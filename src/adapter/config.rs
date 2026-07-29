@@ -12,6 +12,7 @@ pub struct Config {
 #[derive(Deserialize)]
 pub struct Log {
     pub level: String,
+    pub filepath: Option<String>,
 }
 #[derive(Deserialize)]
 pub struct Postgres {
@@ -23,7 +24,7 @@ pub struct HTTPServer {
 }
 
 impl Config {
-    pub fn new(filepath: &String) -> Result<Self, String> {
+    pub fn new(filepath: &str) -> Result<Self, String> {
         let config_builder =
             ConfigExternal::builder().add_source(File::new(filepath, FileFormat::Yaml));
         let result = config_builder

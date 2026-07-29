@@ -11,10 +11,10 @@ pub struct Postgres {
 }
 
 impl Postgres {
-    pub async fn new(dsn: String) -> Result<Self, String> {
+    pub async fn new(dsn: &str) -> Result<Self, String> {
         let pool = PgPoolOptions::new()
             .max_connections(5)
-            .connect(dsn.as_str())
+            .connect(dsn)
             .await
             .map_err(|e| format!("failed to connect to db: {e}"))?;
 
