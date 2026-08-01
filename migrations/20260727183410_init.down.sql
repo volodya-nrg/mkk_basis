@@ -1,5 +1,12 @@
+DROP TRIGGER trg_task_comments_updated ON task_comments;
 DROP TRIGGER trg_tasks_updated ON tasks;
+DROP TRIGGER trg_teams_updated ON teams;
 DROP TRIGGER trg_users_updated ON users;
-DROP FUNCTION update_updated_at_column;
+DROP TABLE task_comments;
+DROP TABLE task_histories;
 DROP TABLE tasks;
+DROP TABLE team_members;
+DROP TABLE teams;
 DROP TABLE users;
+DROP FUNCTION update_updated_at_column;
+DROP TYPE task_status_enum;

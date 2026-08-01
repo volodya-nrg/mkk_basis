@@ -10,17 +10,17 @@ use teams::Teams;
 
 #[derive(Clone)]
 pub struct UseCase {
-    pub auth: Auth,
-    pub tasks: Tasks,
-    pub teams: Teams,
+    // pub auth: Auth,
+    // pub tasks: Tasks,
+    // pub teams: Teams,
 }
 
 impl UseCase {
     pub fn new(postgres: Postgres) -> Self {
         Self {
-            auth: Auth::new(postgres.tbl_tasks.clone()),
-            tasks: Tasks::new(postgres.tbl_tasks.clone()),
-            teams: Teams::new(postgres.tbl_teams.clone()),
+            // auth: Auth::new(postgres.tbl_tasks.clone()),
+            // tasks: Tasks::new(postgres.tbl_tasks.clone()),
+            // teams: Teams::new(postgres.tbl_teams.clone()),
         }
     }
 }

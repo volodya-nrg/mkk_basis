@@ -10,9 +10,9 @@ pub struct Handlers {}
 impl Handlers {
     pub async fn login(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         println!("--- handler login");
-        if let Err(e) = state.use_case.auth.login() {
-            println!("{e}")
-        }
+        // if let Err(e) = state.use_case.auth.login() {
+        //     println!("{e}")
+        // }
         Json(json!({
             "status": "ok",
             "message": "login",
@@ -20,9 +20,9 @@ impl Handlers {
     }
     pub async fn register(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         println!("--- handler register");
-        if let Err(e) = state.use_case.auth.register() {
-            println!("{e}")
-        }
+        // if let Err(e) = state.use_case.auth.register() {
+        //     println!("{e}")
+        // }
         Json(json!({
             "status": "ok",
             "message": "register",
@@ -30,9 +30,9 @@ impl Handlers {
     }
     pub async fn tasks(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         println!("--- handler tasks");
-        if let Err(e) = state.use_case.tasks.get_one() {
-            println!("{e}")
-        }
+        // if let Err(e) = state.use_case.tasks.get_one() {
+        //     println!("{e}")
+        // }
         Json(json!({
             "status": "ok",
             "message": "tasks",
@@ -40,9 +40,9 @@ impl Handlers {
     }
     pub async fn teams(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         println!("--- handler teams");
-        if let Err(e) = state.use_case.teams.get_one() {
-            println!("{e}")
-        }
+        // if let Err(e) = state.use_case.teams.get_one() {
+        //     println!("{e}")
+        // }
         Json(json!({
             "status": "ok",
             "message": "teams",

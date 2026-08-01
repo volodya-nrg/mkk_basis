@@ -2,7 +2,7 @@ mod adapter;
 mod transport;
 mod usecase;
 
-use adapter::{Config, Postgres, logger};
+use adapter::{config::Config, db::postgres::Postgres, logger};
 use clap::Parser;
 use transport::http_server::HTTPServer;
 use usecase::UseCase;
@@ -15,6 +15,9 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
+    let x = String::from("приве");
+    println!("{}", x.capacity());
+
     if let Err(e) = run(&Args::parse().config).await {
         log::error!("failed to run app: {e}");
         std::process::exit(1);
@@ -36,15 +39,15 @@ async fn run(config_filepath: &str) -> Result<(), String> {
     )
     .map_err(|e| format!("failed to init logger: {e}"))?;
 
-    let postgres = Postgres::new(&cfg.postgres.dsn)
-        .await
-        .map_err(|e| format!("failed to create new postgres: {e}"))?;
-
-    log::info!("start server on {}", cfg.http_server.address);
-
-    HTTPServer::run(&cfg.http_server.address, UseCase::new(postgres))
-        .await
-        .map_err(|e| format!("failed to run server: {e}"))?;
+    // let postgres = Postgres::new(&cfg.postgres.dsn)
+    //     .await
+    //     .map_err(|e| format!("failed to create new postgres: {e}"))?;
+    //
+    // log::info!("start server on {}", cfg.http_server.address);
+    //
+    // HTTPServer::run(&cfg.http_server.address, UseCase::new(postgres))
+    //     .await
+    //     .map_err(|e| format!("failed to run server: {e}"))?;
 
     Ok(())
 }

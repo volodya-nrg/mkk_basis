@@ -1,26 +1,30 @@
-pub mod tasks;
-pub mod teams;
+mod table_basic;
+mod tables;
 
-use sqlx::postgres::PgPoolOptions;
-use tasks::Tasks;
-use teams::Teams;
+use sqlx::{Pool, Postgres as SQLXPostgres};
+use tables::task_comments::TaskComments;
+use tables::task_histories::TaskHistories;
+use tables::tasks::Tasks;
+use tables::teams::Teams;
+use tables::users::Users;
 
-pub struct Postgres {
-    pub tbl_tasks: Tasks,
-    pub tbl_teams: Teams,
+#[derive(Debug)]
+pub struct Postgres<'a> {
+    pub tbl_users: Users<'a>,
+    pub tbl_teams: Teams<'a>,
+    pub tbl_tasks: Tasks<'a>,
+    pub tbl_task_histories: TaskHistories<'a>,
+    pub tbl_task_comments: TaskComments<'a>,
 }
 
-impl Postgres {
-    pub async fn new(dsn: &str) -> Result<Self, String> {
-        let pool = PgPoolOptions::new()
-            .max_connections(5)
-            .connect(dsn)
-            .await
-            .map_err(|e| format!("failed to connect to db: {e}"))?;
-
-        Ok(Self {
-            tbl_tasks: Tasks::new(pool.clone()),
-            tbl_teams: Teams::new(pool.clone()),
-        })
+impl<'a> Postgres<'a> {
+    pub fn new(pool: &'a Pool<SQLXPostgres>) -> Self {
+        Self {
+            tbl_users: Users::new(pool),
+            tbl_teams: Teams::new(pool),
+            tbl_tasks: Tasks::new(pool),
+            tbl_task_histories: TaskHistories::new(pool),
+            tbl_task_comments: TaskComments::new(pool),
+        }
     }
 }

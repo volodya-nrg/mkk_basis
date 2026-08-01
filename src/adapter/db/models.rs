@@ -1,37 +1,53 @@
-use crate::usecase::models as ucModels;
 use chrono::{DateTime, Utc};
+use fake::Dummy;
+use sqlx::FromRow;
 use uuid::Uuid;
 
-pub struct Task {
-    pub task_id: Uuid,
-    pub name: String,
+#[derive(Debug, FromRow, Clone, Dummy, PartialEq)]
+pub struct User {
+    pub user_id: Uuid,
+    pub name: Option<String>,
+    pub email: String,
+    pub password: String,
+    pub email_is_confirmed: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
-impl Task {
-    pub fn to_uc(&self) -> ucModels::Task {
-        ucModels::Task {
-            task_id: self.task_id,
-            name: self.name.to_string(),
-            created_at: self.created_at,
-            updated_at: self.updated_at,
-        }
-    }
-}
-
 pub struct Team {
     pub team_id: Uuid,
     pub name: String,
+    pub created_by: Uuid,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
-impl Team {
-    pub fn to_uc(&self) -> ucModels::Team {
-        ucModels::Team {
-            team_id: self.team_id,
-            name: self.name.to_string(),
-            created_at: self.created_at,
-            updated_at: self.updated_at,
-        }
-    }
+pub struct TeamMember {
+    pub team_id: Uuid,
+    pub user_id: Uuid,
+    pub created_at: DateTime<Utc>,
+}
+pub struct Task {
+    pub task_id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub created_by: Uuid,
+    pub team_id: Uuid,
+    pub assignee_id: Option<Uuid>,
+    pub status: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+pub struct TaskHistory {
+    pub task_history_id: Uuid,
+    pub task_id: Uuid,
+    pub user_id: Uuid,
+    pub msg: String,
+    pub created_at: DateTime<Utc>,
+}
+pub struct TaskComment {
+    pub task_comment_id: Uuid,
+    pub task_id: Uuid,
+    pub user_id: Uuid,
+    pub msg: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
