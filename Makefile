@@ -17,16 +17,11 @@ build:
 run_server: build
 	./target/release/$(PROJECT_NAME)
 
-.PHONY: check
-check:
-	cargo check
-
-.PHONY: update
-update:
-	cargo update
-
 migration_up:
 	sqlx migrate run --database-url "${POSTGRES_DSN}"
 
 migration_down:
 	sqlx migrate revert --database-url "${POSTGRES_DSN}"
+
+test_db:
+	cargo test --test db -- --nocapture # --include-ignored

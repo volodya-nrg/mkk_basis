@@ -13,6 +13,8 @@ pub struct User {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
+
+#[derive(Debug, FromRow, Clone, Dummy, PartialEq)]
 pub struct Team {
     pub team_id: Uuid,
     pub name: String,
@@ -20,11 +22,15 @@ pub struct Team {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
+
+#[derive(Debug, FromRow, Clone, Dummy, PartialEq)]
 pub struct TeamMember {
     pub team_id: Uuid,
     pub user_id: Uuid,
     pub created_at: DateTime<Utc>,
 }
+
+#[derive(Debug, FromRow, Clone, Dummy, PartialEq)]
 pub struct Task {
     pub task_id: Uuid,
     pub name: String,
@@ -36,6 +42,8 @@ pub struct Task {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
+
+#[derive(Debug, FromRow, Clone, Dummy, PartialEq)]
 pub struct TaskHistory {
     pub task_history_id: Uuid,
     pub task_id: Uuid,
@@ -43,6 +51,8 @@ pub struct TaskHistory {
     pub msg: String,
     pub created_at: DateTime<Utc>,
 }
+
+#[derive(Debug, FromRow, Clone, Dummy, PartialEq)]
 pub struct TaskComment {
     pub task_comment_id: Uuid,
     pub task_id: Uuid,

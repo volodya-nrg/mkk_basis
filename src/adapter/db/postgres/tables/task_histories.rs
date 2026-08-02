@@ -1,6 +1,7 @@
-use sqlx::{Pool, Postgres};
-use super::super::super::models::TaskHistory;
-use super::super::table_basic::TableBasic;
+use crate::adapter::db::errors::Error;
+use crate::adapter::db::models::TaskHistory;
+use crate::adapter::db::postgres::table_basic::TableBasic;
+use sqlx::{Pool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -24,27 +25,119 @@ impl<'p> TaskHistories<'p> {
             },
         }
     }
-    pub fn list(&self, limit: i32, offset: i32) -> Result<(Vec<TaskHistory>, u32), String> {
-        let items = vec![];
-        let total: u32 = 0;
-        Ok((items, total))
+    pub async fn list(&self, limit: i32, offset: i32) -> Result<(Vec<TaskHistory>, i64), String> {
+        let mut query = QueryBuilder::new(format!(
+            "SELECT {} FROM {} ORDER BY created_at DESC",
+            self.table_basic.fields.join(","),
+            self.table_basic.name,
+        ));
+
+        if limit > -1 {
+            query.push(" LIMIT ");
+            query.push_bind(limit);
+        }
+        if offset > -1 {
+            query.push(" OFFSET ");
+            query.push_bind(offset);
+        }
+
+        let items: Vec<TaskHistory> = query
+            .build_query_as()
+            .fetch_all(self.pool)
+            .await
+            .map_err(|e| format!("failed to query: {e}"))?;
+        let total: (i64,) =
+            QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.table_basic.name)) // возвращает такой же диапазон как и i64
+                .build_query_as()
+                .fetch_one(self.pool)
+                .await
+                .map_err(|e| format!("failed to count: {e}"))?;
+
+        Ok((items, total.0))
     }
-    pub fn one(&self, item_id: Uuid) -> Result<TaskHistory, String> {
-        Ok(TaskHistory {
-            task_history_id: Default::default(),
-            task_id: Default::default(),
-            user_id: Default::default(),
-            msg: "".to_string(),
-            created_at: Default::default(),
-        })
+    pub async fn one(&self, item_id: Uuid) -> Result<TaskHistory, Error> {
+        let query = format!(
+            "SELECT {} FROM {} WHERE task_history_id=$1",
+            self.table_basic.fields.join(","),
+            self.table_basic.name,
+        );
+        let opt = QueryBuilder::new(query)
+            .build_query_as()
+            .bind(item_id)
+            .fetch_optional(self.pool)
+            .await
+            .map_err(|e| Error::Any(format!("failed to query: {e}")))?;
+        match opt {
+            Some(v) => Ok(v),
+            None => Err(Error::NotFound),
+        }
     }
-    pub fn create(&self, item: TaskHistory) -> Result<Uuid, String> {
-        Ok(Uuid::new_v4())
+    pub async fn create(&self, item: TaskHistory) -> Result<Uuid, String> {
+        let query = format!(
+            "INSERT INTO {} (task_id, user_id, msg) VALUES ($1,$2,$3) RETURNING task_history_id",
+            self.table_basic.name,
+        );
+        let result = QueryBuilder::new(query)
+            .build()
+            .bind(item.task_id)
+            .bind(item.user_id)
+            .bind(item.msg)
+            .fetch_one(self.pool)
+            .await
+            .map_err(|e| format!("failed to insert: {e}"))?
+            .get(0);
+
+        Ok(result)
     }
-    pub fn update(&self, item: TaskHistory) -> Result<(), String> {
+    pub async fn update(&self, item: TaskHistory) -> Result<(), Error> {
+        let query = format!(
+            "UPDATE {} SET task_id=$1, user_id=$2, msg=$3 WHERE task_history_id=$4",
+            self.table_basic.name,
+        );
+        let result = QueryBuilder::new(query)
+            .build()
+            .bind(item.task_id)
+            .bind(item.user_id)
+            .bind(item.msg)
+            .bind(item.task_history_id)
+            .execute(self.pool)
+            .await
+            .map_err(|e| Error::Any(format!("failed to update: {e}")))?;
+
+        let amount_updated_rows = result.rows_affected();
+        if amount_updated_rows != 1 {
+            let err_msg = format!(
+                "expected update one row, but update {}",
+                amount_updated_rows
+            )
+            .to_string();
+            return Err(Error::Any(err_msg));
+        }
+
         Ok(())
     }
-    pub fn delete(&self, item_id: Uuid) -> Result<(), String> {
+    pub async fn delete(&self, item_id: Uuid) -> Result<(), String> {
+        let query = format!(
+            "DELETE FROM {} WHERE task_history_id=$1",
+            self.table_basic.name
+        );
+        let result = QueryBuilder::new(query)
+            .build()
+            .bind(item_id)
+            .execute(self.pool)
+            .await
+            .map_err(|e| format!("failed to delete: {e}"))?;
+
+        let amount_updated_rows = result.rows_affected();
+        if amount_updated_rows != 1 {
+            let err_msg = format!(
+                "expected delete one row, but delete {}",
+                amount_updated_rows
+            )
+            .to_string();
+            return Err(err_msg);
+        }
+
         Ok(())
     }
 }

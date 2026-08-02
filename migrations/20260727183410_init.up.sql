@@ -32,10 +32,10 @@ CREATE TABLE team_members
 (
     team_id    UUID                      NOT NULL,
     user_id    UUID                      NOT NULL,
-    created_at timestamptz DEFAULT now() NOT NULL, -- когда user присоединился к команде
+    created_at timestamptz DEFAULT now() NOT NULL,                                                        -- когда user присоединился к команде
     CONSTRAINT pk_team_members PRIMARY KEY (team_id, user_id),
     CONSTRAINT fk_team_members_teams FOREIGN KEY (team_id) REFERENCES teams (team_id) ON DELETE CASCADE,
-    CONSTRAINT fk_team_members_users FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+    CONSTRAINT fk_team_members_users FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE NO ACTION -- относительно teams только
 );
 CREATE TABLE tasks
 (
@@ -48,6 +48,7 @@ CREATE TABLE tasks
     status      task_status_enum DEFAULT 'start' NOT NULL,
     created_at  timestamptz      DEFAULT now()   NOT NULL,
     updated_at  timestamptz      DEFAULT now()   NOT NULL,
+    CONSTRAINT uk_tasks UNIQUE (created_by, team_id),
     CONSTRAINT fk_tasks_teams FOREIGN KEY (team_id) REFERENCES teams (team_id) ON DELETE RESTRICT,
     CONSTRAINT fk_tasks_users1 FOREIGN KEY (created_by) REFERENCES users (user_id) ON DELETE RESTRICT,
     CONSTRAINT fk_tasks_users2 FOREIGN KEY (assignee_id) REFERENCES users (user_id) ON DELETE SET NULL
@@ -59,6 +60,7 @@ CREATE TABLE task_histories
     user_id         UUID                      NOT NULL,
     msg             TEXT                      NOT NULL,
     created_at      timestamptz DEFAULT now() NOT NULL,
+    CONSTRAINT uk_task_histories UNIQUE (task_id, user_id),
     CONSTRAINT fk_task_histories_tasks FOREIGN KEY (task_id) REFERENCES tasks (task_id) ON DELETE CASCADE,
     CONSTRAINT fk_task_histories_users FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
 );
