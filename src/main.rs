@@ -4,7 +4,7 @@ mod usecase;
 
 use adapter::{config::Config, db::postgres::Postgres, logger};
 use clap::Parser;
-use transport::http_server::HTTPServer;
+// use transport::HTTPServer;
 use usecase::UseCase;
 
 #[derive(Parser)]
@@ -15,9 +15,6 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
-    let x = String::from("приве");
-    println!("{}", x.capacity());
-
     if let Err(e) = run(&Args::parse().config).await {
         log::error!("failed to run app: {e}");
         std::process::exit(1);

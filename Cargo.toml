@@ -16,3 +16,4 @@ axum = "0.8.9"
 serde_json = "1.0.151"
 env_logger = "0.11.11"
 fake = { version = "5.1.0", features = ["derive", "chrono", "uuid"] }
+reqwest = { version = "0.13.4", features = ["form", "json"] }

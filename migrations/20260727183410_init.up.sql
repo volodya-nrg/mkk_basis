@@ -72,8 +72,8 @@ CREATE TABLE task_comments
     msg             TEXT                      NOT NULL,
     created_at      timestamptz DEFAULT now() NOT NULL,
     updated_at      timestamptz DEFAULT now() NOT NULL,
-    CONSTRAINT fk_task_histories_tasks FOREIGN KEY (task_id) REFERENCES tasks (task_id) ON DELETE CASCADE,
-    CONSTRAINT fk_task_histories_users FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+    CONSTRAINT fk_task_comments_tasks FOREIGN KEY (task_id) REFERENCES tasks (task_id) ON DELETE CASCADE,
+    CONSTRAINT fk_task_comments_users FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
 );
 
 CREATE TRIGGER trg_users_updated

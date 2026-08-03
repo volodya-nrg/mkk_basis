@@ -14,7 +14,7 @@ impl<'p> TaskComments<'p> {
         Self {
             pool,
             table_basic: TableBasic {
-                name: "users".to_string(),
+                name: "task_comments".to_string(),
                 fields: vec![
                     "task_comment_id".to_string(),
                     "task_id".to_string(),

@@ -1,3 +1,6 @@
+mod transport;
+mod common;
+
 use chrono::Local;
 use fake::{Fake, Faker};
 use mkk_basis::adapter::db::errors::Error;
@@ -555,7 +558,6 @@ async fn check_task_histories() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn check_task_comments() {
     let pool = PgPoolOptions::new().connect(DSN).await.unwrap();
     let db = Postgres::new(&pool);
@@ -576,57 +578,63 @@ async fn check_task_comments() {
 
     // err: проверим что не находит
     assert_matches!(
-        db.tbl_task_histories.one(Uuid::new_v4()).await,
+        db.tbl_task_comments.one(Uuid::new_v4()).await,
         Err(Error::NotFound)
     );
 
-    // err: попытаемся создать
+    // err: попытаемся создать, отсутствуют зависимости
     assert!(
-        db.tbl_task_histories
-            .create(Faker.fake::<TaskHistory>())
+        db.tbl_task_comments
+            .create(Faker.fake::<TaskComment>())
             .await
             .is_err()
     );
 
     // ok: проверим что создается
-    let mut task_history_expected: TaskHistory = Faker.fake();
-    task_history_expected.task_id = task_id;
-    task_history_expected.user_id = user_id;
+    let mut task_comment_expected: TaskComment = Faker.fake();
+    task_comment_expected.task_id = task_id;
+    task_comment_expected.user_id = user_id;
     let result = db
-        .tbl_task_histories
-        .create(task_history_expected.clone())
+        .tbl_task_comments
+        .create(task_comment_expected.clone())
         .await;
     assert!(result.is_ok());
-    task_history_expected.task_history_id = result.unwrap();
+    task_comment_expected.task_comment_id = result.unwrap();
 
-    // err: проверим что нельзя добавить такую же запись
+    // ok: проверим что можно добавить такую же запись
     assert!(
-        db.tbl_task_histories
-            .create(task_history_expected.clone())
+        db.tbl_task_comments
+            .create(task_comment_expected.clone())
             .await
-            .is_err()
+            .is_ok()
     );
 
     // ok: проверим что можно получить и их данные равны
     let result = db
-        .tbl_task_histories
-        .one(task_history_expected.task_history_id)
+        .tbl_task_comments
+        .one(task_comment_expected.task_comment_id)
         .await;
     assert!(result.is_ok());
-    let task_history_actual = result.unwrap();
-    task_history_expected.created_at = task_history_actual.created_at; // подменим на валидное явно
-    assert_eq!(task_history_expected, task_history_actual);
-    assert!(task_history_expected.created_at.gt(&time_now));
+    let task_comment_actual = result.unwrap();
+    task_comment_expected.created_at = task_comment_actual.created_at; // подменим на валидное явно
+    task_comment_expected.updated_at = task_comment_actual.updated_at; // подменим на валидное явно
+    assert_eq!(task_comment_expected, task_comment_actual);
+    assert!(task_comment_expected.created_at.gt(&time_now));
+    assert!(
+        task_comment_expected
+            .created_at
+            .eq(&task_comment_expected.updated_at)
+    );
 
     // ok: проверим что список не пустой
-    let result = db.tbl_task_histories.list(-1, -1).await;
+    let result = db.tbl_task_comments.list(-1, -1).await;
     assert!(result.is_ok());
     let (items, total) = result.unwrap();
     assert!(!items.is_empty());
     assert!(total > 0);
 
     // ok: проверим пустой результат
-    let result = db.tbl_task_histories.list(0, 0).await;
+    let result = db.tbl_task_comments.list(0, 0).await;
     assert!(result.is_ok());
     let (items, total) = result.unwrap();
     assert!(items.is_empty());
@@ -634,47 +642,53 @@ async fn check_task_comments() {
 
     // err: изменим неизвестного
     assert!(
-        db.tbl_task_histories
-            .update(Faker.fake::<TaskHistory>())
+        db.tbl_task_comments
+            .update(Faker.fake::<TaskComment>())
             .await
             .is_err()
     );
 
     // ok: изменим и проверим
-    let mut task_history_expected: TaskHistory = Faker.fake();
-    task_history_expected.task_history_id = task_history_actual.task_history_id;
-    task_history_expected.task_id = task_id;
-    task_history_expected.user_id = user_id2;
+    let mut task_comment_expected: TaskComment = Faker.fake();
+    task_comment_expected.task_comment_id = task_comment_actual.task_comment_id;
+    task_comment_expected.task_id = task_id;
+    task_comment_expected.user_id = user_id2;
 
     let result = db
-        .tbl_task_histories
-        .update(task_history_expected.clone())
+        .tbl_task_comments
+        .update(task_comment_expected.clone())
         .await;
     assert!(result.is_ok());
     let result = db
-        .tbl_task_histories
-        .one(task_history_expected.task_history_id)
+        .tbl_task_comments
+        .one(task_comment_expected.task_comment_id)
         .await;
     assert!(result.is_ok());
-    let task_history_actual = result.unwrap();
-    task_history_expected.created_at = task_history_actual.created_at; // подменим на валидное явно
-    assert_eq!(task_history_expected, task_history_actual);
+    let task_comment_actual = result.unwrap();
+    task_comment_expected.created_at = task_comment_actual.created_at; // подменим на валидное явно
+    task_comment_expected.updated_at = task_comment_actual.updated_at; // подменим на валидное явно
+    assert_eq!(task_comment_expected, task_comment_actual);
+    assert!(
+        task_comment_expected
+            .updated_at
+            .gt(&task_comment_expected.created_at)
+    );
 
     // err: попытаемся удалить
-    assert!(db.tbl_task_histories.delete(Uuid::new_v4()).await.is_err());
+    assert!(db.tbl_task_comments.delete(Uuid::new_v4()).await.is_err());
 
     // ok: удалим
     assert!(
-        db.tbl_task_histories
-            .delete(task_history_actual.task_history_id)
+        db.tbl_task_comments
+            .delete(task_comment_actual.task_comment_id)
             .await
             .is_ok()
     );
 
     // ok: не нашли, как и задумано
     assert_matches!(
-        db.tbl_task_histories
-            .one(task_history_actual.task_history_id)
+        db.tbl_task_comments
+            .one(task_comment_actual.task_comment_id)
             .await,
         Err(Error::NotFound)
     );
@@ -694,37 +708,37 @@ async fn check_task_comments() {
     task.team_id = team_id;
     task.created_by = user_id;
     task.assignee_id = None;
-    task.status = format!("{:?}", TaskStatus::Todo).to_lowercase();
+    task.status = format!("{:?}", TaskStatus::Done).to_lowercase();
     let task_id = db.tbl_tasks.create(task.clone()).await.unwrap();
 
-    let mut task_history_expected: TaskHistory = Faker.fake();
-    task_history_expected.task_id = task_id;
-    task_history_expected.user_id = user_id;
-    let task_history_id = db
-        .tbl_task_histories
-        .create(task_history_expected)
+    let mut task_comment_expected: TaskComment = Faker.fake();
+    task_comment_expected.task_id = task_id;
+    task_comment_expected.user_id = user_id;
+    let task_comment_id = db
+        .tbl_task_comments
+        .create(task_comment_expected)
         .await
         .unwrap();
     db.tbl_tasks.delete(task_id).await.unwrap();
     assert_matches!(
-        db.tbl_task_histories.one(task_history_id).await,
+        db.tbl_task_comments.one(task_comment_id).await,
         Err(Error::NotFound)
     );
 
     // проверим каскадное удаление относительно user_id2
     let task_id = db.tbl_tasks.create(task).await.unwrap();
     let user_id2: Uuid = db.tbl_users.create(Faker.fake::<User>()).await.unwrap();
-    let mut task_history_expected: TaskHistory = Faker.fake();
-    task_history_expected.task_id = task_id;
-    task_history_expected.user_id = user_id2;
-    let task_history_id = db
-        .tbl_task_histories
-        .create(task_history_expected)
+    let mut task_comment_expected: TaskComment = Faker.fake();
+    task_comment_expected.task_id = task_id;
+    task_comment_expected.user_id = user_id2;
+    let task_comment_id = db
+        .tbl_task_comments
+        .create(task_comment_expected)
         .await
         .unwrap();
     db.tbl_users.delete(user_id2).await.unwrap();
     assert_matches!(
-        db.tbl_task_histories.one(task_history_id).await,
+        db.tbl_task_comments.one(task_comment_id).await,
         Err(Error::NotFound)
     );
 
