@@ -193,7 +193,7 @@ impl Client {
     }
     pub async fn tasks_create(
         &self,
-        req: RequestTaskCreate,
+        req: RequestTask,
         cb: fn(Result<ResponseTask, String>),
     ) -> &Self {
         let result = self
@@ -218,39 +218,58 @@ impl Client {
         cb(result);
         self
     }
-    pub async fn tasks_update(&self) -> &Self {
-        // let result = self
-        //     .client
-        //     .post(format!("{}/api/v1/teams", self.addr))
-        //     .json(&req)
-        //     .send()
-        //     .await
-        //     .map_err(|e| format!("failed to request: {e}"));
-        // let result = match result {
-        //     Ok(v) => v,
-        //     Err(e) => {
-        //         cb(Err(e));
-        //         return self;
-        //     }
-        // };
-        // let result = result
-        //     .json()
-        //     .await
-        //     .map_err(|e| format!("failed convert to json: {e}"));
-        //
-        // cb(result);
+    pub async fn tasks_update(
+        &self,
+        task_id: Uuid,
+        req: RequestTask,
+        cb: fn(Result<ResponseTask, String>),
+    ) -> &Self {
+        let result = self
+            .client
+            .put(format!("{}/api/v1/tasks/{}", self.addr, task_id))
+            .json(&req)
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {e}"));
+        let result = match result {
+            Ok(v) => v,
+            Err(e) => {
+                cb(Err(e));
+                return self;
+            }
+        };
+        let result = result
+            .json()
+            .await
+            .map_err(|e| format!("failed convert to json: {e}"));
+
+        cb(result);
         self
     }
-    pub async fn tasks_history(&self, task_id: Uuid) -> &Self {
-        // let result = self
-        //     .client
-        //     .post(format!("{}/api/v1/teams/{}/invite", self.addr, team_id))
-        //     .json(&req)
-        //     .send()
-        //     .await
-        //     .map_err(|e| format!("failed to request: {e}"));
-        //
-        // cb(result);
+    pub async fn tasks_history(
+        &self,
+        task_id: Uuid,
+        cb: fn(Result<ResponseTaskHistories, String>),
+    ) -> &Self {
+        let result = self
+            .client
+            .get(format!("{}/api/v1/tasks/{}/history", self.addr, task_id))
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {e}"));
+        let result = match result {
+            Ok(v) => v,
+            Err(e) => {
+                cb(Err(e));
+                return self;
+            }
+        };
+        let result = result
+            .json()
+            .await
+            .map_err(|e| format!("failed convert to json: {e}"));
+
+        cb(result);
         self
     }
 }

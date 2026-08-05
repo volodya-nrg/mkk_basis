@@ -90,11 +90,30 @@ async fn check_transport() {
     )
     .await
     .tasks_create(
-        Faker.fake::<RequestTaskCreate>(),
+        Faker.fake::<RequestTask>(),
         |result: Result<ResponseTask, String>| {
             assert!(result.is_ok());
             let resp = result.unwrap();
             println!("{:?}", resp)
+        },
+    )
+    .await
+    .tasks_update(
+        Uuid::new_v4(),
+        Faker.fake::<RequestTask>(),
+        |result: Result<ResponseTask, String>| {
+            assert!(result.is_ok());
+            let resp = result.unwrap();
+            println!("{:?}", resp)
+        },
+    )
+    .await
+    .tasks_history(
+        Uuid::new_v4(),
+        |result: Result<ResponseTaskHistories, String>| {
+            assert!(result.is_ok());
+            let resp = result.unwrap();
+            assert!(resp.items.len() > 0)
         },
     )
     .await;

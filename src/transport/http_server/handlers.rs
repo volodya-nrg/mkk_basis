@@ -5,7 +5,6 @@ use axum::extract::Path;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use chrono::Utc;
 use serde_json::json;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -50,7 +49,7 @@ impl Handlers {
         //     println!("{e}")
         // }
         Json(json!(ResponseTeamsList {
-            item: vec![payload.filter],
+            items: vec![payload.filter],
             page_number: payload.limit.cast_unsigned(),
             total: payload.offset.into(),
         }))
@@ -90,14 +89,14 @@ impl Handlers {
         //     println!("{e}")
         // }
         Json(json!(ResponseTasksList {
-            item: vec![payload.filter],
+            items: vec![payload.filter],
             page_number: payload.limit.cast_unsigned(),
             total: payload.offset.into(),
         }))
     }
     pub async fn tasks_create(
         State(state): State<Arc<AppState>>,
-        Json(payload): Json<RequestTaskCreate>,
+        Json(payload): Json<RequestTask>,
     ) -> impl IntoResponse {
         // if let Err(e) = state.use_case.teams.get_one() {
         //     println!("{e}")
@@ -114,22 +113,35 @@ impl Handlers {
             updated_at: Default::default(),
         }))
     }
-    pub async fn tasks_update(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    pub async fn tasks_update(
+        State(state): State<Arc<AppState>>,
+        Path(task_id): Path<Uuid>,
+        Json(payload): Json<RequestTask>,
+    ) -> impl IntoResponse {
         // if let Err(e) = state.use_case.tasks.get_one() {
         //     println!("{e}")
         // }
-        Json(json!({
-            "status": "ok",
-            "message": "",
+        Json(json!(ResponseTask {
+            task_id,
+            name: payload.name,
+            description: payload.description,
+            created_by: payload.created_by,
+            team_id: payload.team_id,
+            assignee_id: payload.assignee_id,
+            status: "start".to_string(),
+            created_at: Default::default(),
+            updated_at: Default::default(),
         }))
     }
-    pub async fn tasks_history(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    pub async fn tasks_history(
+        State(state): State<Arc<AppState>>,
+        Path(task_id): Path<Uuid>,
+    ) -> impl IntoResponse {
         // if let Err(e) = state.use_case.tasks.get_one() {
         //     println!("{e}")
         // }
-        Json(json!({
-            "status": "ok",
-            "message": "",
+        Json(json!(ResponseTaskHistories {
+            items: vec![task_id.to_string()],
         }))
     }
 }
