@@ -4,13 +4,13 @@ use crate::adapter::db::postgres::table_basic::TableBasic;
 use sqlx::{Pool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
 
-#[derive(Debug)]
-pub struct Teams<'p> {
-    pool: &'p Pool<Postgres>,
+#[derive(Clone)] // из-за axum-state
+pub struct Teams {
+    pool: Pool<Postgres>,
     table_basic: TableBasic,
 }
-impl<'p> Teams<'p> {
-    pub fn new(pool: &'p Pool<Postgres>) -> Self {
+impl Teams {
+    pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
             pool,
             table_basic: TableBasic {
@@ -43,13 +43,13 @@ impl<'p> Teams<'p> {
 
         let items: Vec<Team> = query
             .build_query_as()
-            .fetch_all(self.pool)
+            .fetch_all(&self.pool)
             .await
             .map_err(|e| format!("failed to query: {e}"))?;
         let total: (i64,) =
             QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.table_basic.name)) // возвращает такой же диапазон как и i64
                 .build_query_as()
-                .fetch_one(self.pool)
+                .fetch_one(&self.pool)
                 .await
                 .map_err(|e| format!("failed to count: {e}"))?;
 
@@ -64,7 +64,7 @@ impl<'p> Teams<'p> {
         let opt = QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(self.pool)
+            .fetch_optional(&self.pool)
             .await
             .map_err(|e| Error::Any(format!("failed to query: {e}")))?;
         match opt {
@@ -81,7 +81,7 @@ impl<'p> Teams<'p> {
             .build()
             .bind(item.name)
             .bind(item.created_by)
-            .fetch_one(self.pool)
+            .fetch_one(&self.pool)
             .await
             .map_err(|e| format!("failed to insert: {e}"))?
             .get(0);
@@ -98,7 +98,7 @@ impl<'p> Teams<'p> {
             .bind(item.name)
             .bind(item.created_by)
             .bind(item.team_id)
-            .execute(self.pool)
+            .execute(&self.pool)
             .await
             .map_err(|e| Error::Any(format!("failed to update: {e}")))?;
 
@@ -119,7 +119,7 @@ impl<'p> Teams<'p> {
         let result = QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(self.pool)
+            .execute(&self.pool)
             .await
             .map_err(|e| format!("failed to delete: {e}"))?;
 

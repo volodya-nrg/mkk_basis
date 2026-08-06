@@ -9,25 +9,25 @@ use tables::team_members::TeamMembers;
 use tables::teams::Teams;
 use tables::users::Users;
 
-#[derive(Debug)]
-pub struct Postgres<'a> {
-    pub tbl_users: Users<'a>,
-    pub tbl_teams: Teams<'a>,
-    pub tbl_team_members: TeamMembers<'a>,
-    pub tbl_tasks: Tasks<'a>,
-    pub tbl_task_histories: TaskHistories<'a>,
-    pub tbl_task_comments: TaskComments<'a>,
+pub struct Postgres {
+    pub tbl_users: Users,
+    pub tbl_teams: Teams,
+    pub tbl_team_members: TeamMembers,
+    pub tbl_tasks: Tasks,
+    pub tbl_task_histories: TaskHistories,
+    pub tbl_task_comments: TaskComments,
 }
 
-impl<'a> Postgres<'a> {
-    pub fn new(pool: &'a Pool<SQLXPostgres>) -> Self {
+impl Postgres {
+    pub fn new(pool: Pool<SQLXPostgres>) -> Self {
         Self {
-            tbl_users: Users::new(pool),
-            tbl_teams: Teams::new(pool),
-            tbl_team_members: TeamMembers::new(pool),
-            tbl_tasks: Tasks::new(pool),
-            tbl_task_histories: TaskHistories::new(pool),
-            tbl_task_comments: TaskComments::new(pool),
+            // state от axum необходимо статическим, поэтому ссылку на pool тут не передаем
+            tbl_users: Users::new(pool.clone()),
+            tbl_teams: Teams::new(pool.clone()),
+            tbl_team_members: TeamMembers::new(pool.clone()),
+            tbl_tasks: Tasks::new(pool.clone()),
+            tbl_task_histories: TaskHistories::new(pool.clone()),
+            tbl_task_comments: TaskComments::new(pool.clone()),
         }
     }
 }

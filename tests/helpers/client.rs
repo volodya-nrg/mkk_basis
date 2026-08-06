@@ -1,5 +1,7 @@
+use fake::{Fake, Faker};
 use mkk_basis::transport::models::*;
-use reqwest::{Client as ReqwestClient, Response};
+use reqwest::{Client as ReqwestClient, Response, StatusCode};
+use std::io::{Bytes, Read};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -31,10 +33,108 @@ impl Client {
                 .unwrap(),
         }
     }
+    pub async fn index(&self, cb: fn(Result<(u16, String), String>)) -> &Self {
+        let result = self
+            .client
+            .get(&self.addr)
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {e}"));
+        let resp = match result {
+            Ok(v) => v,
+            Err(e) => {
+                cb(Err(e));
+                return self;
+            }
+        };
+        let status_code = resp.status().as_u16();
+        let result = resp
+            .text()
+            .await
+            .map_err(|e| format!("failed to read body: {e}"));
+        let body_str = match result {
+            Ok(v) => v,
+            Err(e) => {
+                cb(Err(e));
+                return self;
+            }
+        };
+
+        cb(Ok((status_code, body_str)));
+        self
+    }
+    pub async fn page404(&self, cb: fn(Result<(u16, String), String>)) -> &Self {
+        let random_string: String = Faker.fake();
+        let result = self
+            .client
+            .get(format!("{}/{}", self.addr, random_string))
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {e}"));
+        let resp = match result {
+            Ok(v) => v,
+            Err(e) => {
+                cb(Err(e));
+                return self;
+            }
+        };
+        let status_code = resp.status().as_u16();
+        let result = resp
+            .text()
+            .await
+            .map_err(|e| format!("failed to read body: {e}"));
+        let body_str = match result {
+            Ok(v) => v,
+            Err(e) => {
+                cb(Err(e));
+                return self;
+            }
+        };
+
+        cb(Ok((status_code, body_str)));
+        self
+    }
+    pub async fn get_file(
+        &self,
+        url_filepath: String,
+        cb: fn(Result<(u16, String), String>),
+    ) -> &Self {
+        let url_filepath = url_filepath
+            .strip_prefix('/')
+            .unwrap_or(url_filepath.as_str());
+        let result = self
+            .client
+            .get(format!("{}/{}", self.addr, url_filepath))
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {e}"));
+        let resp = match result {
+            Ok(v) => v,
+            Err(e) => {
+                cb(Err(e));
+                return self;
+            }
+        };
+        let status_code = resp.status().as_u16();
+        let result = resp
+            .text()
+            .await
+            .map_err(|e| format!("failed to read body: {e}"));
+        let body_str = match result {
+            Ok(v) => v,
+            Err(e) => {
+                cb(Err(e));
+                return self;
+            }
+        };
+
+        cb(Ok((status_code, body_str)));
+        self
+    }
     pub async fn register(
         &self,
         req: RequestRegister,
-        cb: fn(Result<ResponseRegister, String>),
+        cb: fn(Result<(), String>),
     ) -> &Self {
         let result = self
             .client
@@ -79,6 +179,24 @@ impl Client {
             .map_err(|e| format!("failed convert to json: {e}"));
 
         cb(result);
+        self
+    }
+    pub async fn logout(&self, cb: fn(Result<StatusCode, String>)) -> &Self {
+        let result = self
+            .client
+            .get(format!("{}/api/v1/logout", self.addr))
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {e}"));
+        let resp = match result {
+            Ok(v) => v,
+            Err(e) => {
+                cb(Err(e));
+                return self;
+            }
+        };
+        
+        cb(Ok(resp.status()));
         self
     }
     pub async fn teams_list(

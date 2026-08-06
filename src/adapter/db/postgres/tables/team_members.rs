@@ -4,13 +4,13 @@ use crate::adapter::db::postgres::table_basic::TableBasic;
 use sqlx::{Pool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
-#[derive(Debug)]
-pub struct TeamMembers<'p> {
-    pool: &'p Pool<Postgres>,
+#[derive(Clone)]
+pub struct TeamMembers {
+    pool: Pool<Postgres>,
     table_basic: TableBasic,
 }
-impl<'p> TeamMembers<'p> {
-    pub fn new(pool: &'p Pool<Postgres>) -> Self {
+impl TeamMembers {
+    pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
             pool,
             table_basic: TableBasic {
@@ -30,7 +30,7 @@ impl<'p> TeamMembers<'p> {
             self.table_basic.name,
         ))
         .build_query_as()
-        .fetch_all(self.pool)
+        .fetch_all(&self.pool)
         .await
         .map_err(|e| format!("failed to query: {e}"))?;
 
@@ -46,7 +46,7 @@ impl<'p> TeamMembers<'p> {
             .build_query_as()
             .bind(team_id)
             .bind(user_id)
-            .fetch_optional(self.pool)
+            .fetch_optional(&self.pool)
             .await
             .map_err(|e| Error::Any(format!("failed to query: {e}")))?;
         match opt {
@@ -64,7 +64,7 @@ impl<'p> TeamMembers<'p> {
             .build()
             .bind(item.team_id)
             .bind(item.user_id)
-            .execute(self.pool)
+            .execute(&self.pool)
             .await
             .map_err(|e| format!("failed to insert: {e}"))?;
         Ok(())
@@ -78,7 +78,7 @@ impl<'p> TeamMembers<'p> {
             .build()
             .bind(team_id)
             .bind(user_id)
-            .execute(self.pool)
+            .execute(&self.pool)
             .await
             .map_err(|e| format!("failed to delete: {e}"))?;
 

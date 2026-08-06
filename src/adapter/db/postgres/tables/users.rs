@@ -4,13 +4,13 @@ use crate::adapter::db::postgres::table_basic::TableBasic;
 use sqlx::{Pool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
 
-#[derive(Debug)]
-pub struct Users<'p> {
-    pool: &'p Pool<Postgres>,
+#[derive(Clone)]
+pub struct Users {
+    pool: Pool<Postgres>,
     table_basic: TableBasic,
 }
-impl<'p> Users<'p> {
-    pub fn new(pool: &'p Pool<Postgres>) -> Self {
+impl Users {
+    pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
             pool,
             table_basic: TableBasic {
@@ -45,13 +45,13 @@ impl<'p> Users<'p> {
 
         let items: Vec<User> = query
             .build_query_as()
-            .fetch_all(self.pool)
+            .fetch_all(&self.pool)
             .await
             .map_err(|e| format!("failed to query: {e}"))?;
         let total: (i64,) =
             QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.table_basic.name)) // возвращает такой же диапазон как и i64
                 .build_query_as()
-                .fetch_one(self.pool)
+                .fetch_one(&self.pool)
                 .await
                 .map_err(|e| format!("failed to count: {e}"))?;
 
@@ -66,7 +66,24 @@ impl<'p> Users<'p> {
         let opt = QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(self.pool)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| Error::Any(format!("failed to query: {e}")))?;
+        match opt {
+            Some(v) => Ok(v),
+            None => Err(Error::NotFound),
+        }
+    }
+    pub async fn get_by_email(&self, email: String) -> Result<User, Error> {
+        let query = format!(
+            "SELECT {} FROM {} WHERE email=$1",
+            self.table_basic.fields.join(","),
+            self.table_basic.name,
+        );
+        let opt = QueryBuilder::new(query)
+            .build_query_as()
+            .bind(email)
+            .fetch_optional(&self.pool)
             .await
             .map_err(|e| Error::Any(format!("failed to query: {e}")))?;
         match opt {
@@ -85,7 +102,7 @@ impl<'p> Users<'p> {
             .bind(item.email)
             .bind(item.password)
             .bind(item.email_is_confirmed)
-            .fetch_one(self.pool)
+            .fetch_one(&self.pool)
             .await
             .map_err(|e| format!("failed to insert: {e}"))?
             .get(0);
@@ -104,7 +121,7 @@ impl<'p> Users<'p> {
             .bind(item.password)
             .bind(item.email_is_confirmed)
             .bind(item.user_id)
-            .execute(self.pool)
+            .execute(&self.pool)
             .await
             .map_err(|e| Error::Any(format!("failed to update: {e}")))?;
 
@@ -125,7 +142,7 @@ impl<'p> Users<'p> {
         let result = QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(self.pool)
+            .execute(&self.pool)
             .await
             .map_err(|e| format!("failed to delete: {e}"))?;
 

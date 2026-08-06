@@ -12,13 +12,13 @@ pub enum Status {
     Cancelled,
 }
 
-#[derive(Debug)]
-pub struct Tasks<'p> {
-    pool: &'p Pool<Postgres>,
+#[derive(Clone)]
+pub struct Tasks {
+    pool: Pool<Postgres>,
     table_basic: TableBasic,
 }
-impl<'p> Tasks<'p> {
-    pub fn new(pool: &'p Pool<Postgres>) -> Self {
+impl Tasks {
+    pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
             pool,
             table_basic: TableBasic {
@@ -58,13 +58,13 @@ impl<'p> Tasks<'p> {
 
         let items: Vec<Task> = query_builder
             .build_query_as()
-            .fetch_all(self.pool)
+            .fetch_all(&self.pool)
             .await
             .map_err(|e| format!("failed to query: {e}"))?;
         let total: (i64,) =
             QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.table_basic.name)) // возвращает такой же диапазон как и i64
                 .build_query_as()
-                .fetch_one(self.pool)
+                .fetch_one(&self.pool)
                 .await
                 .map_err(|e| format!("failed to count: {e}"))?;
 
@@ -80,7 +80,7 @@ impl<'p> Tasks<'p> {
         let opt = QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(self.pool)
+            .fetch_optional(&self.pool)
             .await
             .map_err(|e| Error::Any(format!("failed to query: {e}")))?;
 
@@ -102,14 +102,14 @@ impl<'p> Tasks<'p> {
             .bind(item.team_id)
             .bind(item.assignee_id)
             .bind(item.status)
-            .fetch_one(self.pool)
+            .fetch_one(&self.pool)
             .await
             .map_err(|e| format!("failed to insert: {e}"))?
             .get(0);
 
         Ok(result)
     }
-    pub async fn update(&self, item: Task) -> Result<(), Error> {
+    pub async fn update(&self, item: Task) -> Result<(), String> {
         let query = format!(
             "UPDATE {} SET name=$1, description=$2, created_by=$3, team_id=$4, assignee_id=$5, status=$6::task_status_enum WHERE task_id=$7",
             self.table_basic.name,
@@ -123,9 +123,9 @@ impl<'p> Tasks<'p> {
             .bind(item.assignee_id)
             .bind(item.status)
             .bind(item.task_id)
-            .execute(self.pool)
+            .execute(&self.pool)
             .await
-            .map_err(|e| Error::Any(format!("failed to update: {e}")))?;
+            .map_err(|e| format!("failed to update: {e}"))?;
         let amount_updated_rows = result.rows_affected();
 
         if amount_updated_rows != 1 {
@@ -134,7 +134,7 @@ impl<'p> Tasks<'p> {
                 amount_updated_rows
             )
             .to_string();
-            return Err(Error::Any(err_msg));
+            return Err(err_msg);
         }
 
         Ok(())
@@ -144,7 +144,7 @@ impl<'p> Tasks<'p> {
         let result = QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(self.pool)
+            .execute(&self.pool)
             .await
             .map_err(|e| format!("failed to delete: {e}"))?;
         let amount_updated_rows = result.rows_affected();

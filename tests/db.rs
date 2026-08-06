@@ -1,4 +1,5 @@
 use chrono::Local;
+use fake::faker::internet::en::SafeEmail;
 use fake::{Fake, Faker};
 use mkk_basis::adapter::db::errors::Error;
 use mkk_basis::adapter::db::models::*;
@@ -6,6 +7,7 @@ use mkk_basis::adapter::db::postgres::Postgres;
 use mkk_basis::adapter::db::postgres::tables::tasks::Status as TaskStatus;
 use sqlx::postgres::PgPoolOptions;
 use std::assert_matches;
+use std::time::Duration;
 use uuid::Uuid;
 
 const DSN: &str =
@@ -13,12 +15,20 @@ const DSN: &str =
 
 #[tokio::test]
 async fn check_users() {
-    let pool = PgPoolOptions::new().connect(DSN).await.unwrap();
-    let db = Postgres::new(&pool);
+    let pool = PgPoolOptions::new()
+        .acquire_timeout(Duration::new(1, 0))
+        .connect(DSN)
+        .await
+        .unwrap();
+    let db = Postgres::new(pool);
     let time_now = Local::now();
 
     // err: проверим что запись не находит
     assert_matches!(db.tbl_users.one(Uuid::new_v4()).await, Err(Error::NotFound));
+    assert_matches!(
+        db.tbl_users.get_by_email(SafeEmail().fake()).await,
+        Err(Error::NotFound)
+    );
 
     // ok: проверим что запись создается
     let mut user_expected: User = Faker.fake();
@@ -35,8 +45,15 @@ async fn check_users() {
     let user_actual = result.unwrap();
     user_expected.created_at = user_actual.created_at; // подменим на валидное явно
     user_expected.updated_at = user_actual.updated_at; // подменим на валидное явно
+    let user_actual1 = user_actual.clone();
     assert_eq!(user_expected, user_actual);
     assert!(user_expected.created_at.gt(&time_now));
+
+    // ok: проверим что находит по емэйлу
+    let result = db.tbl_users.get_by_email(user_actual.email).await;
+    assert!(result.is_ok());
+    let user_actual2 = result.unwrap();
+    assert_eq!(user_actual1, user_actual2);
 
     // ok: проверим что список не пустой
     let result = db.tbl_users.list(-1, -1).await;
@@ -82,8 +99,12 @@ async fn check_users() {
 
 #[tokio::test]
 async fn check_teams() {
-    let pool = PgPoolOptions::new().connect(DSN).await.unwrap();
-    let db = Postgres::new(&pool);
+    let pool = PgPoolOptions::new()
+        .acquire_timeout(Duration::new(1, 0))
+        .connect(DSN)
+        .await
+        .unwrap();
+    let db = Postgres::new(pool);
     let time_now = Local::now();
 
     // ok: создадим пользователя
@@ -165,8 +186,12 @@ async fn check_teams() {
 
 #[tokio::test]
 async fn check_team_members() {
-    let pool = PgPoolOptions::new().connect(DSN).await.unwrap();
-    let db = Postgres::new(&pool);
+    let pool = PgPoolOptions::new()
+        .acquire_timeout(Duration::new(1, 0))
+        .connect(DSN)
+        .await
+        .unwrap();
+    let db = Postgres::new(pool);
     let time_now = Local::now();
 
     // ok: создадим команду и пользователя
@@ -280,8 +305,12 @@ async fn check_team_members() {
 
 #[tokio::test]
 async fn check_tasks() {
-    let pool = PgPoolOptions::new().connect(DSN).await.unwrap();
-    let db = Postgres::new(&pool);
+    let pool = PgPoolOptions::new()
+        .acquire_timeout(Duration::new(1, 0))
+        .connect(DSN)
+        .await
+        .unwrap();
+    let db = Postgres::new(pool);
     let time_now = Local::now();
 
     // ok: создадим пользователя и команду
@@ -377,8 +406,12 @@ async fn check_tasks() {
 
 #[tokio::test]
 async fn check_task_histories() {
-    let pool = PgPoolOptions::new().connect(DSN).await.unwrap();
-    let db = Postgres::new(&pool);
+    let pool = PgPoolOptions::new()
+        .acquire_timeout(Duration::new(1, 0))
+        .connect(DSN)
+        .await
+        .unwrap();
+    let db = Postgres::new(pool);
     let time_now = Local::now();
 
     // ok: создадим зависимости
@@ -451,6 +484,12 @@ async fn check_task_histories() {
     let (items, total) = result.unwrap();
     assert!(items.is_empty());
     assert!(total > 0); // список пустой, но общее кол-во есть
+
+    // получим список относительно task_id
+    let result = db.tbl_task_histories.get_by_task_id(task_id).await;
+    assert!(result.is_ok());
+    let items = result.unwrap();
+    assert_eq!(1, items.len());
 
     // err: изменим неизвестного
     assert!(
@@ -556,8 +595,12 @@ async fn check_task_histories() {
 
 #[tokio::test]
 async fn check_task_comments() {
-    let pool = PgPoolOptions::new().connect(DSN).await.unwrap();
-    let db = Postgres::new(&pool);
+    let pool = PgPoolOptions::new()
+        .acquire_timeout(Duration::new(1, 0))
+        .connect(DSN)
+        .await
+        .unwrap();
+    let db = Postgres::new(pool);
     let time_now = Local::now();
 
     // ok: создадим зависимости

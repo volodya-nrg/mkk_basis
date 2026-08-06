@@ -4,13 +4,13 @@ use crate::adapter::db::postgres::table_basic::TableBasic;
 use sqlx::{Pool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
 
-#[derive(Debug)]
-pub struct TaskHistories<'p> {
-    pool: &'p Pool<Postgres>,
+#[derive(Clone)]
+pub struct TaskHistories {
+    pool: Pool<Postgres>,
     table_basic: TableBasic,
 }
-impl<'p> TaskHistories<'p> {
-    pub fn new(pool: &'p Pool<Postgres>) -> Self {
+impl TaskHistories {
+    pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
             pool,
             table_basic: TableBasic {
@@ -43,13 +43,13 @@ impl<'p> TaskHistories<'p> {
 
         let items: Vec<TaskHistory> = query
             .build_query_as()
-            .fetch_all(self.pool)
+            .fetch_all(&self.pool)
             .await
             .map_err(|e| format!("failed to query: {e}"))?;
         let total: (i64,) =
             QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.table_basic.name)) // возвращает такой же диапазон как и i64
                 .build_query_as()
-                .fetch_one(self.pool)
+                .fetch_one(&self.pool)
                 .await
                 .map_err(|e| format!("failed to count: {e}"))?;
 
@@ -64,13 +64,27 @@ impl<'p> TaskHistories<'p> {
         let opt = QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(self.pool)
+            .fetch_optional(&self.pool)
             .await
             .map_err(|e| Error::Any(format!("failed to query: {e}")))?;
         match opt {
             Some(v) => Ok(v),
             None => Err(Error::NotFound),
         }
+    }
+    pub async fn get_by_task_id(&self, task_id: Uuid) -> Result<Vec<TaskHistory>, String> {
+        let items: Vec<TaskHistory> = QueryBuilder::new(format!(
+            "SELECT {} FROM {} WHERE task_id=$1 ORDER BY created_at DESC",
+            self.table_basic.fields.join(","),
+            self.table_basic.name,
+        ))
+        .build_query_as()
+        .bind(task_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| format!("failed to query: {e}"))?;
+
+        Ok(items)
     }
     pub async fn create(&self, item: TaskHistory) -> Result<Uuid, String> {
         let query = format!(
@@ -82,7 +96,7 @@ impl<'p> TaskHistories<'p> {
             .bind(item.task_id)
             .bind(item.user_id)
             .bind(item.msg)
-            .fetch_one(self.pool)
+            .fetch_one(&self.pool)
             .await
             .map_err(|e| format!("failed to insert: {e}"))?
             .get(0);
@@ -100,7 +114,7 @@ impl<'p> TaskHistories<'p> {
             .bind(item.user_id)
             .bind(item.msg)
             .bind(item.task_history_id)
-            .execute(self.pool)
+            .execute(&self.pool)
             .await
             .map_err(|e| Error::Any(format!("failed to update: {e}")))?;
 
@@ -124,7 +138,7 @@ impl<'p> TaskHistories<'p> {
         let result = QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(self.pool)
+            .execute(&self.pool)
             .await
             .map_err(|e| format!("failed to delete: {e}"))?;
 

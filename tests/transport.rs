@@ -9,32 +9,71 @@ use mkk_basis::transport::models::*;
 use mkk_basis::usecase::UseCase;
 use reqwest::Response;
 use sqlx::postgres::PgPoolOptions;
+use std::net::TcpListener;
 use tokio::time::{Duration, sleep};
 use uuid::Uuid;
 
 #[tokio::test]
 async fn check_transport() {
-    let addr = format!("localhost:{}", helpers::funcs::gen_rand_port());
+    logger::init("", "", "debug", "").unwrap();
+
+    let addr = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .to_string();
     let http_addr = format!("http://{}", addr);
     let cl = helpers::client::Client::new(http_addr);
-
-    logger::init("", "", "debug", "").unwrap();
 
     tokio::spawn(async move {
         let pool = PgPoolOptions::new()
             .connect("postgres://postgres:postgres@127.0.0.1:5432/postgres?search_path=mkk_basis&sslmode=disable")
             .await
             .unwrap();
-        HTTPServer::run(&addr, UseCase::new(Postgres::new(&pool)))
-            .await
-            .unwrap()
+        let http_server = HTTPServer::new(addr.clone(), UseCase::new(Postgres::new(pool)));
+        log::info!("http-server start on {}", addr);
+        http_server.run().await.unwrap()
     });
 
     sleep(Duration::from_secs(1)).await;
 
-    cl.register(
+    cl.index(|result: Result<(u16, String), String>| {
+        assert!(result.is_ok());
+        let (status_code, body_str) = result.unwrap();
+        assert_eq!(StatusCode::OK, status_code);
+        assert!(!body_str.is_empty());
+    })
+    .await
+    .page404(|result: Result<(u16, String), String>| {
+        assert!(result.is_ok());
+        let (status_code, body_str) = result.unwrap();
+        assert_eq!(StatusCode::NOT_FOUND, status_code);
+        assert!(!body_str.is_empty());
+    })
+    .await
+    .get_file(
+        "/robots.txt".to_string(),
+        |result: Result<(u16, String), String>| {
+            assert!(result.is_ok());
+            let (status_code, body_str) = result.unwrap();
+            assert_eq!(StatusCode::OK, status_code);
+            assert!(!body_str.is_empty());
+        },
+    )
+    .await
+    .get_file(
+        "/sitemap.xml".to_string(),
+        |result: Result<(u16, String), String>| {
+            assert!(result.is_ok());
+            let (status_code, body_str) = result.unwrap();
+            assert_eq!(StatusCode::OK, status_code);
+            assert!(!body_str.is_empty());
+        },
+    )
+    .await
+    .register(
         Faker.fake::<RequestRegister>(),
-        |result: Result<ResponseRegister, String>| {
+        |result: Result<(), String>| {
             assert!(result.is_ok());
         },
     )
@@ -47,6 +86,12 @@ async fn check_transport() {
             println!("{:?}", resp)
         },
     )
+    .await
+    .logout(|result: Result<reqwest::StatusCode, String>| {
+        assert!(result.is_ok());
+        let resp = result.unwrap();
+        assert_eq!(StatusCode::OK, resp)
+    })
     .await
     .teams_list(
         100,

@@ -42,18 +42,10 @@ pub struct RequestTask {
     pub created_by: Uuid,
     pub team_id: Uuid,
     pub assignee_id: Option<Uuid>,
-    pub status: Option<String>,
+    pub status: String,
 }
 
 // ------------------------------------
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct ResponseRegister {
-    pub email: String,
-    pub password: String,
-    pub password_confirm: String,
-    pub is_agree: bool,
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ResponseLogin {
@@ -63,9 +55,8 @@ pub struct ResponseLogin {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ResponseTeamsList {
-    pub items: Vec<String>,
-    pub page_number: u32,
-    pub total: i64,
+    pub items: Vec<ResponseTeam>,
+    pub total: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -79,9 +70,8 @@ pub struct ResponseTeam {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ResponseTasksList {
-    pub items: Vec<String>,
-    pub page_number: u32,
-    pub total: i64,
+    pub items: Vec<ResponseTask>,
+    pub total: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -99,5 +89,24 @@ pub struct ResponseTask {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ResponseTaskHistories {
-    pub items: Vec<String>,
+    pub items: Vec<ResponseTaskHistory>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ResponseTaskHistory {
+    pub task_history_id: Uuid,
+    pub task_id: Uuid,
+    pub user_id: Uuid,
+    pub msg: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ResponseUUID {
+    pub uuid: Uuid,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ResponseError {
+    pub message: String,
 }

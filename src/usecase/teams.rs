@@ -1,42 +1,53 @@
-// use crate::adapter::db::postgres::teams::Teams as TeamsRepo;
-// use crate::usecase::models::Team;
-// use uuid::Uuid;
+use crate::adapter::db::postgres::tables::{
+    team_members::TeamMembers as TeamMembersRepo, teams::Teams as TeamsRepo,
+};
+use crate::usecase::{mapper, models::*};
+use uuid::Uuid;
 
-#[derive(Clone)]
+#[derive(Clone)] // из-за axum-state
 pub struct Teams {
-    // teams_repo: TeamsRepo,
+    teams_repo: TeamsRepo,
+    team_members_repo: TeamMembersRepo,
 }
 
 impl Teams {
-    // pub fn new(teams_repo: TeamsRepo) -> Self {
-    //     Self { teams_repo }
-    // }
-    // pub fn get_all(&self) -> Result<Vec<Team>, String> {
-    //     println!("--- usecase teams get_all");
-    //     let items = self
-    //         .teams_repo
-    //         .get_all()
-    //         .map_err(|e| format!("failed to get items: {e}"))?;
-    //     Ok(items.iter().map(|i| i.to_uc()).collect())
-    // }
-    // pub fn get_one(&self) -> Result<Team, String> {
-    //     println!("--- usecase teams get_one");
-    //     let item = self
-    //         .teams_repo
-    //         .get_one()
-    //         .map_err(|e| format!("failed to get item: {e}"))?;
-    //     Ok(item.to_uc())
-    // }
-    // pub fn create(&self) -> Result<Uuid, String> {
-    //     println!("--- usecase teams create");
-    //     Ok(Uuid::new_v4())
-    // }
-    // pub fn update(&self) -> Result<(), String> {
-    //     println!("--- usecase teams update");
-    //     Ok(())
-    // }
-    // pub fn delete(&self) -> Result<(), String> {
-    //     println!("--- usecase teams delete");
-    //     Ok(())
-    // }
+    pub fn new(teams_repo: TeamsRepo, team_members_repo: TeamMembersRepo) -> Self {
+        Self {
+            teams_repo,
+            team_members_repo,
+        }
+    }
+    pub async fn get_list(&self, limit: i32, offset: i32) -> Result<(Vec<Team>, i64), String> {
+        let (items, total) = self
+            .teams_repo
+            .list(limit, offset)
+            .await
+            .map_err(|e| format!("failed to get items: {e}"))?;
+        Ok((
+            items
+                .into_iter()
+                .map(|item| mapper::team_db_to_team_uc(item))
+                .collect(),
+            total,
+        ))
+    }
+    pub async fn create(&self, team: Team) -> Result<Uuid, String> {
+        let new_uuid = self
+            .teams_repo
+            .create(mapper::team_uc_to_team_db(team))
+            .await
+            .map_err(|e| format!("failed to create: {e}"))?;
+        Ok(new_uuid)
+    }
+    pub async fn invite(&self, team_id: Uuid, user_id: Uuid) -> Result<(), String> {
+        self.team_members_repo
+            .create(mapper::team_member_uc_to_team_member_db(TeamMember {
+                team_id,
+                user_id,
+                created_at: Default::default(),
+            }))
+            .await
+            .map_err(|e| format!("failed to create: {e}"))?;
+        Ok(())
+    }
 }

@@ -28,3 +28,9 @@ test_db:
 	
 test_transport:
 	cargo test --test transport -- --nocapture # --include-ignored
+
+cargo_reload:
+	cargo clean && cargo update && cargo build
+
+cargo_check:
+	cargo check

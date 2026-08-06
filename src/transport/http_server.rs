@@ -1,41 +1,24 @@
-mod handlers;
+pub mod handlers;
 
 use crate::usecase::UseCase;
 use axum::Router;
 use axum::routing::{get, post, put};
 use handlers::Handlers;
-use std::sync::Arc;
 use tokio::net::TcpListener;
+use tower_http::services::{ServeDir, ServeFile};
 
-pub struct AppState {
-    pub use_case: UseCase,
+pub struct HTTPServer {
+    addr: String,
+    use_case: UseCase,
 }
-impl AppState {
-    pub fn new(use_case: UseCase) -> Self {
-        Self { use_case }
-    }
-}
-
-pub struct HTTPServer {}
 
 impl HTTPServer {
-    pub async fn run(addr: &str, use_case: UseCase) -> Result<(), String> {
-        let router = Router::new()
-            .route("/api/v1/register", post(Handlers::register))
-            .route("/api/v1/login", post(Handlers::login))
-            .route(
-                "/api/v1/teams",
-                get(Handlers::teams_list).post(Handlers::teams_create),
-            )
-            .route("/api/v1/teams/{id}/invite", post(Handlers::teams_invite))
-            .route(
-                "/api/v1/tasks",
-                get(Handlers::tasks_list).post(Handlers::tasks_create),
-            )
-            .route("/api/v1/tasks/{id}", put(Handlers::tasks_update))
-            .route("/api/v1/tasks/{id}/history", get(Handlers::tasks_history))
-            .with_state(Arc::new(AppState::new(use_case)));
-        let listener = TcpListener::bind(addr)
+    pub fn new(addr: String, use_case: UseCase) -> Self {
+        Self { addr, use_case }
+    }
+    pub async fn run(&self) -> Result<(), String> {
+        let router = self.get_router();
+        let listener = TcpListener::bind(self.addr.as_str())
             .await
             .map_err(|e| format!("failed to bind addr: {e}"))?;
 
@@ -44,5 +27,36 @@ impl HTTPServer {
             .map_err(|e| format!("failed to serve: {e}"))?;
 
         Ok(())
+    }
+    fn get_router(&self) -> Router {
+        Router::new()
+            // index
+            .route("/", get(Handlers::index))
+            // auth
+            .route("/api/v1/register", post(Handlers::register))
+            .route("/api/v1/login", post(Handlers::login))
+            .route("/api/v1/logout", post(Handlers::logout))
+            // teams
+            .route(
+                "/api/v1/teams",
+                get(Handlers::teams_list).post(Handlers::teams_create),
+            )
+            .route("/api/v1/teams/{id}/invite", post(Handlers::teams_invite))
+            // tasks
+            .route(
+                "/api/v1/tasks",
+                get(Handlers::tasks_list).post(Handlers::tasks_create),
+            )
+            .route("/api/v1/tasks/{id}", put(Handlers::tasks_update))
+            .route("/api/v1/tasks/{id}/history", get(Handlers::tasks_history))
+            // static
+            .nest_service("/js", ServeDir::new("./web/js"))
+            .nest_service("/css", ServeDir::new("./web/css"))
+            .nest_service("/images", ServeDir::new("./web/images"))
+            .nest_service("/robots.txt", ServeFile::new("./web/robots.txt"))
+            .nest_service("/sitemap.xml", ServeFile::new("./web/sitemap.xml"))
+            // other
+            .fallback(Handlers::page404)
+            .with_state(self.use_case.clone())
     }
 }

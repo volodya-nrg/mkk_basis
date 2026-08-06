@@ -4,13 +4,13 @@ use crate::adapter::db::postgres::table_basic::TableBasic;
 use sqlx::{Pool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
 
-#[derive(Debug)]
-pub struct TaskComments<'p> {
-    pool: &'p Pool<Postgres>,
+#[derive(Clone)]
+pub struct TaskComments {
+    pool: Pool<Postgres>,
     table_basic: TableBasic,
 }
-impl<'p> TaskComments<'p> {
-    pub fn new(pool: &'p Pool<Postgres>) -> Self {
+impl TaskComments {
+    pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
             pool,
             table_basic: TableBasic {
@@ -44,13 +44,13 @@ impl<'p> TaskComments<'p> {
 
         let items: Vec<TaskComment> = query
             .build_query_as()
-            .fetch_all(self.pool)
+            .fetch_all(&self.pool)
             .await
             .map_err(|e| format!("failed to query: {e}"))?;
         let total: (i64,) =
             QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.table_basic.name)) // возвращает такой же диапазон как и i64
                 .build_query_as()
-                .fetch_one(self.pool)
+                .fetch_one(&self.pool)
                 .await
                 .map_err(|e| format!("failed to count: {e}"))?;
 
@@ -65,7 +65,7 @@ impl<'p> TaskComments<'p> {
         let opt = QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(self.pool)
+            .fetch_optional(&self.pool)
             .await
             .map_err(|e| Error::Any(format!("failed to query: {e}")))?;
         match opt {
@@ -83,7 +83,7 @@ impl<'p> TaskComments<'p> {
             .bind(item.task_id)
             .bind(item.user_id)
             .bind(item.msg)
-            .fetch_one(self.pool)
+            .fetch_one(&self.pool)
             .await
             .map_err(|e| format!("failed to insert: {e}"))?
             .get(0);
@@ -101,7 +101,7 @@ impl<'p> TaskComments<'p> {
             .bind(item.user_id)
             .bind(item.msg)
             .bind(item.task_comment_id)
-            .execute(self.pool)
+            .execute(&self.pool)
             .await
             .map_err(|e| Error::Any(format!("failed to update: {e}")))?;
 
@@ -125,7 +125,7 @@ impl<'p> TaskComments<'p> {
         let result = QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(self.pool)
+            .execute(&self.pool)
             .await
             .map_err(|e| format!("failed to delete: {e}"))?;
 
