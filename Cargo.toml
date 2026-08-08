@@ -19,3 +19,9 @@ fake = { version = "5.1.0", features = ["derive", "chrono", "uuid"] }
 reqwest = { version = "0.13.4", features = ["form", "json"] }
 tower-http = { version = "0.7.0", features = ["fs"] }
 argon2 = { version = "0.5.3", features = ["std"] }
+regex = "1.13.1"
+once_cell = "1.21.4"
+email_address = "0.2.9"
+ctor = "1.0.12"
+http = "1.5.0"
+lazy_static = "1.5.0"

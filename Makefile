@@ -27,7 +27,7 @@ test_db:
 	cargo test --test db -- --nocapture # --include-ignored
 	
 test_transport:
-	cargo test --test transport -- --nocapture # --include-ignored
+	RUST_BACKTRACE=1 cargo test --test transport -- --nocapture # --include-ignored
 
 cargo_reload:
 	cargo clean && cargo update && cargo build

@@ -1,19 +1,25 @@
 use chrono::{DateTime, Utc};
 use fake::Dummy;
+use fake::faker::internet::raw::{FreeEmail, Password};
+use fake::locales::EN;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, Dummy, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Dummy, PartialEq, Clone)]
 pub struct RequestRegister {
+    #[dummy(faker = "FreeEmail(EN)")]
     pub email: String,
+    #[dummy(faker = "Password(EN, 5..20)")]
     pub password: String,
+    #[dummy(faker = "Password(EN, 5..20)")]
     pub password_confirm: String,
-    pub is_agree: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize, Dummy)]
+#[derive(Debug, Serialize, Deserialize, Dummy, Clone)]
 pub struct RequestLogin {
+    #[dummy(faker = "FreeEmail(EN)")]
     pub email: String,
+    #[dummy(faker = "Password(EN, 5..20)")]
     pub password: String,
 }
 

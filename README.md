@@ -7,3 +7,4 @@
 - tokio/axum/tower/hyper/lapin
 - tokio - асинхронный runtime
 - https://github.com/cksac/fake-rs
+- чтоб пропустить тест нужно добавить метку: #[ignore]

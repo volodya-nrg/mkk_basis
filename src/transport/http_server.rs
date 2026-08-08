@@ -1,9 +1,10 @@
 pub mod handlers;
+pub mod middleware;
 
 use crate::usecase::UseCase;
-use axum::Router;
 use axum::routing::{get, post, put};
-use handlers::Handlers;
+use axum::{Router, middleware as AxumMiddleware};
+use handlers::{auth, etc, tasks, teams};
 use tokio::net::TcpListener;
 use tower_http::services::{ServeDir, ServeFile};
 
@@ -31,32 +32,41 @@ impl HTTPServer {
     fn get_router(&self) -> Router {
         Router::new()
             // index
-            .route("/", get(Handlers::index))
+            .route("/", get(etc::Handlers::index))
+            .route("/healthz", get(etc::Handlers::healthz))
             // auth
-            .route("/api/v1/register", post(Handlers::register))
-            .route("/api/v1/login", post(Handlers::login))
-            .route("/api/v1/logout", post(Handlers::logout))
+            .route("/api/v1/register", post(auth::Handlers::register))
+            .route("/api/v1/login", post(auth::Handlers::login))
+            .route("/api/v1/logout", post(auth::Handlers::logout))
             // teams
             .route(
                 "/api/v1/teams",
-                get(Handlers::teams_list).post(Handlers::teams_create),
+                get(teams::Handlers::teams_list).post(teams::Handlers::teams_create),
             )
-            .route("/api/v1/teams/{id}/invite", post(Handlers::teams_invite))
+            .route(
+                "/api/v1/teams/{id}/invite",
+                post(teams::Handlers::teams_invite),
+            )
             // tasks
             .route(
                 "/api/v1/tasks",
-                get(Handlers::tasks_list).post(Handlers::tasks_create),
+                get(tasks::Handlers::tasks_list).post(tasks::Handlers::tasks_create),
             )
-            .route("/api/v1/tasks/{id}", put(Handlers::tasks_update))
-            .route("/api/v1/tasks/{id}/history", get(Handlers::tasks_history))
+            .route("/api/v1/tasks/{id}", put(tasks::Handlers::tasks_update))
+            .route(
+                "/api/v1/tasks/{id}/history",
+                get(tasks::Handlers::tasks_history),
+            )
             // static
             .nest_service("/js", ServeDir::new("./web/js"))
             .nest_service("/css", ServeDir::new("./web/css"))
             .nest_service("/images", ServeDir::new("./web/images"))
             .nest_service("/robots.txt", ServeFile::new("./web/robots.txt"))
             .nest_service("/sitemap.xml", ServeFile::new("./web/sitemap.xml"))
+            // middleware
+            .route_layer(AxumMiddleware::from_fn(middleware::err::err))
             // other
-            .fallback(Handlers::page404)
+            .fallback(etc::Handlers::page404)
             .with_state(self.use_case.clone())
     }
 }

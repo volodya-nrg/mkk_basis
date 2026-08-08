@@ -1,7 +1,6 @@
 use fake::{Fake, Faker};
 use mkk_basis::transport::models::*;
-use reqwest::{Client as ReqwestClient, Response, StatusCode};
-use std::io::{Bytes, Read};
+use reqwest::{Client as ReqwestClient, Response};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -33,34 +32,50 @@ impl Client {
                 .unwrap(),
         }
     }
+    async fn parse_response(&self, resp: Response) -> Result<(u16, String), String> {
+        let status_code = resp.status().as_u16();
+        let result = resp
+            .text()
+            .await
+            .map_err(|e| format!("failed to read body: {:?}", e))?;
+        Ok((status_code, result))
+    }
+
+    // etc
     pub async fn index(&self, cb: fn(Result<(u16, String), String>)) -> &Self {
         let result = self
             .client
             .get(&self.addr)
             .send()
             .await
-            .map_err(|e| format!("failed to request: {e}"));
-        let resp = match result {
-            Ok(v) => v,
-            Err(e) => {
-                cb(Err(e));
-                return self;
-            }
-        };
-        let status_code = resp.status().as_u16();
-        let result = resp
-            .text()
-            .await
-            .map_err(|e| format!("failed to read body: {e}"));
-        let body_str = match result {
-            Ok(v) => v,
-            Err(e) => {
-                cb(Err(e));
-                return self;
-            }
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
         };
 
-        cb(Ok((status_code, body_str)));
+        cb(result);
+        self
+    }
+    pub async fn healthz(&self, cb: fn(Result<(u16, String), String>)) -> &Self {
+        let result = self
+            .client
+            .get(format!("{}/healthz", self.addr))
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        };
+
+        cb(result);
         self
     }
     pub async fn page404(&self, cb: fn(Result<(u16, String), String>)) -> &Self {
@@ -70,28 +85,16 @@ impl Client {
             .get(format!("{}/{}", self.addr, random_string))
             .send()
             .await
-            .map_err(|e| format!("failed to request: {e}"));
-        let resp = match result {
-            Ok(v) => v,
-            Err(e) => {
-                cb(Err(e));
-                return self;
-            }
-        };
-        let status_code = resp.status().as_u16();
-        let result = resp
-            .text()
-            .await
-            .map_err(|e| format!("failed to read body: {e}"));
-        let body_str = match result {
-            Ok(v) => v,
-            Err(e) => {
-                cb(Err(e));
-                return self;
-            }
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
         };
 
-        cb(Ok((status_code, body_str)));
+        cb(result);
         self
     }
     pub async fn get_file(
@@ -107,34 +110,24 @@ impl Client {
             .get(format!("{}/{}", self.addr, url_filepath))
             .send()
             .await
-            .map_err(|e| format!("failed to request: {e}"));
-        let resp = match result {
-            Ok(v) => v,
-            Err(e) => {
-                cb(Err(e));
-                return self;
-            }
-        };
-        let status_code = resp.status().as_u16();
-        let result = resp
-            .text()
-            .await
-            .map_err(|e| format!("failed to read body: {e}"));
-        let body_str = match result {
-            Ok(v) => v,
-            Err(e) => {
-                cb(Err(e));
-                return self;
-            }
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
         };
 
-        cb(Ok((status_code, body_str)));
+        cb(result);
         self
     }
+
+    // auth
     pub async fn register(
         &self,
         req: RequestRegister,
-        cb: fn(Result<(), String>),
+        cb: fn(Result<(u16, String), String>),
     ) -> &Self {
         let result = self
             .client
@@ -142,63 +135,57 @@ impl Client {
             .json(&req)
             .send()
             .await
-            .map_err(|e| format!("failed to request: {e}"));
+            .map_err(|e| format!("failed to request: {:?}", e));
         let result = match result {
-            Ok(v) => v,
-            Err(e) => {
-                cb(Err(e));
-                return self;
-            }
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
         };
-        let result = result
-            .json()
-            .await
-            .map_err(|e| format!("failed convert to json: {e}"));
 
         cb(result);
         self
     }
-    pub async fn login(&self, req: RequestLogin, cb: fn(Result<ResponseLogin, String>)) -> &Self {
+    pub async fn login(&self, req: RequestLogin, cb: fn(Result<(u16, String), String>)) -> &Self {
         let result = self
             .client
             .post(format!("{}/api/v1/login", self.addr))
             .json(&req)
             .send()
             .await
-            .map_err(|e| format!("failed to request: {e}"));
+            .map_err(|e| format!("failed to request: {:?}", e));
         let result = match result {
-            Ok(v) => v,
-            Err(e) => {
-                cb(Err(e));
-                return self;
-            }
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
         };
-        let result = result
-            .json()
-            .await
-            .map_err(|e| format!("failed convert to json: {e}"));
 
         cb(result);
         self
     }
-    pub async fn logout(&self, cb: fn(Result<StatusCode, String>)) -> &Self {
+    pub async fn logout(&self, cb: fn(Result<(u16, String), String>)) -> &Self {
         let result = self
             .client
-            .get(format!("{}/api/v1/logout", self.addr))
+            .post(format!("{}/api/v1/logout", self.addr))
             .send()
             .await
-            .map_err(|e| format!("failed to request: {e}"));
-        let resp = match result {
-            Ok(v) => v,
-            Err(e) => {
-                cb(Err(e));
-                return self;
-            }
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
         };
-        
-        cb(Ok(resp.status()));
+
+        cb(result);
         self
     }
+
+    // teams
     pub async fn teams_list(
         &self,
         limit: i32,
@@ -216,7 +203,7 @@ impl Client {
             })
             .send()
             .await
-            .map_err(|e| format!("failed to request: {e}"));
+            .map_err(|e| format!("failed to request: {:?}", e));
         let result = match result {
             Ok(v) => v,
             Err(e) => {
@@ -227,7 +214,7 @@ impl Client {
         let result = result
             .json()
             .await
-            .map_err(|e| format!("failed convert to json: {e}"));
+            .map_err(|e| format!("failed convert to json: {:?}", e));
 
         cb(result);
         self
@@ -243,7 +230,7 @@ impl Client {
             .json(&req)
             .send()
             .await
-            .map_err(|e| format!("failed to request: {e}"));
+            .map_err(|e| format!("failed to request: {:?}", e));
         let result = match result {
             Ok(v) => v,
             Err(e) => {
@@ -254,7 +241,7 @@ impl Client {
         let result = result
             .json()
             .await
-            .map_err(|e| format!("failed convert to json: {e}"));
+            .map_err(|e| format!("failed convert to json: {:?}", e));
 
         cb(result);
         self
@@ -271,11 +258,13 @@ impl Client {
             .json(&req)
             .send()
             .await
-            .map_err(|e| format!("failed to request: {e}"));
+            .map_err(|e| format!("failed to request: {:?}", e));
 
         cb(result);
         self
     }
+
+    // tasks
     pub async fn tasks_list(
         &self,
         limit: i32,
@@ -293,7 +282,7 @@ impl Client {
             })
             .send()
             .await
-            .map_err(|e| format!("failed to request: {e}"));
+            .map_err(|e| format!("failed to request: {:?}", e));
         let result = match result {
             Ok(v) => v,
             Err(e) => {
@@ -304,7 +293,7 @@ impl Client {
         let result = result
             .json()
             .await
-            .map_err(|e| format!("failed convert to json: {e}"));
+            .map_err(|e| format!("failed convert to json: {:?}", e));
 
         cb(result);
         self
@@ -320,7 +309,7 @@ impl Client {
             .json(&req)
             .send()
             .await
-            .map_err(|e| format!("failed to request: {e}"));
+            .map_err(|e| format!("failed to request: {:?}", e));
         let result = match result {
             Ok(v) => v,
             Err(e) => {
@@ -331,7 +320,7 @@ impl Client {
         let result = result
             .json()
             .await
-            .map_err(|e| format!("failed convert to json: {e}"));
+            .map_err(|e| format!("failed convert to json: {:?}", e));
 
         cb(result);
         self
@@ -348,7 +337,7 @@ impl Client {
             .json(&req)
             .send()
             .await
-            .map_err(|e| format!("failed to request: {e}"));
+            .map_err(|e| format!("failed to request: {:?}", e));
         let result = match result {
             Ok(v) => v,
             Err(e) => {
@@ -359,7 +348,7 @@ impl Client {
         let result = result
             .json()
             .await
-            .map_err(|e| format!("failed convert to json: {e}"));
+            .map_err(|e| format!("failed convert to json: {:?}", e));
 
         cb(result);
         self
@@ -374,7 +363,7 @@ impl Client {
             .get(format!("{}/api/v1/tasks/{}/history", self.addr, task_id))
             .send()
             .await
-            .map_err(|e| format!("failed to request: {e}"));
+            .map_err(|e| format!("failed to request: {:?}", e));
         let result = match result {
             Ok(v) => v,
             Err(e) => {
@@ -385,7 +374,7 @@ impl Client {
         let result = result
             .json()
             .await
-            .map_err(|e| format!("failed convert to json: {e}"));
+            .map_err(|e| format!("failed convert to json: {:?}", e));
 
         cb(result);
         self

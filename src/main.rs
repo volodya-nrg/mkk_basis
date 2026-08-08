@@ -1,6 +1,9 @@
 mod adapter;
 mod transport;
 mod usecase;
+mod err_msg;
+mod consts;
+mod custom_error;
 
 use adapter::{config::Config, db::postgres::Postgres, logger};
 use clap::Parser;

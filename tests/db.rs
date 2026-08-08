@@ -1,26 +1,34 @@
 use chrono::Local;
+use ctor::ctor;
 use fake::faker::internet::en::SafeEmail;
 use fake::{Fake, Faker};
 use mkk_basis::adapter::db::errors::Error;
 use mkk_basis::adapter::db::models::*;
 use mkk_basis::adapter::db::postgres::Postgres;
 use mkk_basis::adapter::db::postgres::tables::tasks::Status as TaskStatus;
+use mkk_basis::adapter::logger;
 use sqlx::postgres::PgPoolOptions;
 use std::assert_matches;
 use std::time::Duration;
 use uuid::Uuid;
 
-const DSN: &str =
-    "postgres://postgres:postgres@127.0.0.1:5432/postgres?search_path=mkk_basis&sslmode=disable";
+#[ctor(unsafe)]
+fn init() {
+    logger::init("", "", "debug", "").unwrap();
+}
+
+async fn get_db() -> Postgres {
+    let pool = PgPoolOptions::new()
+        .acquire_timeout(Duration::new(1, 0))
+        .connect("postgres://postgres:postgres@127.0.0.1:5432/postgres?search_path=mkk_basis&sslmode=disable")
+        .await
+        .unwrap();
+    Postgres::new(pool)
+}
 
 #[tokio::test]
 async fn check_users() {
-    let pool = PgPoolOptions::new()
-        .acquire_timeout(Duration::new(1, 0))
-        .connect(DSN)
-        .await
-        .unwrap();
-    let db = Postgres::new(pool);
+    let db = get_db().await;
     let time_now = Local::now();
 
     // err: проверим что запись не находит
@@ -99,12 +107,7 @@ async fn check_users() {
 
 #[tokio::test]
 async fn check_teams() {
-    let pool = PgPoolOptions::new()
-        .acquire_timeout(Duration::new(1, 0))
-        .connect(DSN)
-        .await
-        .unwrap();
-    let db = Postgres::new(pool);
+    let db = get_db().await;
     let time_now = Local::now();
 
     // ok: создадим пользователя
@@ -186,12 +189,7 @@ async fn check_teams() {
 
 #[tokio::test]
 async fn check_team_members() {
-    let pool = PgPoolOptions::new()
-        .acquire_timeout(Duration::new(1, 0))
-        .connect(DSN)
-        .await
-        .unwrap();
-    let db = Postgres::new(pool);
+    let db = get_db().await;
     let time_now = Local::now();
 
     // ok: создадим команду и пользователя
@@ -305,12 +303,7 @@ async fn check_team_members() {
 
 #[tokio::test]
 async fn check_tasks() {
-    let pool = PgPoolOptions::new()
-        .acquire_timeout(Duration::new(1, 0))
-        .connect(DSN)
-        .await
-        .unwrap();
-    let db = Postgres::new(pool);
+    let db = get_db().await;
     let time_now = Local::now();
 
     // ok: создадим пользователя и команду
@@ -406,12 +399,7 @@ async fn check_tasks() {
 
 #[tokio::test]
 async fn check_task_histories() {
-    let pool = PgPoolOptions::new()
-        .acquire_timeout(Duration::new(1, 0))
-        .connect(DSN)
-        .await
-        .unwrap();
-    let db = Postgres::new(pool);
+    let db = get_db().await;
     let time_now = Local::now();
 
     // ok: создадим зависимости
@@ -595,12 +583,7 @@ async fn check_task_histories() {
 
 #[tokio::test]
 async fn check_task_comments() {
-    let pool = PgPoolOptions::new()
-        .acquire_timeout(Duration::new(1, 0))
-        .connect(DSN)
-        .await
-        .unwrap();
-    let db = Postgres::new(pool);
+    let db = get_db().await;
     let time_now = Local::now();
 
     // ok: создадим зависимости
@@ -720,7 +703,7 @@ async fn check_task_comments() {
     // ok: удалим
     assert!(
         db.tbl_task_comments
-            .delete(task_comment_actual.task_comment_id)
+            .delete(task_comment_actual.task_comment_id.clone())
             .await
             .is_ok()
     );
@@ -728,7 +711,7 @@ async fn check_task_comments() {
     // ok: не нашли, как и задумано
     assert_matches!(
         db.tbl_task_comments
-            .one(task_comment_actual.task_comment_id)
+            .one(task_comment_actual.task_comment_id.clone())
             .await,
         Err(Error::NotFound)
     );
