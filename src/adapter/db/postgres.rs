@@ -9,6 +9,7 @@ use tables::team_members::TeamMembers;
 use tables::teams::Teams;
 use tables::users::Users;
 
+#[allow(dead_code)]
 pub struct Postgres {
     pub tbl_users: Users,
     pub tbl_teams: Teams,

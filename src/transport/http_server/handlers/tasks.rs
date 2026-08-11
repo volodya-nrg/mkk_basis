@@ -22,7 +22,7 @@ impl Handlers {
                 Json(json!(ResponseTasksList {
                     items: items
                         .into_iter()
-                        .map(|item| mapper::task_uc_to_task_tr(item))
+                        .map(mapper::task_uc_to_task_tr)
                         .collect(),
                     total: total as u32,
                 })),
@@ -93,7 +93,7 @@ impl Handlers {
                 Json(json!(ResponseTaskHistories {
                     items: v
                         .into_iter()
-                        .map(|item| mapper::task_history_uc_to_task_history_tr(item))
+                        .map(mapper::task_history_uc_to_task_history_tr)
                         .collect(),
                 })),
             )

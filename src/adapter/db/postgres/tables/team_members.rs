@@ -9,6 +9,8 @@ pub struct TeamMembers {
     pool: Pool<Postgres>,
     table_basic: TableBasic,
 }
+
+#[allow(dead_code)]
 impl TeamMembers {
     pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
@@ -32,7 +34,7 @@ impl TeamMembers {
         .build_query_as()
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| RepositoryError::FailedToQuery(e))?;
+        .map_err(RepositoryError::FailedToQuery)?;
 
         Ok(items)
     }
@@ -48,7 +50,7 @@ impl TeamMembers {
             .bind(user_id)
             .fetch_optional(&self.pool)
             .await
-            .map_err(|e| RepositoryError::FailedToQuery(e))?;
+            .map_err(RepositoryError::FailedToQuery)?;
         match opt {
             Some(v) => Ok(v),
             None => Err(RepositoryError::NotFoundRow),
@@ -66,7 +68,7 @@ impl TeamMembers {
             .bind(item.user_id)
             .execute(&self.pool)
             .await
-            .map_err(|e| RepositoryError::FailedToInsert(e))?;
+            .map_err(RepositoryError::FailedToInsert)?;
         Ok(())
     }
     pub async fn delete(&self, team_id: Uuid, user_id: Uuid) -> Result<(), RepositoryError> {
@@ -80,7 +82,7 @@ impl TeamMembers {
             .bind(user_id)
             .execute(&self.pool)
             .await
-            .map_err(|e| RepositoryError::FailedToDelete(e))?;
+            .map_err(RepositoryError::FailedToDelete)?;
         let amount_updated_rows = result.rows_affected();
         
         if amount_updated_rows != 1 {

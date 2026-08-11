@@ -45,13 +45,13 @@ impl Teams {
             .build_query_as()
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| RepositoryError::FailedToQuery(e))?;
+            .map_err(RepositoryError::FailedToQuery)?;
         let total: (i64,) =
             QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.table_basic.name)) // возвращает такой же диапазон как и i64
                 .build_query_as()
                 .fetch_one(&self.pool)
                 .await
-                .map_err(|e| RepositoryError::FailedToCount(e))?;
+                .map_err(RepositoryError::FailedToCount)?;
 
         Ok((items, total.0))
     }
@@ -66,7 +66,7 @@ impl Teams {
             .bind(item_id)
             .fetch_optional(&self.pool)
             .await
-            .map_err(|e| RepositoryError::FailedToQuery(e))?;
+            .map_err(RepositoryError::FailedToQuery)?;
         match opt {
             Some(v) => Ok(v),
             None => Err(RepositoryError::NotFoundRow),
@@ -83,11 +83,12 @@ impl Teams {
             .bind(item.created_by)
             .fetch_one(&self.pool)
             .await
-            .map_err(|e| RepositoryError::FailedToInsert(e))?
+            .map_err(RepositoryError::FailedToInsert)?
             .get(0);
 
         Ok(result)
     }
+    #[allow(dead_code)]
     pub async fn update(&self, item: Team) -> Result<(), RepositoryError> {
         let query = format!(
             "UPDATE {} SET name=$1, created_by=$2 WHERE team_id=$3",
@@ -100,7 +101,7 @@ impl Teams {
             .bind(item.team_id)
             .execute(&self.pool)
             .await
-            .map_err(|e| RepositoryError::FailedToUpdate(e))?;
+            .map_err(RepositoryError::FailedToUpdate)?;
         let amount_updated_rows = result.rows_affected();
 
         if amount_updated_rows != 1 {
@@ -109,6 +110,8 @@ impl Teams {
 
         Ok(())
     }
+
+    #[allow(dead_code)]
     pub async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE team_id=$1", self.table_basic.name);
         let result = QueryBuilder::new(query)
@@ -116,7 +119,7 @@ impl Teams {
             .bind(item_id)
             .execute(&self.pool)
             .await
-            .map_err(|e| RepositoryError::FailedToDelete(e))?;
+            .map_err(RepositoryError::FailedToDelete)?;
         let amount_updated_rows = result.rows_affected();
 
         if amount_updated_rows != 1 {

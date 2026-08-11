@@ -29,7 +29,7 @@ async fn main() {
 async fn run(config_filepath: &str) -> Result<(), String> {
     let cfg = Config::new(config_filepath).map_err(|e| {
         let str = format!("failed to create new config: {e}");
-        eprint!("{}", &str);
+        eprint!("{}", str);
         str
     })?;
 

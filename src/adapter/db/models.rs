@@ -52,6 +52,7 @@ pub struct TaskHistory {
     pub created_at: DateTime<Utc>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, FromRow, Clone, Dummy, PartialEq)]
 pub struct TaskComment {
     pub task_comment_id: Uuid,

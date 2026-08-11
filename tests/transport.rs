@@ -31,7 +31,7 @@ static MARKER: OnceCell<String> = OnceCell::const_new();
 
 async fn run_test_server() -> &'static str {
     MARKER.get_or_init(|| async move {
-        logger::init("test_transport_service", "v0.0.1", "debug", "", true).expect("failed to init logger");
+        logger::init("", "", "error", "", true).unwrap();
 
         let addr = TcpListener::bind("127.0.0.1:0")
             .expect("failed to bind addr")
@@ -112,7 +112,7 @@ async fn check_auth() {
     cl.register(
         req_register.clone(),
         |result: Result<(u16, String), String>| {
-            let (status_code, body_str) = result.unwrap();
+            let (status_code, _body_str) = result.unwrap();
             assert_eq!(StatusCode::BAD_REQUEST.as_u16(), status_code);
 
             // err: проверка пароля на длину
@@ -124,7 +124,7 @@ async fn check_auth() {
     .register(
         req_register.clone(),
         |result: Result<(u16, String), String>| {
-            let (status_code, _) = result.unwrap();
+            let (status_code, _body_str) = result.unwrap();
             assert_eq!(StatusCode::BAD_REQUEST.as_u16(), status_code);
 
             // err: проверка паролей на равенство
@@ -135,7 +135,7 @@ async fn check_auth() {
     .register(
         req_register.clone(),
         |result: Result<(u16, String), String>| {
-            let (status_code, _) = result.unwrap();
+            let (status_code, _body_str) = result.unwrap();
             assert_eq!(StatusCode::BAD_REQUEST.as_u16(), status_code);
 
             // ok
@@ -146,7 +146,7 @@ async fn check_auth() {
     .register(
         req_register.clone(),
         |result: Result<(u16, String), String>| {
-            let (status_code, _) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
             assert_eq!(StatusCode::OK.as_u16(), status_code);
         },
     )
@@ -154,7 +154,7 @@ async fn check_auth() {
     .login(
         req_login.clone(),
         |result: Result<(u16, String), String>| {
-            let (status_code, _) = result.unwrap();
+            let (status_code, _body_str) = result.unwrap();
             assert_eq!(StatusCode::BAD_REQUEST.as_u16(), status_code);
 
             // err: проверим что по левому е-мэйлу не находит пользователя
@@ -165,7 +165,7 @@ async fn check_auth() {
     .login(
         req_login.clone(),
         |result: Result<(u16, String), String>| {
-            let (status_code, _) = result.unwrap();
+            let (status_code, _body_str) = result.unwrap();
             assert_eq!(StatusCode::BAD_REQUEST.as_u16(), status_code);
 
             // err: проверим что пароль короткий
@@ -177,7 +177,7 @@ async fn check_auth() {
     .login(
         req_login.clone(),
         |result: Result<(u16, String), String>| {
-            let (status_code, _) = result.unwrap();
+            let (status_code, _body_str) = result.unwrap();
             assert_eq!(StatusCode::BAD_REQUEST.as_u16(), status_code);
 
             // err: проверим что пароль не верный
@@ -188,7 +188,7 @@ async fn check_auth() {
     .login(
         req_login.clone(),
         |result: Result<(u16, String), String>| {
-            let (status_code, _) = result.unwrap();
+            let (status_code, _body_str) = result.unwrap();
             assert_eq!(StatusCode::BAD_REQUEST.as_u16(), status_code);
 
             // ok
@@ -210,7 +210,7 @@ async fn check_auth() {
     )
     .await
     .logout(|result: Result<(u16, String), String>| {
-        let (status_code, _) = result.unwrap();
+        let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::OK.as_u16(), status_code);
     })
     .await;
@@ -243,7 +243,7 @@ async fn check_teams() {
     cl.teams_create(
         req_team_create.clone(),
         |result: Result<(u16, String), String>| {
-            let (status_code, body_str) = result.unwrap();
+            let (status_code, _body_str) = result.unwrap();
             assert_eq!(StatusCode::INTERNAL_SERVER_ERROR.as_u16(), status_code);
 
             req_team_create.created_by = user_id;
@@ -251,7 +251,7 @@ async fn check_teams() {
     )
     .await // ок
     .teams_create(req_team_create, |result: Result<(u16, String), String>| {
-        let (status_code, body_str) = result.unwrap();
+        let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
         assert_eq!(StatusCode::OK.as_u16(), status_code);
 
         let resp_team_actual: ResponseTeam =
@@ -284,7 +284,7 @@ async fn check_teams() {
         team_id,
         RequestTeamInvite { user_id },
         |result: Result<(u16, String), String>| {
-            let (status_code, body_str) = result.unwrap();
+            let (status_code, _body_str) = result.unwrap();
             assert_eq!(StatusCode::OK.as_u16(), status_code);
         },
     )
@@ -307,7 +307,7 @@ async fn check_tasks() {
 
     // создадим пользователя и команду
     cl.register(req_register, |result: Result<(u16, String), String>| {
-        let (status_code, body_str) = result.unwrap();
+        let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
         assert_eq!(StatusCode::OK.as_u16(), status_code);
 
         let resp: ResponseUUID =
@@ -338,7 +338,7 @@ async fn check_tasks() {
     cl.tasks_create(
         req_task1.clone(),
         |result: Result<(u16, String), String>| {
-            let (status_code, body_str) = result.unwrap();
+            let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
             assert_eq!(StatusCode::OK.as_u16(), status_code);
 
             let resp_task: ResponseTask =
@@ -350,7 +350,7 @@ async fn check_tasks() {
     .tasks_create(
         req_task1.clone(),
         |result: Result<(u16, String), String>| {
-            let (status_code, _) = result.unwrap();
+            let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
             assert_eq!(StatusCode::INTERNAL_SERVER_ERROR.as_u16(), status_code);
         },
     )

@@ -22,7 +22,7 @@ impl Handlers {
                 Json(json!(ResponseTeamsList {
                     items: items
                         .into_iter()
-                        .map(|item| mapper::team_uc_to_team_tr(item))
+                        .map(mapper::team_uc_to_team_tr)
                         .collect(),
                     total: total as u32,
                 })),

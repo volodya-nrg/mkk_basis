@@ -9,6 +9,8 @@ pub struct TaskComments {
     pool: Pool<Postgres>,
     table_basic: TableBasic,
 }
+
+#[allow(dead_code)]
 impl TaskComments {
     pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
@@ -50,13 +52,13 @@ impl TaskComments {
             .build_query_as()
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| RepositoryError::FailedToQuery(e))?;
+            .map_err(RepositoryError::FailedToQuery)?;
         let total: (i64,) =
             QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.table_basic.name)) // возвращает такой же диапазон как и i64
                 .build_query_as()
                 .fetch_one(&self.pool)
                 .await
-                .map_err(|e| RepositoryError::FailedToCount(e))?;
+                .map_err(RepositoryError::FailedToCount)?;
 
         Ok((items, total.0))
     }
@@ -71,7 +73,7 @@ impl TaskComments {
             .bind(item_id)
             .fetch_optional(&self.pool)
             .await
-            .map_err(|e| RepositoryError::FailedToQuery(e))?;
+            .map_err(RepositoryError::FailedToQuery)?;
         match opt {
             Some(v) => Ok(v),
             None => Err(RepositoryError::NotFoundRow),
@@ -89,7 +91,7 @@ impl TaskComments {
             .bind(item.msg)
             .fetch_one(&self.pool)
             .await
-            .map_err(|e| RepositoryError::FailedToInsert(e))?
+            .map_err(RepositoryError::FailedToInsert)?
             .get(0);
 
         Ok(result)
@@ -107,7 +109,7 @@ impl TaskComments {
             .bind(item.task_comment_id)
             .execute(&self.pool)
             .await
-            .map_err(|e| RepositoryError::FailedToUpdate(e))?;
+            .map_err(RepositoryError::FailedToUpdate)?;
         let amount_updated_rows = result.rows_affected();
         
         if amount_updated_rows != 1 {
@@ -126,7 +128,7 @@ impl TaskComments {
             .bind(item_id)
             .execute(&self.pool)
             .await
-            .map_err(|e| RepositoryError::FailedToDelete(e))?;
+            .map_err(RepositoryError::FailedToDelete)?;
         let amount_updated_rows = result.rows_affected();
         
         if amount_updated_rows != 1 {

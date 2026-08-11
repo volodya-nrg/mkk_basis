@@ -30,23 +30,18 @@ impl Tasks {
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))?;
         Ok((
-            items
-                .into_iter()
-                .map(|item| mapper::task_db_to_task_uc(item))
-                .collect(),
+            items.into_iter().map(mapper::task_db_to_task_uc).collect(),
             total,
         ))
     }
     pub async fn one(&self, task_id: Uuid) -> Result<Task, UseCaseError> {
-        let task_db = self.tasks_repo.one(task_id).await.map_err(|e| {
-            return match e {
-                RepositoryError::NotFoundRow => UseCaseError::ForTransport {
-                    status_code: StatusCode::NOT_FOUND,
-                    public_err: "item not found".to_string(),
-                    internal_err: "".to_string(),
-                },
-                other => UseCaseError::Common(other.to_string()),
-            };
+        let task_db = self.tasks_repo.one(task_id).await.map_err(|e| match e {
+            RepositoryError::NotFoundRow => UseCaseError::ForTransport {
+                status_code: StatusCode::NOT_FOUND,
+                public_err: "item not found".to_string(),
+                internal_err: "".to_string(),
+            },
+            other => UseCaseError::Common(other.to_string()),
         })?;
         Ok(mapper::task_db_to_task_uc(task_db))
     }
@@ -73,7 +68,7 @@ impl Tasks {
             .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))?;
         Ok(items
             .into_iter()
-            .map(|item| mapper::task_history_db_to_task_history_uc(item))
+            .map(mapper::task_history_db_to_task_history_uc)
             .collect())
     }
 }

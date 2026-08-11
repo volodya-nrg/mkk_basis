@@ -33,21 +33,19 @@ impl Teams {
         Ok((
             items
                 .into_iter()
-                .map(|item| mapper::team_db_to_team_uc(item))
+                .map(mapper::team_db_to_team_uc)
                 .collect(),
             total,
         ))
     }
     pub async fn one(&self, team_id: Uuid) -> Result<Team, UseCaseError> {
-        let team_db = self.teams_repo.one(team_id).await.map_err(|e| {
-            return match e {
-                RepositoryError::NotFoundRow => UseCaseError::ForTransport {
-                    status_code: StatusCode::NOT_FOUND,
-                    public_err: "item not found".to_string(),
-                    internal_err: "".to_string(),
-                },
-                other => UseCaseError::Common(other.to_string()),
-            };
+        let team_db = self.teams_repo.one(team_id).await.map_err(|e| match e {
+            RepositoryError::NotFoundRow => UseCaseError::ForTransport {
+                status_code: StatusCode::NOT_FOUND,
+                public_err: "item not found".to_string(),
+                internal_err: "".to_string(),
+            },
+            other => UseCaseError::Common(other.to_string()),
         })?;
         Ok(mapper::team_db_to_team_uc(team_db))
     }

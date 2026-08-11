@@ -890,14 +890,14 @@ async fn check_task_comments() {
 
     // ok: удалим
     db.tbl_task_comments
-        .delete(task_comment_actual.task_comment_id.clone())
+        .delete(task_comment_actual.task_comment_id)
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
 
     // ok: не нашли, как и задумано
     assert_matches!(
         db.tbl_task_comments
-            .one(task_comment_actual.task_comment_id.clone())
+            .one(task_comment_actual.task_comment_id)
             .await,
         Err(RepositoryError::NotFoundRow)
     );

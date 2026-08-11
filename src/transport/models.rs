@@ -110,8 +110,3 @@ pub struct ResponseTaskHistory {
 pub struct ResponseUUID {
     pub uuid: Uuid,
 }
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct ResponseError {
-    pub message: String,
-}

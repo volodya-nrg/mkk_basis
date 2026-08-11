@@ -13,7 +13,13 @@ struct LogEntry {
     version: String,
 }
 
-pub fn init(service_name: &str, version: &str, level: &str, filepath: &str, is_test: bool) -> Result<(), String> {
+pub fn init(
+    service_name: &str,
+    version: &str,
+    level: &str,
+    filepath: &str,
+    is_test: bool,
+) -> Result<(), String> {
     let level: LevelFilter = match level.to_lowercase().as_str() {
         "info" => LevelFilter::Info,
         "warn" => LevelFilter::Warn,
@@ -24,10 +30,10 @@ pub fn init(service_name: &str, version: &str, level: &str, filepath: &str, is_t
     let version_loc = version.to_string();
     let mut builder = Builder::new();
 
-    if filepath != "" {
+    if !filepath.is_empty() {
         let log_file = OpenOptions::new()
             .create(true)
-            .write(true)
+            // .write(true) // lint
             .append(true)
             .open(filepath)
             .map_err(|e| format!("failed to init file: {e}"))?;
@@ -46,10 +52,15 @@ pub fn init(service_name: &str, version: &str, level: &str, filepath: &str, is_t
                 target: record.target().to_string(),
             };
 
-            if let Ok(json_str) = serde_json::to_string(&log_entry) {
-                Ok(writeln!(buf, "{}", json_str).unwrap_or_default())
-            } else {
-                Ok(writeln!(buf, "{}", record.args()).unwrap_or_default())
+            match serde_json::to_string(&log_entry) {
+                Ok(v) => {
+                    let _: () = writeln!(buf, "{}", v).unwrap_or_default();
+                    Ok(())
+                }
+                Err(_) => {
+                    let _: () = writeln!(buf, "{}", record.args()).unwrap_or_default();
+                    Ok(())
+                }
             }
         })
         .is_test(is_test)

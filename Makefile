@@ -34,3 +34,6 @@ cargo_reload:
 
 cargo_check:
 	cargo check
+
+lint:
+	cargo clippy --tests
