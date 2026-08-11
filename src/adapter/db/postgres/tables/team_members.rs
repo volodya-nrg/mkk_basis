@@ -1,4 +1,4 @@
-use crate::adapter::db::errors::Error;
+use crate::adapter::db::RepositoryError;
 use crate::adapter::db::models::TeamMember;
 use crate::adapter::db::postgres::table_basic::TableBasic;
 use sqlx::{Pool, Postgres, QueryBuilder};
@@ -23,7 +23,7 @@ impl TeamMembers {
             },
         }
     }
-    pub async fn all(&self) -> Result<Vec<TeamMember>, String> {
+    pub async fn all(&self) -> Result<Vec<TeamMember>, RepositoryError> {
         let items: Vec<TeamMember> = QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
             self.table_basic.fields.join(","),
@@ -32,11 +32,11 @@ impl TeamMembers {
         .build_query_as()
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| format!("failed to query: {e}"))?;
+        .map_err(|e| RepositoryError::FailedToQuery(e))?;
 
         Ok(items)
     }
-    pub async fn one(&self, team_id: Uuid, user_id: Uuid) -> Result<TeamMember, Error> {
+    pub async fn one(&self, team_id: Uuid, user_id: Uuid) -> Result<TeamMember, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE team_id=$1 AND user_id=$2",
             self.table_basic.fields.join(","),
@@ -48,13 +48,13 @@ impl TeamMembers {
             .bind(user_id)
             .fetch_optional(&self.pool)
             .await
-            .map_err(|e| Error::Any(format!("failed to query: {e}")))?;
+            .map_err(|e| RepositoryError::FailedToQuery(e))?;
         match opt {
             Some(v) => Ok(v),
-            None => Err(Error::NotFound),
+            None => Err(RepositoryError::NotFoundRow),
         }
     }
-    pub async fn create(&self, item: TeamMember) -> Result<(), String> {
+    pub async fn create(&self, item: TeamMember) -> Result<(), RepositoryError> {
         let query = format!(
             "INSERT INTO {} (team_id, user_id) VALUES ($1,$2)",
             self.table_basic.name,
@@ -66,10 +66,10 @@ impl TeamMembers {
             .bind(item.user_id)
             .execute(&self.pool)
             .await
-            .map_err(|e| format!("failed to insert: {e}"))?;
+            .map_err(|e| RepositoryError::FailedToInsert(e))?;
         Ok(())
     }
-    pub async fn delete(&self, team_id: Uuid, user_id: Uuid) -> Result<(), String> {
+    pub async fn delete(&self, team_id: Uuid, user_id: Uuid) -> Result<(), RepositoryError> {
         let query = format!(
             "DELETE FROM {} WHERE team_id=$1 AND user_id=$2",
             self.table_basic.name
@@ -80,16 +80,11 @@ impl TeamMembers {
             .bind(user_id)
             .execute(&self.pool)
             .await
-            .map_err(|e| format!("failed to delete: {e}"))?;
-
+            .map_err(|e| RepositoryError::FailedToDelete(e))?;
         let amount_updated_rows = result.rows_affected();
+        
         if amount_updated_rows != 1 {
-            let err_msg = format!(
-                "expected delete one row, but delete {}",
-                amount_updated_rows
-            )
-            .to_string();
-            return Err(err_msg);
+            return Err(RepositoryError::ExpectedOneRow(amount_updated_rows));
         }
 
         Ok(())

@@ -1,4 +1,4 @@
-use crate::adapter::db::errors::Error;
+use crate::adapter::db::RepositoryError;
 use crate::adapter::db::models::TaskComment;
 use crate::adapter::db::postgres::table_basic::TableBasic;
 use sqlx::{Pool, Postgres, QueryBuilder, Row};
@@ -26,7 +26,11 @@ impl TaskComments {
             },
         }
     }
-    pub async fn list(&self, limit: i32, offset: i32) -> Result<(Vec<TaskComment>, i64), String> {
+    pub async fn list(
+        &self,
+        limit: i32,
+        offset: i32,
+    ) -> Result<(Vec<TaskComment>, i64), RepositoryError> {
         let mut query = QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
             self.table_basic.fields.join(","),
@@ -46,17 +50,17 @@ impl TaskComments {
             .build_query_as()
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| format!("failed to query: {e}"))?;
+            .map_err(|e| RepositoryError::FailedToQuery(e))?;
         let total: (i64,) =
             QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.table_basic.name)) // возвращает такой же диапазон как и i64
                 .build_query_as()
                 .fetch_one(&self.pool)
                 .await
-                .map_err(|e| format!("failed to count: {e}"))?;
+                .map_err(|e| RepositoryError::FailedToCount(e))?;
 
         Ok((items, total.0))
     }
-    pub async fn one(&self, item_id: Uuid) -> Result<TaskComment, Error> {
+    pub async fn one(&self, item_id: Uuid) -> Result<TaskComment, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE task_comment_id=$1",
             self.table_basic.fields.join(","),
@@ -67,13 +71,13 @@ impl TaskComments {
             .bind(item_id)
             .fetch_optional(&self.pool)
             .await
-            .map_err(|e| Error::Any(format!("failed to query: {e}")))?;
+            .map_err(|e| RepositoryError::FailedToQuery(e))?;
         match opt {
             Some(v) => Ok(v),
-            None => Err(Error::NotFound),
+            None => Err(RepositoryError::NotFoundRow),
         }
     }
-    pub async fn create(&self, item: TaskComment) -> Result<Uuid, String> {
+    pub async fn create(&self, item: TaskComment) -> Result<Uuid, RepositoryError> {
         let query = format!(
             "INSERT INTO {} (task_id, user_id, msg) VALUES ($1,$2,$3) RETURNING task_comment_id",
             self.table_basic.name,
@@ -85,12 +89,12 @@ impl TaskComments {
             .bind(item.msg)
             .fetch_one(&self.pool)
             .await
-            .map_err(|e| format!("failed to insert: {e}"))?
+            .map_err(|e| RepositoryError::FailedToInsert(e))?
             .get(0);
 
         Ok(result)
     }
-    pub async fn update(&self, item: TaskComment) -> Result<(), Error> {
+    pub async fn update(&self, item: TaskComment) -> Result<(), RepositoryError> {
         let query = format!(
             "UPDATE {} SET task_id=$1, user_id=$2, msg=$3 WHERE task_comment_id=$4",
             self.table_basic.name,
@@ -103,21 +107,16 @@ impl TaskComments {
             .bind(item.task_comment_id)
             .execute(&self.pool)
             .await
-            .map_err(|e| Error::Any(format!("failed to update: {e}")))?;
-
+            .map_err(|e| RepositoryError::FailedToUpdate(e))?;
         let amount_updated_rows = result.rows_affected();
+        
         if amount_updated_rows != 1 {
-            let err_msg = format!(
-                "expected update one row, but update {}",
-                amount_updated_rows
-            )
-            .to_string();
-            return Err(Error::Any(err_msg));
+            return Err(RepositoryError::ExpectedOneRow(amount_updated_rows));
         }
 
         Ok(())
     }
-    pub async fn delete(&self, item_id: Uuid) -> Result<(), String> {
+    pub async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError> {
         let query = format!(
             "DELETE FROM {} WHERE task_comment_id=$1",
             self.table_basic.name
@@ -127,16 +126,11 @@ impl TaskComments {
             .bind(item_id)
             .execute(&self.pool)
             .await
-            .map_err(|e| format!("failed to delete: {e}"))?;
-
+            .map_err(|e| RepositoryError::FailedToDelete(e))?;
         let amount_updated_rows = result.rows_affected();
+        
         if amount_updated_rows != 1 {
-            let err_msg = format!(
-                "expected delete one row, but delete {}",
-                amount_updated_rows
-            )
-            .to_string();
-            return Err(err_msg);
+            return Err(RepositoryError::ExpectedOneRow(amount_updated_rows));
         }
 
         Ok(())

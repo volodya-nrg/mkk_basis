@@ -13,7 +13,7 @@ struct LogEntry {
     version: String,
 }
 
-pub fn init(service_name: &str, version: &str, level: &str, filepath: &str) -> Result<(), String> {
+pub fn init(service_name: &str, version: &str, level: &str, filepath: &str, is_test: bool) -> Result<(), String> {
     let level: LevelFilter = match level.to_lowercase().as_str() {
         "info" => LevelFilter::Info,
         "warn" => LevelFilter::Warn,
@@ -52,6 +52,7 @@ pub fn init(service_name: &str, version: &str, level: &str, filepath: &str) -> R
                 Ok(writeln!(buf, "{}", record.args()).unwrap_or_default())
             }
         })
+        .is_test(is_test)
         .init();
 
     Ok(())

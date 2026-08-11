@@ -42,7 +42,10 @@ impl Client {
     }
 
     // etc
-    pub async fn index(&self, cb: fn(Result<(u16, String), String>)) -> &Self {
+    pub async fn index<T>(&self, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(u16, String), String>),
+    {
         let result = self
             .client
             .get(&self.addr)
@@ -60,7 +63,10 @@ impl Client {
         cb(result);
         self
     }
-    pub async fn healthz(&self, cb: fn(Result<(u16, String), String>)) -> &Self {
+    pub async fn healthz<T>(&self, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(u16, String), String>),
+    {
         let result = self
             .client
             .get(format!("{}/healthz", self.addr))
@@ -78,7 +84,10 @@ impl Client {
         cb(result);
         self
     }
-    pub async fn page404(&self, cb: fn(Result<(u16, String), String>)) -> &Self {
+    pub async fn page404<T>(&self, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(u16, String), String>),
+    {
         let random_string: String = Faker.fake();
         let result = self
             .client
@@ -97,11 +106,10 @@ impl Client {
         cb(result);
         self
     }
-    pub async fn get_file(
-        &self,
-        url_filepath: String,
-        cb: fn(Result<(u16, String), String>),
-    ) -> &Self {
+    pub async fn get_file<T>(&self, url_filepath: String, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(u16, String), String>),
+    {
         let url_filepath = url_filepath
             .strip_prefix('/')
             .unwrap_or(url_filepath.as_str());
@@ -124,11 +132,10 @@ impl Client {
     }
 
     // auth
-    pub async fn register(
-        &self,
-        req: RequestRegister,
-        cb: fn(Result<(u16, String), String>),
-    ) -> &Self {
+    pub async fn register<T>(&self, req: RequestRegister, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(u16, String), String>),
+    {
         let result = self
             .client
             .post(format!("{}/api/v1/register", self.addr))
@@ -147,7 +154,10 @@ impl Client {
         cb(result);
         self
     }
-    pub async fn login(&self, req: RequestLogin, cb: fn(Result<(u16, String), String>)) -> &Self {
+    pub async fn login<T>(&self, req: RequestLogin, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(u16, String), String>),
+    {
         let result = self
             .client
             .post(format!("{}/api/v1/login", self.addr))
@@ -166,7 +176,10 @@ impl Client {
         cb(result);
         self
     }
-    pub async fn logout(&self, cb: fn(Result<(u16, String), String>)) -> &Self {
+    pub async fn logout<T>(&self, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(u16, String), String>),
+    {
         let result = self
             .client
             .post(format!("{}/api/v1/logout", self.addr))
@@ -186,44 +199,32 @@ impl Client {
     }
 
     // teams
-    pub async fn teams_list(
-        &self,
-        limit: i32,
-        offset: i32,
-        filter: String,
-        cb: fn(Result<ResponseTeamsList, String>),
-    ) -> &Self {
+    pub async fn teams_list<T>(&self, limit: i32, offset: i32, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(u16, String), String>),
+    {
         let result = self
             .client
             .get(format!("{}/api/v1/teams", self.addr))
-            .json(&RequestLimitOffsetFilter {
-                limit,
-                offset,
-                filter,
-            })
+            .json(&RequestLimitOffset { limit, offset })
             .send()
             .await
             .map_err(|e| format!("failed to request: {:?}", e));
         let result = match result {
-            Ok(v) => v,
-            Err(e) => {
-                cb(Err(e));
-                return self;
-            }
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
         };
-        let result = result
-            .json()
-            .await
-            .map_err(|e| format!("failed convert to json: {:?}", e));
 
         cb(result);
         self
     }
-    pub async fn teams_create(
-        &self,
-        req: RequestTeamCreate,
-        cb: fn(Result<ResponseTeam, String>),
-    ) -> &Self {
+    pub async fn teams_create<T>(&self, req: RequestTeamCreate, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(u16, String), String>),
+    {
         let result = self
             .client
             .post(format!("{}/api/v1/teams", self.addr))
@@ -232,26 +233,20 @@ impl Client {
             .await
             .map_err(|e| format!("failed to request: {:?}", e));
         let result = match result {
-            Ok(v) => v,
-            Err(e) => {
-                cb(Err(e));
-                return self;
-            }
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
         };
-        let result = result
-            .json()
-            .await
-            .map_err(|e| format!("failed convert to json: {:?}", e));
 
         cb(result);
         self
     }
-    pub async fn teams_invite(
-        &self,
-        team_id: Uuid,
-        req: RequestTeamInvite,
-        cb: fn(Result<Response, String>),
-    ) -> &Self {
+    pub async fn teams_invite<T>(&self, team_id: Uuid, req: RequestTeamInvite, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(u16, String), String>), // + 'static,
+    {
         let result = self
             .client
             .post(format!("{}/api/v1/teams/{}/invite", self.addr, team_id))
@@ -259,50 +254,45 @@ impl Client {
             .send()
             .await
             .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        };
 
         cb(result);
         self
     }
 
     // tasks
-    pub async fn tasks_list(
-        &self,
-        limit: i32,
-        offset: i32,
-        filter: String,
-        cb: fn(Result<ResponseTasksList, String>),
-    ) -> &Self {
+    pub async fn tasks_list<T>(&self, limit: i32, offset: i32, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(u16, String), String>),
+    {
         let result = self
             .client
             .get(format!("{}/api/v1/tasks", self.addr))
-            .json(&RequestLimitOffsetFilter {
-                limit,
-                offset,
-                filter,
-            })
+            .json(&RequestLimitOffset { limit, offset })
             .send()
             .await
             .map_err(|e| format!("failed to request: {:?}", e));
         let result = match result {
-            Ok(v) => v,
-            Err(e) => {
-                cb(Err(e));
-                return self;
-            }
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
         };
-        let result = result
-            .json()
-            .await
-            .map_err(|e| format!("failed convert to json: {:?}", e));
 
         cb(result);
         self
     }
-    pub async fn tasks_create(
-        &self,
-        req: RequestTask,
-        cb: fn(Result<ResponseTask, String>),
-    ) -> &Self {
+    pub async fn tasks_create<T>(&self, req: RequestTask, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(u16, String), String>),
+    {
         let result = self
             .client
             .post(format!("{}/api/v1/tasks", self.addr))
@@ -311,26 +301,20 @@ impl Client {
             .await
             .map_err(|e| format!("failed to request: {:?}", e));
         let result = match result {
-            Ok(v) => v,
-            Err(e) => {
-                cb(Err(e));
-                return self;
-            }
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
         };
-        let result = result
-            .json()
-            .await
-            .map_err(|e| format!("failed convert to json: {:?}", e));
 
         cb(result);
         self
     }
-    pub async fn tasks_update(
-        &self,
-        task_id: Uuid,
-        req: RequestTask,
-        cb: fn(Result<ResponseTask, String>),
-    ) -> &Self {
+    pub async fn tasks_update<T>(&self, task_id: Uuid, req: RequestTask, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(u16, String), String>),
+    {
         let result = self
             .client
             .put(format!("{}/api/v1/tasks/{}", self.addr, task_id))
@@ -339,25 +323,20 @@ impl Client {
             .await
             .map_err(|e| format!("failed to request: {:?}", e));
         let result = match result {
-            Ok(v) => v,
-            Err(e) => {
-                cb(Err(e));
-                return self;
-            }
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
         };
-        let result = result
-            .json()
-            .await
-            .map_err(|e| format!("failed convert to json: {:?}", e));
 
         cb(result);
         self
     }
-    pub async fn tasks_history(
-        &self,
-        task_id: Uuid,
-        cb: fn(Result<ResponseTaskHistories, String>),
-    ) -> &Self {
+    pub async fn tasks_history<T>(&self, task_id: Uuid, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(u16, String), String>),
+    {
         let result = self
             .client
             .get(format!("{}/api/v1/tasks/{}/history", self.addr, task_id))
@@ -365,16 +344,12 @@ impl Client {
             .await
             .map_err(|e| format!("failed to request: {:?}", e));
         let result = match result {
-            Ok(v) => v,
-            Err(e) => {
-                cb(Err(e));
-                return self;
-            }
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
         };
-        let result = result
-            .json()
-            .await
-            .map_err(|e| format!("failed convert to json: {:?}", e));
 
         cb(result);
         self

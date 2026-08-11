@@ -1,9 +1,8 @@
-use super::{mapper, models::*};
-use crate::adapter::db::errors::Error as DBError;
+use super::{UseCaseError, mapper, models::*};
+use crate::adapter::db::RepositoryError;
 use crate::adapter::db::postgres::tables::users::Users as UsersRepo;
 use crate::adapter::helpers;
 use crate::consts;
-use crate::custom_error::CustomError;
 use crate::err_msg::ErrMsg;
 use argon2::Argon2;
 use argon2::password_hash::{
@@ -26,30 +25,34 @@ impl Auth {
         email: String,
         password: String,
         password_confirm: String,
-    ) -> Result<Uuid, String> {
+    ) -> Result<Uuid, UseCaseError> {
         if !helpers::is_valid_email(&email) {
-            return Err(
-                CustomError::new(StatusCode::BAD_REQUEST, ErrMsg::EmailNotCorrect.as_str()).into(),
-            );
+            return Err(UseCaseError::ForTransport {
+                status_code: StatusCode::BAD_REQUEST,
+                public_err: ErrMsg::EmailNotCorrect.as_str(),
+                internal_err: format!("user send bad email ({})", email),
+            });
         }
         if password.chars().count() < consts::MIN_PASSWORD_LEN {
-            return Err(
-                CustomError::new(StatusCode::BAD_REQUEST, ErrMsg::PasswordIsShort.as_str()).into(),
-            );
+            return Err(UseCaseError::ForTransport {
+                status_code: StatusCode::BAD_REQUEST,
+                public_err: ErrMsg::PasswordIsShort.as_str(),
+                internal_err: Default::default(),
+            });
         }
         if password != password_confirm {
-            return Err(CustomError::new(
-                StatusCode::BAD_REQUEST,
-                ErrMsg::PasswordsNotEquals.as_str(),
-            )
-            .into());
+            return Err(UseCaseError::ForTransport {
+                status_code: StatusCode::BAD_REQUEST,
+                public_err: ErrMsg::PasswordsNotEquals.as_str(),
+                internal_err: Default::default(),
+            });
         }
 
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
         let password_hash = argon2
             .hash_password(password.as_bytes(), &salt)
-            .map_err(|e| format!("failed to hash password: {e}"))?;
+            .map_err(|e| UseCaseError::Common(format!("failed to hash password: {e}")))?;
         let result = self
             .users_repo
             .create(mapper::user_uc_to_user_db(User {
@@ -62,35 +65,66 @@ impl Auth {
                 updated_at: Default::default(),
             }))
             .await
-            .map_err(|e| format!("failed to create: {e}"))?;
+            .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))?;
 
         // TODO тут надо отправить сообщение на е-мэйл с ссылкой для подтверждения пароля
 
         Ok(result)
     }
-    pub async fn login(&self, email: String, password: String) -> Result<(String, String), String> {
+    pub async fn login(
+        &self,
+        email: String,
+        password: String,
+    ) -> Result<(String, String), UseCaseError> {
+        if !helpers::is_valid_email(&email) {
+            return Err(UseCaseError::ForTransport {
+                status_code: StatusCode::BAD_REQUEST,
+                public_err: ErrMsg::EmailNotCorrect.as_str(),
+                internal_err: format!("user send bad email ({})", email),
+            });
+        }
+        if password.chars().count() < consts::MIN_PASSWORD_LEN {
+            return Err(UseCaseError::ForTransport {
+                status_code: StatusCode::BAD_REQUEST,
+                public_err: ErrMsg::PasswordIsShort.as_str(),
+                internal_err: String::new(),
+            });
+        }
+
         let result = self.users_repo.get_by_email(email.clone()).await;
         let user = match result {
             Ok(v) => v,
             Err(e) => {
-                return match e {
-                    DBError::NotFound => Err(format!("not found user ({})", email)),
-                    DBError::Any(e) => Err(format!("failed to get user: {e}")),
-                };
+                if let RepositoryError::NotFoundRow = e {
+                    return Err(UseCaseError::ForTransport {
+                        status_code: StatusCode::BAD_REQUEST,
+                        public_err: ErrMsg::NotFoundUser.as_str(),
+                        internal_err: format!("user send other email ({})", email),
+                    });
+                }
+                return Err(UseCaseError::Common(e.to_string()));
             }
         };
 
         // TODO это дело пока опустим, после надо будет доделать
         // if !user.email_is_confirmed {
-        //     return Err("email is not confirmed".to_string());
+        //     return Err(UseCaseError::ForTransport {
+        //         status_code: StatusCode::BAD_REQUEST,
+        //         public_err: ErrMsg::EmailNotConfirmed.as_str(),
+        //         internal_err: String::new(),
+        //     });
         // }
 
         let parsed_hash = PasswordHash::new(&user.password)
-            .map_err(|e| format!("failed to create new parsed hash: {e}"))?;
+            .map_err(|e| UseCaseError::Common(format!("failed to create new parsed hash: {e}")))?;
         let is_eq = Argon2::default().verify_password(password.as_ref(), &parsed_hash);
 
         if !is_eq.is_ok() {
-            return Err("not correct password".to_string());
+            return Err(UseCaseError::ForTransport {
+                status_code: StatusCode::BAD_REQUEST,
+                public_err: ErrMsg::LoginOrPasswordNotCorrect.as_str(),
+                internal_err: String::new(),
+            });
         }
 
         let access_token = String::from("access_token");
@@ -98,7 +132,7 @@ impl Auth {
 
         Ok((access_token, refresh_token))
     }
-    pub async fn logout(&self) -> Result<(), String> {
+    pub async fn logout(&self) -> Result<(), UseCaseError> {
         Ok(())
     }
 }

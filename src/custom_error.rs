@@ -1,17 +1,20 @@
 use http::StatusCode;
 use std::error::Error;
 use std::fmt;
+use axum::response::{IntoResponse, Response};
 
 #[derive(Debug)]
 pub struct CustomError {
-    original_error: String,
     status_code: StatusCode,
+    public_msg: String,
+    internal_error_msg: String,
 }
 impl CustomError {
-    pub fn new(status_code: StatusCode, original_error: String) -> Self {
+    pub fn new(status_code: StatusCode, public_msg: String, internal_error_msg: String) -> Self {
         Self {
-            original_error,
             status_code,
+            public_msg,
+            internal_error_msg,
         }
     }
 }
@@ -20,9 +23,15 @@ impl fmt::Display for CustomError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "custom error: {}, {}",
-            self.status_code, self.original_error
+            "Custom error. status code - {}, public msg - {}, internal error msg - {}",
+            self.status_code, self.public_msg, self.internal_error_msg
         )
+    }
+}
+
+impl IntoResponse for CustomError {
+    fn into_response(self) -> Response {
+        (self.status_code, self.public_msg.to_string()).into_response()
     }
 }
 
@@ -31,8 +40,9 @@ impl Error for CustomError {}
 impl From<String> for CustomError {
     fn from(value: String) -> Self {
         Self {
-            original_error: value,
             status_code: StatusCode::INTERNAL_SERVER_ERROR,
+            public_msg: value.clone(),
+            internal_error_msg: value.clone(),
         }
     }
 }
@@ -40,8 +50,9 @@ impl From<String> for CustomError {
 impl From<&str> for CustomError {
     fn from(value: &str) -> Self {
         Self {
-            original_error: value.to_string(),
             status_code: StatusCode::INTERNAL_SERVER_ERROR,
+            public_msg: value.to_string(),
+            internal_error_msg: value.to_string(),
         }
     }
 }

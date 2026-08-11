@@ -1,9 +1,9 @@
 mod adapter;
-mod transport;
-mod usecase;
-mod err_msg;
 mod consts;
 mod custom_error;
+mod err_msg;
+mod transport;
+mod usecase;
 
 use adapter::{config::Config, db::postgres::Postgres, logger};
 use clap::Parser;
@@ -38,6 +38,7 @@ async fn run(config_filepath: &str) -> Result<(), String> {
         &cfg.version,
         &cfg.log.level,
         &cfg.log.filepath.unwrap_or("".to_string()),
+        false,
     )
     .map_err(|e| format!("failed to init logger: {e}"))?;
 
