@@ -31,7 +31,7 @@ migration_down:
 generate-jwt-secret:
 	@if [ ! -f $(JWT_SECRET) ]; then \
 		echo "Generating JWT secret..."; \
-		openssl genrsa -out $(JWT_SECRET) 2048 \
+		openssl genrsa -out $(JWT_SECRET) 2048; \
 		chmod 600 $(JWT_SECRET); \
 		echo "✅ JWT secret created in $(JWT_SECRET)"; \
 	else \
