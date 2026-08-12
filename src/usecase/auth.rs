@@ -106,15 +106,6 @@ impl Auth {
             }
         };
 
-        // TODO это дело пока опустим, после надо будет доделать
-        // if !user.email_is_confirmed {
-        //     return Err(UseCaseError::ForTransport {
-        //         status_code: StatusCode::BAD_REQUEST,
-        //         public_err: ErrMsg::EmailNotConfirmed.as_str(),
-        //         internal_err: String::new(),
-        //     });
-        // }
-
         let parsed_hash = PasswordHash::new(&user.password)
             .map_err(|e| UseCaseError::Common(format!("failed to create new parsed hash: {e}")))?;
         let is_eq = Argon2::default().verify_password(password.as_ref(), &parsed_hash);
@@ -126,6 +117,8 @@ impl Auth {
                 internal_err: String::new(),
             });
         }
+
+        // user.user_id
 
         let access_token = String::from("access_token");
         let refresh_token = String::from("refresh_token");

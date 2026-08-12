@@ -1,6 +1,5 @@
 mod adapter;
 mod consts;
-mod custom_error;
 mod err_msg;
 mod transport;
 mod usecase;

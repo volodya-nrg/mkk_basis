@@ -18,15 +18,6 @@ use tokio::sync::OnceCell;
 use tokio::time::{Duration, sleep};
 use uuid::Uuid;
 
-/*
-Проблема: OnceCell создает клиент один раз для всех тестов. Но каждый тест запускается в своем
-runtime. Когда первый тест завершается, его runtime может быть уничтожен, но Client (который внутри
-содержит свой runtime) остается в статической переменной.
-
-Когда второй тест вызывает get_test_server().await, он получает уже существующий клиент, но его
-внутренний runtime уже мог быть уничтожен после завершения первого теста.
-*/
-
 static MARKER: OnceCell<String> = OnceCell::const_new();
 
 async fn run_test_server() -> &'static str {
