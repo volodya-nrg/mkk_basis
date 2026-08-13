@@ -1,3 +1,4 @@
+use crate::transport::extractor::AuthenticatedUser;
 use crate::transport::mapper;
 use crate::transport::models::*;
 use crate::usecase::UseCase;
@@ -13,6 +14,7 @@ pub struct Handlers {}
 
 impl Handlers {
     pub async fn teams_list(
+        _user: AuthenticatedUser,
         State(use_case): State<UseCase>,
         Json(payload): Json<RequestLimitOffset>,
     ) -> impl IntoResponse {
@@ -20,10 +22,7 @@ impl Handlers {
             Ok((items, total)) => (
                 StatusCode::OK,
                 Json(json!(ResponseTeamsList {
-                    items: items
-                        .into_iter()
-                        .map(mapper::team_uc_to_team_tr)
-                        .collect(),
+                    items: items.into_iter().map(mapper::team_uc_to_team_tr).collect(),
                     total: total as u32,
                 })),
             )
@@ -32,6 +31,7 @@ impl Handlers {
         }
     }
     pub async fn teams_create(
+        _user: AuthenticatedUser,
         State(use_case): State<UseCase>,
         Json(payload): Json<RequestTeamCreate>,
     ) -> impl IntoResponse {
@@ -57,6 +57,7 @@ impl Handlers {
             .into_response()
     }
     pub async fn teams_invite(
+        _user: AuthenticatedUser,
         State(use_case): State<UseCase>,
         Path(team_id): Path<Uuid>,
         Json(payload): Json<RequestTeamInvite>,

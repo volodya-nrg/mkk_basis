@@ -1,7 +1,7 @@
 PROJECT_NAME=mkk_basis
 GIT_COMMIT=$(shell git rev-parse --short HEAD)
 POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:5432/postgres?search_path=mkk_basis&sslmode=disable
-JWT_SECRET ?= jwt.key # если переменная не определена, то присвоить значение
+PRIVATE_KEY ?= private.key # если переменная не определена, то присвоить значение
 
 .PHONY: echo_version
 echo_version:
@@ -27,15 +27,15 @@ migration_up:
 migration_down:
 	sqlx migrate revert --database-url "${POSTGRES_DSN}"
 
-.PHONY: generate-jwt-secret
-generate-jwt-secret:
-	@if [ ! -f $(JWT_SECRET) ]; then \
-		echo "Generating JWT secret..."; \
-		openssl genrsa -out $(JWT_SECRET) 2048; \
-		chmod 600 $(JWT_SECRET); \
-		echo "✅ JWT secret created in $(JWT_SECRET)"; \
+.PHONY: generate-private-key
+generate-private-key:
+	@if [ ! -f $(PRIVATE_KEY) ]; then \
+		echo "Generating private key..."; \
+		openssl genrsa -out $(PRIVATE_KEY) 2048; \
+		chmod 600 $(PRIVATE_KEY); \
+		echo "✅ private key created in $(PRIVATE_KEY)"; \
 	else \
-		echo "⚠️ JWT secret already exists"; \
+		echo "⚠️ private key already exists"; \
 	fi
 
 .PHONY: test_db
@@ -45,6 +45,10 @@ test_db:
 .PHONY: test_transport
 test_transport:
 	RUST_BACKTRACE=1 cargo test --test transport -- --nocapture # --include-ignored
+
+.PHONY: test_units
+test_units:
+	cargo test adapter::jwt
 
 .PHONY: cargo_reload
 cargo_reload:
@@ -56,4 +60,4 @@ cargo_check:
 
 .PHONY: lint
 lint:
-	cargo clippy --tests
+	cargo clippy # --tests

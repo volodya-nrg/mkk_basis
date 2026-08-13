@@ -30,10 +30,10 @@ impl HTTPServer {
         Ok(())
     }
     fn get_router(&self) -> Router {
-        Router::new()
-            // index
+        let public = Router::new()
             .route("/", get(etc::Handlers::index))
-            .route("/healthz", get(etc::Handlers::healthz))
+            .route("/healthz", get(etc::Handlers::healthz));
+        let api = Router::new()
             // auth
             .route("/api/v1/register", post(auth::Handlers::register))
             .route("/api/v1/login", post(auth::Handlers::login))
@@ -56,16 +56,18 @@ impl HTTPServer {
             .route(
                 "/api/v1/tasks/{id}/history",
                 get(tasks::Handlers::tasks_history),
-            )
-            // static
+            );
+        let static_loc = Router::new()
             .nest_service("/js", ServeDir::new("./web/js"))
             .nest_service("/css", ServeDir::new("./web/css"))
             .nest_service("/images", ServeDir::new("./web/images"))
             .nest_service("/robots.txt", ServeFile::new("./web/robots.txt"))
-            .nest_service("/sitemap.xml", ServeFile::new("./web/sitemap.xml"))
-            // middleware
+            .nest_service("/sitemap.xml", ServeFile::new("./web/sitemap.xml"));
+        Router::new()
+            .merge(public)
+            .merge(api)
+            .merge(static_loc)
             .route_layer(AxumMiddleware::from_fn(middleware::err::err))
-            // other
             .fallback(etc::Handlers::page404)
             .with_state(self.use_case.clone())
     }

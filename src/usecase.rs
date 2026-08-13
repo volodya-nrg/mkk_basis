@@ -5,6 +5,7 @@ pub mod tasks;
 pub mod teams;
 
 use crate::adapter::db::postgres::Postgres;
+use crate::adapter::jwt::Jwt as JWTService;
 use auth::Auth;
 use axum::Json;
 use axum::response::{IntoResponse, Response};
@@ -22,9 +23,9 @@ pub struct UseCase {
 }
 
 impl UseCase {
-    pub fn new(postgres: Postgres) -> Self {
+    pub fn new(postgres: Postgres, jwt_service: JWTService) -> Self {
         Self {
-            auth: Auth::new(postgres.tbl_users),
+            auth: Auth::new(postgres.tbl_users, jwt_service),
             tasks: Tasks::new(postgres.tbl_tasks, postgres.tbl_task_histories),
             teams: Teams::new(postgres.tbl_teams, postgres.tbl_team_members),
         }

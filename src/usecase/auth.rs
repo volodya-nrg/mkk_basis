@@ -2,6 +2,7 @@ use super::{UseCaseError, mapper, models::*};
 use crate::adapter::db::RepositoryError;
 use crate::adapter::db::postgres::tables::users::Users as UsersRepo;
 use crate::adapter::helpers;
+use crate::adapter::jwt::Jwt as JWTService;
 use crate::consts;
 use crate::err_msg::ErrMsg;
 use argon2::Argon2;
@@ -14,11 +15,15 @@ use uuid::Uuid;
 #[derive(Clone)] // из-за axum-state
 pub struct Auth {
     users_repo: UsersRepo,
+    pub jwt_service: JWTService, // публичен для экстрактора
 }
 
 impl Auth {
-    pub fn new(users_repo: UsersRepo) -> Self {
-        Self { users_repo }
+    pub fn new(users_repo: UsersRepo, jwt_service: JWTService) -> Self {
+        Self {
+            users_repo,
+            jwt_service,
+        }
     }
     pub async fn register(
         &self,
@@ -118,10 +123,14 @@ impl Auth {
             });
         }
 
-        // user.user_id
-
-        let access_token = String::from("access_token");
-        let refresh_token = String::from("refresh_token");
+        let access_token = self
+            .jwt_service
+            .generate_access_token(user.user_id, "".to_string())
+            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+        let refresh_token = self
+            .jwt_service
+            .generate_refresh_token(user.user_id)
+            .map_err(|e| UseCaseError::Common(e.to_string()))?;
 
         Ok((access_token, refresh_token))
     }

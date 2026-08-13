@@ -14,3 +14,4 @@
 
   Когда второй тест вызывает get_test_server().await, он получает уже существующий клиент, но его
   внутренний runtime уже мог быть уничтожен после завершения первого теста.
+- https://ohmycloud.github.io/2025/05/03/authentication-with-axum.html - cookie auth

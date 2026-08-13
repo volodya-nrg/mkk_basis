@@ -1,3 +1,4 @@
+use crate::transport::extractor::AuthenticatedUser;
 use crate::transport::mapper;
 use crate::transport::models::*;
 use crate::usecase::UseCase;
@@ -13,6 +14,7 @@ pub struct Handlers {}
 
 impl Handlers {
     pub async fn tasks_list(
+        _user: AuthenticatedUser,
         State(use_case): State<UseCase>,
         Json(payload): Json<RequestLimitOffset>,
     ) -> impl IntoResponse {
@@ -20,10 +22,7 @@ impl Handlers {
             Ok((items, total)) => (
                 StatusCode::OK,
                 Json(json!(ResponseTasksList {
-                    items: items
-                        .into_iter()
-                        .map(mapper::task_uc_to_task_tr)
-                        .collect(),
+                    items: items.into_iter().map(mapper::task_uc_to_task_tr).collect(),
                     total: total as u32,
                 })),
             )
@@ -32,6 +31,7 @@ impl Handlers {
         }
     }
     pub async fn tasks_create(
+        _user: AuthenticatedUser,
         State(use_case): State<UseCase>,
         Json(payload): Json<RequestTask>,
     ) -> impl IntoResponse {
@@ -58,6 +58,7 @@ impl Handlers {
     }
 
     pub async fn tasks_update(
+        _user: AuthenticatedUser,
         State(use_case): State<UseCase>,
         Path(task_id): Path<Uuid>,
         Json(payload): Json<RequestTask>,
@@ -84,6 +85,7 @@ impl Handlers {
             .into_response()
     }
     pub async fn tasks_history(
+        _user: AuthenticatedUser,
         State(use_case): State<UseCase>,
         Path(task_id): Path<Uuid>,
     ) -> impl IntoResponse {

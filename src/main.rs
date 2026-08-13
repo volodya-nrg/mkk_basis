@@ -4,6 +4,7 @@ mod err_msg;
 mod transport;
 mod usecase;
 
+use crate::adapter::jwt::Jwt;
 use adapter::{config::Config, db::postgres::Postgres, logger};
 use clap::Parser;
 use sqlx::postgres::PgPoolOptions;
@@ -41,6 +42,8 @@ async fn run(config_filepath: &str) -> Result<(), String> {
     )
     .map_err(|e| format!("failed to init logger: {e}"))?;
 
+    let private_key_bytes = std::fs::read(cfg.private_key_path)
+        .map_err(|e| format!("failed to read private key: {e}"))?;
     let pool = PgPoolOptions::new()
         .acquire_timeout(Duration::new(1, 0))
         .connect(&cfg.postgres.dsn)
@@ -48,7 +51,10 @@ async fn run(config_filepath: &str) -> Result<(), String> {
         .map_err(|e| format!("failed to connect on DB: {e}"))?;
     let http_server = HTTPServer::new(
         cfg.http_server.address.clone(),
-        UseCase::new(Postgres::new(pool)),
+        UseCase::new(
+            Postgres::new(pool),
+            Jwt::new(private_key_bytes, 60 * 20, 60 * 60 * 24),
+        ),
     );
 
     log::info!("http-server start on {}", cfg.http_server.address);

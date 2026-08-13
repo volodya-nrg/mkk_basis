@@ -1,3 +1,4 @@
+use crate::transport::extractor::AuthenticatedUser;
 use crate::transport::models::*;
 use crate::usecase::UseCase;
 use axum::Json;
@@ -40,7 +41,10 @@ impl Handlers {
             Err(e) => e.into_response(),
         }
     }
-    pub async fn logout(State(use_case): State<UseCase>) -> impl IntoResponse {
+    pub async fn logout(
+        _user: AuthenticatedUser,
+        State(use_case): State<UseCase>,
+    ) -> impl IntoResponse {
         match use_case.auth.logout().await {
             Ok(_) => StatusCode::OK.into_response(),
             Err(e) => e.into_response(),

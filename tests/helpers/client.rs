@@ -1,27 +1,21 @@
 use fake::{Fake, Faker};
+use http::StatusCode;
 use mkk_basis::transport::models::*;
-use reqwest::{Client as ReqwestClient, Response};
+use reqwest::{Client as ReqwestClient, Response, header};
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 pub struct Client {
     addr: String,
     client: ReqwestClient,
+    access_token: Arc<Mutex<String>>,
+    refresh_token: Arc<Mutex<String>>,
 }
 
 impl Client {
     pub fn new(addr: String) -> Self {
-        /*
-        let mut headers = header::HeaderMap::new();
-        headers.insert(
-            header::USER_AGENT,
-            header::HeaderValue::from_static("my-app/1.0")
-        );
-        headers.insert(
-            header::AUTHORIZATION,
-            header::HeaderValue::from_static("Bearer token123")
-        );
-        */
         Self {
             addr,
             client: ReqwestClient::builder()
@@ -30,10 +24,25 @@ impl Client {
                 .user_agent("my-rust-client/1.0")
                 .build()
                 .unwrap(),
+            access_token: Arc::new(Default::default()),
+            refresh_token: Arc::new(Default::default()),
         }
     }
-    async fn parse_response(&self, resp: Response) -> Result<(u16, String), String> {
-        let status_code = resp.status().as_u16();
+    async fn headers(&self) -> header::HeaderMap {
+        let mut headers = header::HeaderMap::new();
+        let access_token_clone = self.access_token.lock().await.to_string();
+
+        if !access_token_clone.is_empty() {
+            headers.insert(
+                header::AUTHORIZATION,
+                header::HeaderValue::from_str(&format!("Bearer {}", access_token_clone)).unwrap(),
+            );
+        }
+
+        headers
+    }
+    async fn parse_response(&self, resp: Response) -> Result<(StatusCode, String), String> {
+        let status_code = resp.status();
         let result = resp
             .text()
             .await
@@ -44,7 +53,7 @@ impl Client {
     // etc
     pub async fn index<T>(&self, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(u16, String), String>),
+        T: FnMut(Result<(StatusCode, String), String>),
     {
         let result = self
             .client
@@ -65,7 +74,7 @@ impl Client {
     }
     pub async fn healthz<T>(&self, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(u16, String), String>),
+        T: FnMut(Result<(StatusCode, String), String>),
     {
         let result = self
             .client
@@ -86,7 +95,7 @@ impl Client {
     }
     pub async fn page404<T>(&self, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(u16, String), String>),
+        T: FnMut(Result<(StatusCode, String), String>),
     {
         let random_string: String = Faker.fake();
         let result = self
@@ -108,7 +117,7 @@ impl Client {
     }
     pub async fn get_file<T>(&self, url_filepath: String, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(u16, String), String>),
+        T: FnMut(Result<(StatusCode, String), String>),
     {
         let url_filepath = url_filepath
             .strip_prefix('/')
@@ -134,11 +143,12 @@ impl Client {
     // auth
     pub async fn register<T>(&self, req: RequestRegister, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(u16, String), String>),
+        T: FnMut(Result<(StatusCode, String), String>),
     {
         let result = self
             .client
             .post(format!("{}/api/v1/register", self.addr))
+            // .headers(self.headers().await)
             .json(&req)
             .send()
             .await
@@ -156,7 +166,7 @@ impl Client {
     }
     pub async fn login<T>(&self, req: RequestLogin, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(u16, String), String>),
+        T: FnMut(Result<(StatusCode, String), String>),
     {
         let result = self
             .client
@@ -173,19 +183,39 @@ impl Client {
             Err(e) => Err(e),
         };
 
+        if let Ok((status_code, body_str)) = &result
+            && status_code.is_success()
+        {
+            let resp_login: ResponseLogin =
+                serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            let mut at = self.access_token.lock().await;
+            let mut rt = self.refresh_token.lock().await;
+            *at = resp_login.access_token;
+            *rt = resp_login.refresh_token;
+        }
+
         cb(result);
         self
     }
     pub async fn logout<T>(&self, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(u16, String), String>),
+        T: FnMut(Result<(StatusCode, String), String>),
     {
         let result = self
             .client
             .post(format!("{}/api/v1/logout", self.addr))
+            .headers(self.headers().await)
             .send()
             .await
             .map_err(|e| format!("failed to request: {:?}", e));
+
+        if result.is_ok() {
+            let mut at = self.access_token.lock().await;
+            let mut rt = self.refresh_token.lock().await;
+            *at = "".to_string();
+            *rt = "".to_string();
+        }
+
         let result = match result {
             Ok(v) => match self.parse_response(v).await {
                 Ok(v) => Ok(v),
@@ -201,11 +231,12 @@ impl Client {
     // teams
     pub async fn teams_list<T>(&self, limit: i32, offset: i32, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(u16, String), String>),
+        T: FnMut(Result<(StatusCode, String), String>),
     {
         let result = self
             .client
             .get(format!("{}/api/v1/teams", self.addr))
+            .headers(self.headers().await)
             .json(&RequestLimitOffset { limit, offset })
             .send()
             .await
@@ -223,11 +254,12 @@ impl Client {
     }
     pub async fn teams_create<T>(&self, req: RequestTeamCreate, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(u16, String), String>),
+        T: FnMut(Result<(StatusCode, String), String>),
     {
         let result = self
             .client
             .post(format!("{}/api/v1/teams", self.addr))
+            .headers(self.headers().await)
             .json(&req)
             .send()
             .await
@@ -245,11 +277,12 @@ impl Client {
     }
     pub async fn teams_invite<T>(&self, team_id: Uuid, req: RequestTeamInvite, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(u16, String), String>), // + 'static,
+        T: FnMut(Result<(StatusCode, String), String>), // + 'static,
     {
         let result = self
             .client
             .post(format!("{}/api/v1/teams/{}/invite", self.addr, team_id))
+            .headers(self.headers().await)
             .json(&req)
             .send()
             .await
@@ -269,11 +302,12 @@ impl Client {
     // tasks
     pub async fn tasks_list<T>(&self, limit: i32, offset: i32, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(u16, String), String>),
+        T: FnMut(Result<(StatusCode, String), String>),
     {
         let result = self
             .client
             .get(format!("{}/api/v1/tasks", self.addr))
+            .headers(self.headers().await)
             .json(&RequestLimitOffset { limit, offset })
             .send()
             .await
@@ -291,11 +325,12 @@ impl Client {
     }
     pub async fn tasks_create<T>(&self, req: RequestTask, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(u16, String), String>),
+        T: FnMut(Result<(StatusCode, String), String>),
     {
         let result = self
             .client
             .post(format!("{}/api/v1/tasks", self.addr))
+            .headers(self.headers().await)
             .json(&req)
             .send()
             .await
@@ -313,11 +348,12 @@ impl Client {
     }
     pub async fn tasks_update<T>(&self, task_id: Uuid, req: RequestTask, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(u16, String), String>),
+        T: FnMut(Result<(StatusCode, String), String>),
     {
         let result = self
             .client
             .put(format!("{}/api/v1/tasks/{}", self.addr, task_id))
+            .headers(self.headers().await)
             .json(&req)
             .send()
             .await
@@ -335,11 +371,12 @@ impl Client {
     }
     pub async fn tasks_history<T>(&self, task_id: Uuid, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(u16, String), String>),
+        T: FnMut(Result<(StatusCode, String), String>),
     {
         let result = self
             .client
             .get(format!("{}/api/v1/tasks/{}/history", self.addr, task_id))
+            .headers(self.headers().await)
             .send()
             .await
             .map_err(|e| format!("failed to request: {:?}", e));

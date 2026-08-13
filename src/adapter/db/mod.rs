@@ -1,9 +1,7 @@
 pub mod postgres;
 pub mod models;
 
-use thiserror::Error;
-
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum RepositoryError {
     #[error("failed to query: {0}")]
     FailedToQuery(sqlx::Error),
