@@ -1,7 +1,7 @@
 use fake::{Fake, Faker};
 use http::StatusCode;
 use mkk_basis::transport::models::*;
-use reqwest::{Client as ReqwestClient, Response, header};
+use reqwest::{Certificate, Client as ReqwestClient, Identity, Response, header};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
@@ -15,10 +15,22 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(addr: String) -> Self {
+    pub fn new(addr: String, ca: String, crt: String, key: String) -> Self {
+        // ca-сертификат - чтоб проверить сервер
+        // crt - чтоб сервер мог проверить клиента
+        // key - доказательство владения crt
+
+        let ca = Certificate::from_pem(ca.as_bytes()).unwrap();
+        let identity =
+            Identity::from_pem(format!("{}{}", crt.to_string(), key.to_string()).as_bytes())
+                .unwrap();
+
         Self {
-            addr,
+            addr: addr.to_string(),
             client: ReqwestClient::builder()
+                .add_root_certificate(ca)
+                .identity(identity)
+                .tls_danger_accept_invalid_certs(false)
                 .timeout(Duration::from_secs(10))
                 .connect_timeout(Duration::from_secs(5))
                 .user_agent("my-rust-client/1.0")

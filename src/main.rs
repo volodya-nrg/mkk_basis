@@ -6,15 +6,17 @@ mod usecase;
 
 use crate::adapter::jwt::Jwt;
 use adapter::{config::Config, db::postgres::Postgres, logger};
+use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use sqlx::postgres::PgPoolOptions;
+use std::fs;
 use std::time::Duration;
 use transport::http_server::HTTPServer;
 use usecase::UseCase;
 
 #[derive(Parser)]
 struct Args {
-    #[arg(short, long, default_value = "./config.yaml")]
+    #[arg(short, long, default_value = "./data/config.yaml")]
     config: String,
 }
 
@@ -42,8 +44,22 @@ async fn run(config_filepath: &str) -> Result<(), String> {
     )
     .map_err(|e| format!("failed to init logger: {e}"))?;
 
-    let private_key_bytes = std::fs::read(cfg.private_key_path)
-        .map_err(|e| format!("failed to read private key: {e}"))?;
+    let private_key_bytes =
+        fs::read(cfg.private_key_path).map_err(|e| format!("failed to read private key: {e}"))?;
+    let mut tls_config_for_server: Option<RustlsConfig> = None;
+
+    if cfg.http_server.tls.is_use {
+        let ca_bytes = fs::read(cfg.http_server.tls.ca_filepath)
+            .map_err(|e| format!("failed to read ca file: {e}"))?;
+        let crt_bytes = fs::read(cfg.http_server.tls.crt_filepath)
+            .map_err(|e| format!("failed to read crt file: {e}"))?;
+        let key_bytes = fs::read(cfg.http_server.tls.key_filepath)
+            .map_err(|e| format!("failed to read key file: {e}"))?;
+        let tls_config = transport::http_server::configure_tls(ca_bytes, crt_bytes, key_bytes)
+            .map_err(|e| format!("failed to configure tls: {e}"))?;
+        tls_config_for_server = Some(tls_config);
+    }
+
     let pool = PgPoolOptions::new()
         .acquire_timeout(Duration::new(1, 0))
         .connect(&cfg.postgres.dsn)
@@ -55,9 +71,9 @@ async fn run(config_filepath: &str) -> Result<(), String> {
             Postgres::new(pool),
             Jwt::new(private_key_bytes, 60 * 20, 60 * 60 * 24),
         ),
+        tls_config_for_server.clone(),
     );
 
-    log::info!("http-server start on {}", cfg.http_server.address);
     http_server
         .run()
         .await

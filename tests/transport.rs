@@ -9,79 +9,82 @@ use mkk_basis::adapter::db::postgres::Postgres;
 use mkk_basis::adapter::db::postgres::tables::tasks::Status as TaskStatus;
 use mkk_basis::adapter::jwt::Jwt;
 use mkk_basis::adapter::logger;
-use mkk_basis::consts;
 use mkk_basis::transport::http_server::HTTPServer;
 use mkk_basis::transport::models::*;
 use mkk_basis::usecase::UseCase;
+use mkk_basis::{consts, transport};
 use sqlx::postgres::PgPoolOptions;
 use std::net::TcpListener;
 use tokio::sync::OnceCell;
 use tokio::time::{Duration, sleep};
 use uuid::Uuid;
 
-static MARKER: OnceCell<String> = OnceCell::const_new();
+struct ClientData {
+    http_addr: String,
+    ca: String,
+    crt: String,
+    key: String,
+}
 
-async fn run_test_server() -> &'static str {
-    MARKER.get_or_init(|| async move {
-        logger::init("", "", "error", "", true).unwrap();
+const DSN: &str =
+    "postgres://postgres:postgres@127.0.0.1:5432/postgres?options=-c%20search_path%3Dmkk_basis";
+static MARKER: OnceCell<ClientData> = OnceCell::const_new();
 
-        let addr_socket = TcpListener::bind("127.0.0.1:0")
-            .expect("failed to bind addr")
-            .local_addr()
-            .expect("failed to local addr");
-        let addr_str = addr_socket.to_string();
-        let http_addr = format!("http://{}", addr_str);
-        let pool = PgPoolOptions::new()
-            .connect("postgres://postgres:postgres@127.0.0.1:5432/postgres?search_path=mkk_basis&sslmode=disable")
-            .await
-            .expect("failed to connect to db");
-        let pg_service = Postgres::new(pool);
-        let private_key = funcs::generate_private_key_bytes(32);
-        let jwt_service = Jwt::new(private_key, 10, 20);
-        let use_case = UseCase::new(pg_service, jwt_service);
-        let http_server = HTTPServer::new(addr_str.clone(), use_case);
+async fn run_test_server() -> &'static ClientData {
+    MARKER
+        .get_or_init(|| async move {
+            logger::init("", "", "", "", true).unwrap();
 
-        tokio::spawn(async move {
-            log::info!("http-server start on {}", addr_str.clone());
-            if let Err(e) = http_server.run().await {
-                log::error!("failed to run server: {e}");
+            let addr_socket = TcpListener::bind(format!("{}:0", helpers::certs::LOCALHOST))
+                .expect("failed to bind addr")
+                .local_addr()
+                .expect("failed to local addr");
+            let addr_str = addr_socket.to_string();
+            let http_addr = format!("https://{}", addr_str); // явно используем https
+            let pool = PgPoolOptions::new()
+                .connect(DSN)
+                .await
+                .expect("failed to connect to db");
+            let pg_service = Postgres::new(pool);
+            let private_key = funcs::gen_priv_key_bytes(32);
+            let jwt_service = Jwt::new(private_key, 10, 20);
+            let use_case = UseCase::new(pg_service, jwt_service);
+            let certs = helpers::certs::gen_certs().unwrap(); // создадим серты
+            let tls_config = transport::http_server::configure_tls(
+                certs.ca_cert.pem().into_bytes(),
+                certs.server_cert.pem().into_bytes(),
+                certs.server_key.serialize_pem().into_bytes(),
+            )
+            .expect("failed to configure tls");
+            let http_server = HTTPServer::new(addr_str.clone(), use_case, Some(tls_config));
+
+            tokio::spawn(async move {
+                if let Err(e) = http_server.run().await {
+                    log::error!("failed to run server: {e}");
+                }
+            });
+
+            sleep(Duration::from_secs(1)).await;
+
+            ClientData {
+                http_addr,
+                ca: certs.ca_cert.pem(),
+                crt: certs.client_cert.pem(),
+                key: certs.client_key.serialize_pem(),
             }
-        });
-
-        // TODO тут надо проверить готовность сервера
-        /*
-            // Если сервер возвращает пустое тело, но клиент ожидает данные
-            let response = client.post(url)
-                .json(&payload)
-                .send()
-                .await?;
-
-            // Проверьте статус перед чтением тела
-            if response.status().is_success() {
-                let body = response.text().await?; // Может вызвать IncompleteMessage если тело пустое
-            } else {
-                // Обработка ошибки
-            }
-        */
-
-        // let timeout = Duration::from_secs(10);
-        // let start = Instant::now();
-        // while start.elapsed() < timeout {
-        //     if std::net::TcpStream::connect(addr_socket).is_ok() {
-        //         return http_addr;
-        //     }
-        //     sleep(Duration::from_millis(50)).await;
-        // }
-        // panic!("Server didn't start in time");
-
-        sleep(Duration::from_secs(1)).await;
-        http_addr
-    }).await
+        })
+        .await
 }
 
 #[tokio::test]
 async fn check_etc() {
-    let cl = Client::new(run_test_server().await.to_string());
+    let data = run_test_server().await;
+    let cl = Client::new(
+        data.http_addr.to_string(),
+        data.ca.to_string(),
+        data.crt.to_string(),
+        data.key.to_string(),
+    );
 
     cl.index(|result: Result<(StatusCode, String), String>| {
         let (status_code, body_str) = result.unwrap();
@@ -123,7 +126,14 @@ async fn check_etc() {
 
 #[tokio::test]
 async fn check_auth() {
-    let cl = Client::new(run_test_server().await.to_string());
+    let data = run_test_server().await;
+    let cl = Client::new(
+        data.http_addr.to_string(),
+        data.ca.to_string(),
+        data.crt.to_string(),
+        data.key.to_string(),
+    );
+
     let mut req_register = Faker.fake::<RequestRegister>();
     req_register.email = "abc".to_string();
     let mut req_login = Faker.fake::<RequestLogin>();
@@ -242,7 +252,14 @@ async fn check_auth() {
 
 #[tokio::test]
 async fn check_teams() {
-    let cl = Client::new(run_test_server().await.to_string());
+    let data = run_test_server().await;
+    let cl = Client::new(
+        data.http_addr.to_string(),
+        data.ca.to_string(),
+        data.crt.to_string(),
+        data.key.to_string(),
+    );
+
     let mut user_id = Uuid::nil();
     let mut req_team_create = Faker.fake::<RequestTeamCreate>();
     let mut req = Faker.fake::<RequestRegister>();
@@ -350,7 +367,14 @@ async fn check_teams() {
 
 #[tokio::test]
 async fn check_tasks() {
-    let cl = Client::new(run_test_server().await.to_string());
+    let data = run_test_server().await;
+    let cl = Client::new(
+        data.http_addr.to_string(),
+        data.ca.to_string(),
+        data.crt.to_string(),
+        data.key.to_string(),
+    );
+
     let mut user_id = Uuid::nil();
     let mut team_id = Uuid::nil();
     let mut task1_id = Uuid::nil();

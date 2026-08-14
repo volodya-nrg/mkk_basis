@@ -22,6 +22,14 @@ pub struct Postgres {
 #[derive(Deserialize)]
 pub struct HTTPServer {
     pub address: String,
+    pub tls: Tls,
+}
+#[derive(Deserialize)]
+pub struct Tls {
+    pub is_use: bool,
+    pub ca_filepath: String,
+    pub crt_filepath: String,
+    pub key_filepath: String,
 }
 
 impl Config {

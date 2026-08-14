@@ -13,7 +13,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 const DSN: &str =
-    "postgres://postgres:postgres@127.0.0.1:5432/postgres?search_path=mkk_basis&sslmode=disable";
+    "postgres://postgres:postgres@127.0.0.1:5432/postgres?options=-c%20search_path%3Dmkk_basis";
 
 #[ctor(unsafe)]
 fn init() {
