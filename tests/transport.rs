@@ -4,7 +4,7 @@ use axum::http::StatusCode;
 use fake::faker::internet::en::SafeEmail;
 use fake::{Fake, Faker};
 use helpers::client::Client;
-use helpers::funcs;
+use helpers::rand;
 use mkk_basis::adapter::db::postgres::Postgres;
 use mkk_basis::adapter::db::postgres::tables::tasks::Status as TaskStatus;
 use mkk_basis::adapter::jwt::Jwt;
@@ -46,7 +46,7 @@ async fn run_test_server() -> &'static ClientData {
                 .await
                 .expect("failed to connect to db");
             let pg_service = Postgres::new(pool);
-            let private_key = funcs::gen_priv_key_bytes(32);
+            let private_key = rand::private_key(32);
             let jwt_service = Jwt::new(private_key, 10, 20);
             let use_case = UseCase::new(pg_service, jwt_service);
             let certs = helpers::certs::gen_certs().unwrap(); // создадим серты

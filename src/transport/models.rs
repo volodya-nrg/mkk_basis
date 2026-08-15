@@ -5,6 +5,11 @@ use fake::locales::EN;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RequestUUID {
+    pub uuid: Uuid,
+}
+
 #[derive(Debug, Serialize, Deserialize, Dummy, PartialEq, Clone)]
 pub struct RequestRegister {
     #[dummy(faker = "FreeEmail(EN)")]
@@ -47,7 +52,18 @@ pub struct RequestTask {
     pub created_by: Uuid,
     pub team_id: Uuid,
     pub assignee_id: Option<Uuid>,
+    #[dummy(faker = "Password(EN, 5..20)")]
     pub status: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Dummy, Clone)]
+pub struct RequestUser {
+    pub name: String,
+    #[dummy(faker = "FreeEmail(EN)")]
+    pub email: String,
+    #[dummy(faker = "Password(EN, 5..20)")]
+    pub password: String,
+    pub email_is_confirmed: bool,
 }
 
 // ------------------------------------
