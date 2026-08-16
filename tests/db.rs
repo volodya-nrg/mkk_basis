@@ -1,7 +1,8 @@
+mod helpers;
+
 use chrono::Local;
 use ctor::ctor;
-use fake::faker::internet::en::SafeEmail;
-use fake::{Fake, Faker};
+use helpers::rand;
 use mkk_basis::adapter::db::RepositoryError;
 use mkk_basis::adapter::db::models::*;
 use mkk_basis::adapter::db::postgres::Postgres;
@@ -42,12 +43,12 @@ async fn check_users() {
         Err(RepositoryError::NotFoundRow)
     );
     assert_matches!(
-        db.tbl_users.get_by_email(SafeEmail().fake()).await,
+        db.tbl_users.get_by_email(rand::email()).await,
         Err(RepositoryError::NotFoundRow)
     );
 
     // ok: проверим что запись создается
-    let mut user_expected: User = Faker.fake();
+    let mut user_expected: User = rand::user();
     user_expected.user_id = db
         .tbl_users
         .create(user_expected.clone())
@@ -96,10 +97,10 @@ async fn check_users() {
     assert!(total > 0); // список пустой, но общее кол-во есть
 
     // err: изменим
-    assert!(db.tbl_users.update(Faker.fake::<User>()).await.is_err());
+    assert!(db.tbl_users.update(rand::user()).await.is_err());
 
     // ok: изменим и проверим пользователя
-    let mut user_expected: User = Faker.fake();
+    let mut user_expected = rand::user();
     user_expected.user_id = user_actual.user_id; // подменим на валидное явно
     db.tbl_users
         .update(user_expected.clone())
@@ -139,7 +140,7 @@ async fn check_teams() {
     // ok: создадим пользователя
     let user_id = db
         .tbl_users
-        .create(Faker.fake::<User>())
+        .create(rand::user())
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
 
@@ -150,10 +151,10 @@ async fn check_teams() {
     );
 
     // err: попытаемся создать команду, но такой нет
-    assert!(db.tbl_teams.create(Faker.fake::<Team>()).await.is_err());
+    assert!(db.tbl_teams.create(rand::team()).await.is_err());
 
     // ok: проверим что создается
-    let mut team_expected: Team = Faker.fake();
+    let mut team_expected: Team = rand::team();
     team_expected.created_by = user_id; // зависит от user-а
     team_expected.team_id = db
         .tbl_teams
@@ -194,10 +195,10 @@ async fn check_teams() {
     assert!(total > 0); // список пустой, но общее кол-во есть
 
     // err: изменим неизвестного
-    assert!(db.tbl_teams.update(Faker.fake::<Team>()).await.is_err());
+    assert!(db.tbl_teams.update(rand::team()).await.is_err());
 
     // ok: изменим и проверим
-    let mut team_expected: Team = Faker.fake();
+    let mut team_expected = rand::team();
     team_expected.team_id = team_actual.team_id; // подменим на валидное явно
     team_expected.created_by = user_id;
     db.tbl_teams
@@ -247,10 +248,10 @@ async fn check_team_members() {
     // ok: создадим команду и пользователя
     let user_id = db
         .tbl_users
-        .create(Faker.fake::<User>())
+        .create(rand::user())
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut team: Team = Faker.fake();
+    let mut team = rand::team();
     team.created_by = user_id;
     let team_id = db
         .tbl_teams
@@ -269,13 +270,13 @@ async fn check_team_members() {
     // err: попытаемся создать, но связанных данных нет
     assert!(
         db.tbl_team_members
-            .create(Faker.fake::<TeamMember>())
+            .create(rand::team_member())
             .await
             .is_err()
     );
 
     // ok: проверим что создается
-    let mut team_member_expected: TeamMember = Faker.fake();
+    let mut team_member_expected = rand::team_member();
     team_member_expected.team_id = team_id; // зависит от team-а
     team_member_expected.user_id = user_id; // зависит от user-а
     db.tbl_team_members
@@ -344,10 +345,10 @@ async fn check_team_members() {
     // проверим каскадное удаление, относительно team_id
     let user_id = db
         .tbl_users
-        .create(Faker.fake::<User>())
+        .create(rand::user())
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut team: Team = Faker.fake();
+    let mut team = rand::team();
     team.created_by = user_id;
 
     let team_id: Uuid = db
@@ -355,7 +356,7 @@ async fn check_team_members() {
         .create(team)
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut team_member_expected: TeamMember = Faker.fake();
+    let mut team_member_expected = rand::team_member();
     team_member_expected.team_id = team_id;
     team_member_expected.user_id = user_id;
 
@@ -387,10 +388,10 @@ async fn check_tasks() {
     // ok: создадим пользователя и команду
     let user_id: Uuid = db
         .tbl_users
-        .create(Faker.fake::<User>())
+        .create(rand::user())
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut team: Team = Faker.fake();
+    let mut team = rand::team();
     team.created_by = user_id;
     let team_id: Uuid = db
         .tbl_teams
@@ -405,10 +406,10 @@ async fn check_tasks() {
     );
 
     // err: попытаемся создать задачу, но такой нет
-    assert!(db.tbl_tasks.create(Faker.fake::<Task>()).await.is_err());
+    assert!(db.tbl_tasks.create(rand::task()).await.is_err());
 
     // ok: проверим что создается
-    let mut task_expected: Task = Faker.fake();
+    let mut task_expected = rand::task();
     task_expected.team_id = team_id; // зависит от team
     task_expected.created_by = user_id; // зависит от user-а
     task_expected.assignee_id = Some(user_id); // зависит от user-а
@@ -452,10 +453,10 @@ async fn check_tasks() {
     assert!(total > 0); // список пустой, но общее кол-во есть
 
     // err: изменим неизвестного
-    assert!(db.tbl_tasks.update(Faker.fake::<Task>()).await.is_err());
+    assert!(db.tbl_tasks.update(rand::task()).await.is_err());
 
     // ok: изменим и проверим
-    let mut task_expected: Task = Faker.fake();
+    let mut task_expected = rand::task();
     task_expected.task_id = task_actual.task_id;
     task_expected.team_id = team_id; // зависит от team
     task_expected.created_by = user_id; // зависит от user-а
@@ -516,22 +517,22 @@ async fn check_task_histories() {
     // ok: создадим зависимости
     let user_id = db
         .tbl_users
-        .create(Faker.fake::<User>())
+        .create(rand::user())
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
     let user_id2 = db
         .tbl_users
-        .create(Faker.fake::<User>())
+        .create(rand::user())
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut team: Team = Faker.fake();
+    let mut team: Team = rand::team();
     team.created_by = user_id;
     let team_id = db
         .tbl_teams
         .create(team)
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut task: Task = Faker.fake();
+    let mut task: Task = rand::task();
     task.team_id = team_id;
     task.created_by = user_id;
     task.assignee_id = None;
@@ -551,13 +552,13 @@ async fn check_task_histories() {
     // err: попытаемся создать
     assert!(
         db.tbl_task_histories
-            .create(Faker.fake::<TaskHistory>())
+            .create(rand::task_history())
             .await
             .is_err()
     );
 
     // ok: проверим что создается
-    let mut task_history_expected: TaskHistory = Faker.fake();
+    let mut task_history_expected = rand::task_history();
     task_history_expected.task_id = task_id;
     task_history_expected.user_id = user_id;
     task_history_expected.task_history_id = db
@@ -613,13 +614,13 @@ async fn check_task_histories() {
     // err: изменим неизвестного
     assert!(
         db.tbl_task_histories
-            .update(Faker.fake::<TaskHistory>())
+            .update(rand::task_history())
             .await
             .is_err()
     );
 
     // ok: изменим и проверим
-    let mut task_history_expected: TaskHistory = Faker.fake();
+    let mut task_history_expected = rand::task_history();
     task_history_expected.task_history_id = task_history_actual.task_history_id;
     task_history_expected.task_id = task_id;
     task_history_expected.user_id = user_id2;
@@ -674,17 +675,17 @@ async fn check_task_histories() {
     // проверим каскадное удаление относительно task_id
     let user_id = db
         .tbl_users
-        .create(Faker.fake::<User>())
+        .create(rand::user())
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut team: Team = Faker.fake();
+    let mut team: Team = rand::team();
     team.created_by = user_id;
     let team_id = db
         .tbl_teams
         .create(team)
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut task: Task = Faker.fake();
+    let mut task: Task = rand::task();
     task.team_id = team_id;
     task.created_by = user_id;
     task.assignee_id = None;
@@ -695,7 +696,7 @@ async fn check_task_histories() {
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
 
-    let mut task_history_expected: TaskHistory = Faker.fake();
+    let mut task_history_expected = rand::task_history();
     task_history_expected.task_id = task_id;
     task_history_expected.user_id = user_id;
     let task_history_id = db
@@ -720,10 +721,10 @@ async fn check_task_histories() {
         .unwrap_or_else(|e| panic!("{:?}", e));
     let user_id2: Uuid = db
         .tbl_users
-        .create(Faker.fake::<User>())
+        .create(rand::user())
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut task_history_expected: TaskHistory = Faker.fake();
+    let mut task_history_expected = rand::task_history();
     task_history_expected.task_id = task_id;
     task_history_expected.user_id = user_id2;
     let task_history_id = db
@@ -763,22 +764,22 @@ async fn check_task_comments() {
     // ok: создадим зависимости
     let user_id: Uuid = db
         .tbl_users
-        .create(Faker.fake::<User>())
+        .create(rand::user())
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
     let user_id2: Uuid = db
         .tbl_users
-        .create(Faker.fake::<User>())
+        .create(rand::user())
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut team: Team = Faker.fake();
+    let mut team = rand::team();
     team.created_by = user_id;
     let team_id: Uuid = db
         .tbl_teams
         .create(team)
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut task: Task = Faker.fake();
+    let mut task = rand::task();
     task.team_id = team_id;
     task.created_by = user_id;
     task.assignee_id = None;
@@ -798,13 +799,13 @@ async fn check_task_comments() {
     // err: попытаемся создать, отсутствуют зависимости
     assert!(
         db.tbl_task_comments
-            .create(Faker.fake::<TaskComment>())
+            .create(rand::task_comment())
             .await
             .is_err()
     );
 
     // ok: проверим что создается
-    let mut task_comment_expected: TaskComment = Faker.fake();
+    let mut task_comment_expected = rand::task_comment();
     task_comment_expected.task_id = task_id;
     task_comment_expected.user_id = user_id;
     task_comment_expected.task_comment_id = db
@@ -856,13 +857,13 @@ async fn check_task_comments() {
     // err: изменим неизвестного
     assert!(
         db.tbl_task_comments
-            .update(Faker.fake::<TaskComment>())
+            .update(rand::task_comment())
             .await
             .is_err()
     );
 
     // ok: изменим и проверим
-    let mut task_comment_expected: TaskComment = Faker.fake();
+    let mut task_comment_expected = rand::task_comment();
     task_comment_expected.task_comment_id = task_comment_actual.task_comment_id;
     task_comment_expected.task_id = task_id;
     task_comment_expected.user_id = user_id2;
@@ -923,17 +924,17 @@ async fn check_task_comments() {
     // проверим каскадное удаление относительно task_id
     let user_id: Uuid = db
         .tbl_users
-        .create(Faker.fake::<User>())
+        .create(rand::user())
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut team: Team = Faker.fake();
+    let mut team: Team = rand::team();
     team.created_by = user_id;
     let team_id: Uuid = db
         .tbl_teams
         .create(team)
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut task: Task = Faker.fake();
+    let mut task: Task = rand::task();
     task.team_id = team_id;
     task.created_by = user_id;
     task.assignee_id = None;
@@ -943,7 +944,7 @@ async fn check_task_comments() {
         .create(task.clone())
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut task_comment_expected: TaskComment = Faker.fake();
+    let mut task_comment_expected = rand::task_comment();
     task_comment_expected.task_id = task_id;
     task_comment_expected.user_id = user_id;
     let task_comment_id = db
@@ -968,10 +969,10 @@ async fn check_task_comments() {
         .unwrap_or_else(|e| panic!("{:?}", e));
     let user_id2: Uuid = db
         .tbl_users
-        .create(Faker.fake::<User>())
+        .create(rand::user())
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut task_comment_expected: TaskComment = Faker.fake();
+    let mut task_comment_expected = rand::task_comment();
     task_comment_expected.task_id = task_id;
     task_comment_expected.user_id = user_id2;
     let task_comment_id = db

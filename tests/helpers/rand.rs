@@ -1,4 +1,12 @@
-use rand::{Rng, RngExt, distr::Alphanumeric}; // distr::Alphabetic,
+use mkk_basis::adapter::db::models::{Task, TaskComment, TaskHistory, Team, TeamMember, User};
+use mkk_basis::adapter::db::postgres::tables::tasks::Status as TaskStatuses;
+use mkk_basis::transport::models::{
+    RequestLogin, RequestRegister, RequestTask, RequestTeamCreate, RequestTeamInvite, RequestUUID,
+    RequestUser,
+};
+use rand::{Rng, RngExt, distr::Alphanumeric};
+use uuid::Uuid;
+// use mkk_basis::usecase::models::TeamMember;
 
 pub fn private_key(len: usize) -> Vec<u8> {
     let mut key = vec![0u8; len];
@@ -16,6 +24,141 @@ pub fn str_limit(len: usize) -> String {
         .take(len)
         .map(char::from)
         .collect()
+}
+pub fn email() -> String {
+    format!("{}@{}.{}", str_limit(10), str_limit(10), str_limit(3))
+}
+pub fn bool() -> bool {
+    rand::random()
+}
+pub fn int_range(min: usize, max: usize) -> usize {
+    let mut rng = rand::rng();
+    rng.random_range(min..=max) // включительно
+}
+
+pub fn request_uuid() -> RequestUUID {
+    RequestUUID {
+        uuid: Uuid::new_v4(),
+    }
+}
+
+pub fn request_register() -> RequestRegister {
+    let pass = str();
+    RequestRegister {
+        email: email(),
+        password: pass.clone(),
+        password_confirm: pass,
+    }
+}
+
+pub fn request_login() -> RequestLogin {
+    RequestLogin {
+        email: email(),
+        password: str(),
+    }
+}
+
+pub fn request_team_create() -> RequestTeamCreate {
+    RequestTeamCreate {
+        name: str(),
+        created_by: Uuid::new_v4(),
+    }
+}
+
+pub fn request_team_invite() -> RequestTeamInvite {
+    RequestTeamInvite {
+        user_id: Uuid::new_v4(),
+    }
+}
+
+pub fn request_task() -> RequestTask {
+    RequestTask {
+        name: str(),
+        description: if bool() { Some(str()) } else { None },
+        created_by: Uuid::new_v4(),
+        team_id: Uuid::new_v4(),
+        assignee_id: if bool() { Some(Uuid::new_v4()) } else { None },
+        status: get_random_task_status(),
+    }
+}
+
+pub fn request_user() -> RequestUser {
+    RequestUser {
+        name: str(),
+        email: email(),
+        password: str(),
+        email_is_confirmed: bool(),
+    }
+}
+
+pub fn user() -> User {
+    User {
+        user_id: Uuid::new_v4(),
+        name: if bool() { Some(str()) } else { None },
+        email: email(),
+        password: str(),
+        email_is_confirmed: bool(),
+        created_at: Default::default(),
+        updated_at: Default::default(),
+    }
+}
+pub fn team() -> Team {
+    Team {
+        team_id: Uuid::new_v4(),
+        name: str(),
+        created_by: Uuid::new_v4(),
+        created_at: Default::default(),
+        updated_at: Default::default(),
+    }
+}
+pub fn team_member() -> TeamMember {
+    TeamMember {
+        team_id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(),
+        created_at: Default::default(),
+    }
+}
+pub fn task() -> Task {
+    Task {
+        task_id: Uuid::new_v4(),
+        name: str(),
+        description: if bool() { Some(str()) } else { None },
+        created_by: Uuid::new_v4(),
+        team_id: Uuid::new_v4(),
+        assignee_id: if bool() { Some(Uuid::new_v4()) } else { None },
+        status: get_random_task_status(),
+        created_at: Default::default(),
+        updated_at: Default::default(),
+    }
+}
+pub fn task_history() -> TaskHistory {
+    TaskHistory {
+        task_history_id: Uuid::new_v4(),
+        task_id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(),
+        msg: str(),
+        created_at: Default::default(),
+    }
+}
+pub fn task_comment() -> TaskComment {
+    TaskComment {
+        task_comment_id: Uuid::new_v4(),
+        task_id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(),
+        msg: str(),
+        created_at: Default::default(),
+        updated_at: Default::default(),
+    }
+}
+
+fn get_random_task_status() -> String {
+    let statuses = [
+        TaskStatuses::Start,
+        TaskStatuses::Todo,
+        TaskStatuses::Done,
+        TaskStatuses::Cancelled,
+    ];
+    statuses[int_range(0, statuses.len() - 1)].to_string()
 }
 
 #[cfg(test)]

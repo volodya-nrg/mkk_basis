@@ -1,7 +1,4 @@
 use chrono::{DateTime, Utc};
-use fake::Dummy;
-use fake::faker::internet::raw::{FreeEmail, Password};
-use fake::locales::EN;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -10,21 +7,16 @@ pub struct RequestUUID {
     pub uuid: Uuid,
 }
 
-#[derive(Debug, Serialize, Deserialize, Dummy, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct RequestRegister {
-    #[dummy(faker = "FreeEmail(EN)")]
     pub email: String,
-    #[dummy(faker = "Password(EN, 5..20)")]
     pub password: String,
-    #[dummy(faker = "Password(EN, 5..20)")]
     pub password_confirm: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Dummy, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RequestLogin {
-    #[dummy(faker = "FreeEmail(EN)")]
     pub email: String,
-    #[dummy(faker = "Password(EN, 5..20)")]
     pub password: String,
 }
 
@@ -34,34 +26,31 @@ pub struct RequestLimitOffset {
     pub offset: i32,
 }
 
-#[derive(Debug, Serialize, Deserialize, Dummy, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RequestTeamCreate {
     pub name: String,
     pub created_by: Uuid,
 }
 
-#[derive(Debug, Serialize, Deserialize, Dummy, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RequestTeamInvite {
     pub user_id: Uuid,
 }
 
-#[derive(Debug, Serialize, Deserialize, Dummy, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RequestTask {
     pub name: String,
     pub description: Option<String>,
     pub created_by: Uuid,
     pub team_id: Uuid,
     pub assignee_id: Option<Uuid>,
-    #[dummy(faker = "Password(EN, 5..20)")]
     pub status: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Dummy, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RequestUser {
     pub name: String,
-    #[dummy(faker = "FreeEmail(EN)")]
     pub email: String,
-    #[dummy(faker = "Password(EN, 5..20)")]
     pub password: String,
     pub email_is_confirmed: bool,
 }

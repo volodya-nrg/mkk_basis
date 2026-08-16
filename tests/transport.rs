@@ -1,12 +1,9 @@
 mod helpers;
 
 use axum::http::StatusCode;
-use fake::faker::internet::en::SafeEmail;
-use fake::{Fake, Faker};
 use helpers::client::Client;
 use helpers::rand;
 use mkk_basis::adapter::db::postgres::Postgres;
-use mkk_basis::adapter::db::postgres::tables::tasks::Status as TaskStatus;
 use mkk_basis::adapter::jwt::Jwt;
 use mkk_basis::adapter::logger;
 use mkk_basis::transport::http_server::HTTPServer;
@@ -133,11 +130,12 @@ async fn check_auth() {
         data.crt.to_string(),
         data.key.to_string(),
     );
+    let wrong_email = "abc".to_string();
+    let mut req_register = rand::request_register();
+    let mut req_login = rand::request_login();
 
-    let mut req_register = Faker.fake::<RequestRegister>();
-    req_register.email = "abc".to_string();
-    let mut req_login = Faker.fake::<RequestLogin>();
-    req_login.email = "abc".to_string();
+    req_register.email = wrong_email.clone();
+    req_login.email = wrong_email.clone();
 
     // err: проверка е-мэйла на валидность
     cl.register(
@@ -146,8 +144,8 @@ async fn check_auth() {
             let (status_code, _body_str) = result.unwrap();
             assert_eq!(StatusCode::BAD_REQUEST, status_code);
 
-            req_register.email = SafeEmail().fake();
-            req_register.password = (1..consts::MIN_PASSWORD_LEN).fake::<String>();
+            req_register.email = rand::email();
+            req_register.password = rand::str_limit(consts::MIN_PASSWORD_LEN - 1);
         },
     )
     .await // err: проверка пароля на длину
@@ -157,7 +155,7 @@ async fn check_auth() {
             let (status_code, _body_str) = result.unwrap();
             assert_eq!(StatusCode::BAD_REQUEST, status_code);
 
-            req_register.password = Faker.fake::<String>();
+            req_register.password = rand::str();
         },
     )
     .await // err: проверка паролей на равенство
@@ -185,7 +183,7 @@ async fn check_auth() {
             let (status_code, _body_str) = result.unwrap();
             assert_eq!(StatusCode::BAD_REQUEST, status_code);
 
-            req_login.email = SafeEmail().fake();
+            req_login.email = rand::email();
         },
     )
     .await // err: проверим что по левому е-мэйлу не находит пользователя
@@ -196,7 +194,7 @@ async fn check_auth() {
             assert_eq!(StatusCode::BAD_REQUEST, status_code);
 
             req_login.email = req_register.email.clone();
-            req_login.password = "abc".to_string();
+            req_login.password = rand::str_limit(consts::MIN_PASSWORD_LEN - 1);
         },
     )
     .await // err: проверим что пароль короткий
@@ -206,7 +204,7 @@ async fn check_auth() {
             let (status_code, _body_str) = result.unwrap();
             assert_eq!(StatusCode::BAD_REQUEST, status_code);
 
-            req_login.password = Faker.fake();
+            req_login.password = rand::str();
         },
     )
     .await // err: проверим что пароль не верный
@@ -261,13 +259,12 @@ async fn check_teams() {
     );
 
     let mut user_id = Uuid::nil();
-    let mut req_team_create = Faker.fake::<RequestTeamCreate>();
-    let mut req = Faker.fake::<RequestRegister>();
-    req.password_confirm = req.password.clone();
+    let mut req_team_create = rand::request_team_create();
+    let mut req_register = rand::request_register();
     let mut team_id = Uuid::nil();
     let req_login = RequestLogin {
-        email: req.email.clone(),
-        password: req.password.clone(),
+        email: req_register.email.clone(),
+        password: req_register.password.clone(),
     };
 
     // проверим на 401
@@ -277,7 +274,7 @@ async fn check_teams() {
     })
     .await
     .teams_create(
-        Faker.fake::<RequestTeamCreate>(),
+        rand::request_team_create(),
         |result: Result<(StatusCode, String), String>| {
             let (status_code, _body_str) = result.unwrap();
             assert_eq!(StatusCode::UNAUTHORIZED, status_code);
@@ -286,7 +283,7 @@ async fn check_teams() {
     .await
     .teams_invite(
         Uuid::new_v4(),
-        Faker.fake::<RequestTeamInvite>(),
+        rand::request_team_invite(),
         |result: Result<(StatusCode, String), String>| {
             let (status_code, _body_str) = result.unwrap();
             assert_eq!(StatusCode::UNAUTHORIZED, status_code);
@@ -295,14 +292,17 @@ async fn check_teams() {
     .await;
 
     // создадим пользователя и аутентифицируемся
-    cl.register(req, |result: Result<(StatusCode, String), String>| {
-        let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+    cl.register(
+        req_register,
+        |result: Result<(StatusCode, String), String>| {
+            let (status_code, body_str) = result.unwrap();
+            assert!(status_code.is_success());
 
-        let resp: ResponseUUID =
-            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
-        user_id = resp.uuid;
-    })
+            let resp: ResponseUUID =
+                serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            user_id = resp.uuid;
+        },
+    )
     .await
     .login(req_login, |result: Result<(StatusCode, String), String>| {
         let (status_code, _body_str) = result.unwrap();
@@ -378,13 +378,11 @@ async fn check_tasks() {
     let mut user_id = Uuid::nil();
     let mut team_id = Uuid::nil();
     let mut task1_id = Uuid::nil();
-    let mut req_register = Faker.fake::<RequestRegister>();
+    let mut req_register = rand::request_register();
     req_register.password_confirm = req_register.password.clone();
-    let mut req_team_create = Faker.fake::<RequestTeamCreate>();
-    let mut req_task1 = Faker.fake::<RequestTask>();
-    req_task1.status = TaskStatus::Start.to_string();
-    let mut req_task2 = Faker.fake::<RequestTask>();
-    req_task2.status = TaskStatus::Cancelled.to_string();
+    let mut req_team_create = rand::request_team_create();
+    let mut req_task1 = rand::request_task();
+    let mut req_task2 = rand::request_task();
     let req_login = RequestLogin {
         email: req_register.email.clone(),
         password: req_register.password.clone(),
@@ -397,7 +395,7 @@ async fn check_tasks() {
     })
     .await
     .tasks_create(
-        Faker.fake::<RequestTask>(),
+        rand::request_task(),
         |result: Result<(StatusCode, String), String>| {
             let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
             assert_eq!(StatusCode::UNAUTHORIZED, status_code);
@@ -406,7 +404,7 @@ async fn check_tasks() {
     .await
     .tasks_update(
         Uuid::new_v4(),
-        Faker.fake::<RequestTask>(),
+        rand::request_task(),
         |result: Result<(StatusCode, String), String>| {
             let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
             assert_eq!(StatusCode::UNAUTHORIZED, status_code);

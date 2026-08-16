@@ -1,4 +1,4 @@
-use fake::{Fake, Faker};
+use super::rand;
 use http::StatusCode;
 use mkk_basis::transport::models::*;
 use reqwest::{Certificate, Client as ReqwestClient, Identity, Response, header};
@@ -109,10 +109,9 @@ impl Client {
     where
         T: FnMut(Result<(StatusCode, String), String>),
     {
-        let random_string: String = Faker.fake();
         let result = self
             .client
-            .get(format!("{}/{}", self.addr, random_string))
+            .get(format!("{}/{}", self.addr, rand::str()))
             .send()
             .await
             .map_err(|e| format!("failed to request: {:?}", e));

@@ -15,7 +15,6 @@ log = "0.4.33"
 axum = "0.8.9"
 serde_json = "1.0.151"
 env_logger = "0.11.11"
-fake = { version = "5.1.0", features = ["derive", "chrono", "uuid"] }
 reqwest = { version = "0.13.4", features = ["form", "json"] }
 tower-http = { version = "0.7.0", features = ["fs"] }
 argon2 = { version = "0.5.3", features = ["std"] }
@@ -29,3 +28,5 @@ rcgen = "0.14.9"
 axum-server = { version = "0.8.0", features = ["tls-rustls-no-provider"] }
 rustls = "0.23.43"
 rustls-pemfile = "2.2.0"
+
+# fake = { version = "5.1.0", features = ["derive", "chrono", "uuid"] }
