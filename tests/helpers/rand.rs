@@ -1,8 +1,7 @@
 use mkk_basis::adapter::db::models::{Task, TaskComment, TaskHistory, Team, TeamMember, User};
 use mkk_basis::adapter::db::postgres::tables::tasks::Status as TaskStatuses;
 use mkk_basis::transport::models::{
-    RequestLogin, RequestRegister, RequestTask, RequestTeamCreate, RequestTeamInvite,
-    RequestUser,
+    RequestLogin, RequestRegister, RequestTask, RequestTeamCreate, RequestTeamInvite, RequestUser,
 };
 use rand::{Rng, RngExt, distr::Alphanumeric};
 use uuid::Uuid;
@@ -41,6 +40,8 @@ pub fn request_register() -> RequestRegister {
         email: email(),
         password: pass.clone(),
         password_confirm: pass,
+        agreement: true,
+        privacy_policy: true,
     }
 }
 

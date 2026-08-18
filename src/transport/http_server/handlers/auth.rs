@@ -18,7 +18,13 @@ impl Handlers {
     ) -> impl IntoResponse {
         let result = use_case
             .auth
-            .register(payload.email, payload.password, payload.password_confirm)
+            .register(
+                payload.email,
+                payload.password,
+                payload.password_confirm,
+                payload.agreement,
+                payload.privacy_policy,
+            )
             .await;
         match result {
             Ok(new_uuid) => {

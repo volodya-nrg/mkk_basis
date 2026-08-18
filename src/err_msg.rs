@@ -6,6 +6,8 @@ pub enum ErrMsg {
     PasswordIsShort,
     NotFoundUser,
     LoginOrPasswordNotCorrect,
+    NeedAcceptAgreement,
+    NeedAcceptPrivacyPolicy,
 }
 impl ErrMsg {
     pub fn as_str(&self) -> String {
@@ -20,6 +22,8 @@ impl ErrMsg {
             }
             ErrMsg::NotFoundUser => "такой пользователь не найден".to_string(),
             ErrMsg::LoginOrPasswordNotCorrect => "логин или пароль не верные".to_string(),
+            ErrMsg::NeedAcceptAgreement => "необходимо принять условия оферты".to_string(),
+            ErrMsg::NeedAcceptPrivacyPolicy => "необходимо принять политику конфиденциальности".to_string(),
         }
     }
 }

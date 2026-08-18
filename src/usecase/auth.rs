@@ -5,11 +5,6 @@ use crate::adapter::{
 };
 use crate::consts;
 use crate::err_msg::ErrMsg;
-
-use argon2::Argon2;
-use argon2::password_hash::{
-    PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng,
-};
 use http::StatusCode;
 use uuid::Uuid;
 
@@ -31,6 +26,8 @@ impl Auth {
         email: String,
         password: String,
         password_confirm: String,
+        agreement: bool,
+        privacy_policy: bool,
     ) -> Result<Uuid, UseCaseError> {
         if !helpersService::is_valid_email(&email) {
             return Err(UseCaseError::ForTransport {
@@ -50,6 +47,20 @@ impl Auth {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: ErrMsg::PasswordsNotEquals.as_str(),
+                internal_err: Default::default(),
+            });
+        }
+        if !agreement {
+            return Err(UseCaseError::ForTransport {
+                status_code: StatusCode::BAD_REQUEST,
+                public_err: ErrMsg::NeedAcceptAgreement.as_str(),
+                internal_err: Default::default(),
+            });
+        }
+        if !privacy_policy {
+            return Err(UseCaseError::ForTransport {
+                status_code: StatusCode::BAD_REQUEST,
+                public_err: ErrMsg::NeedAcceptPrivacyPolicy.as_str(),
                 internal_err: Default::default(),
             });
         }

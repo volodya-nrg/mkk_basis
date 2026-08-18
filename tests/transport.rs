@@ -3,13 +3,19 @@ mod helpers;
 use axum::http::StatusCode;
 use helpers::client::Client;
 use helpers::rand;
-use mkk_basis::adapter::db::postgres::Postgres;
-use mkk_basis::adapter::jwt::Jwt;
-use mkk_basis::adapter::logger;
-use mkk_basis::transport::http_server::HTTPServer;
-use mkk_basis::transport::models::*;
-use mkk_basis::usecase::UseCase;
-use mkk_basis::{consts, transport};
+use mkk_basis::{
+    adapter::db::postgres::Postgres,
+    adapter::jwt::Jwt,
+    adapter::logger,
+    consts, transport,
+    transport::http_server::HTTPServer,
+    transport::models::{
+        RequestLogin, RequestTeamInvite, ResponseLogin, ResponseTask, ResponseTaskHistories,
+        ResponseTasksList, ResponseTeam, ResponseTeamsList, ResponseUUID, ResponseUser,
+        ResponseUsersList,
+    },
+    usecase::UseCase,
+};
 use sqlx::postgres::PgPoolOptions;
 use std::net::TcpListener;
 use tokio::sync::OnceCell;
@@ -166,6 +172,28 @@ async fn check_auth() {
             assert_eq!(StatusCode::BAD_REQUEST, status_code);
 
             req_register.password_confirm = req_register.password.clone();
+            req_register.agreement = false;
+        },
+    )
+    .await // err: не принято условия оферты
+    .register(
+        req_register.clone(),
+        |result: Result<(StatusCode, String), String>| {
+            let (status_code, _body_str) = result.unwrap();
+            assert_eq!(StatusCode::BAD_REQUEST, status_code);
+
+            req_register.agreement = true;
+            req_register.privacy_policy = false;
+        },
+    )
+    .await // err: не принято политику конфиденциальности
+    .register(
+        req_register.clone(),
+        |result: Result<(StatusCode, String), String>| {
+            let (status_code, _body_str) = result.unwrap();
+            assert_eq!(StatusCode::BAD_REQUEST, status_code);
+
+            req_register.privacy_policy = true;
         },
     )
     .await // ok
@@ -545,7 +573,7 @@ async fn check_users() {
         email: req_register.email.clone(),
         password: req_register.password.clone(),
     };
-    let mut saved_resp_user: ResponseUser = ResponseUser {
+    let mut saved_resp_user = ResponseUser {
         user_id,
         name: None,
         email: "".to_string(),

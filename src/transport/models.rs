@@ -7,6 +7,8 @@ pub struct RequestRegister {
     pub email: String,
     pub password: String,
     pub password_confirm: String,
+    pub agreement: bool,
+    pub privacy_policy: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
