@@ -2,4 +2,4 @@ pub mod auth;
 pub mod tasks;
 pub mod teams;
 pub mod etc;
-mod users;
+pub mod users;

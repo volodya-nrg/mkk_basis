@@ -1,12 +1,11 @@
 use mkk_basis::adapter::db::models::{Task, TaskComment, TaskHistory, Team, TeamMember, User};
 use mkk_basis::adapter::db::postgres::tables::tasks::Status as TaskStatuses;
 use mkk_basis::transport::models::{
-    RequestLogin, RequestRegister, RequestTask, RequestTeamCreate, RequestTeamInvite, RequestUUID,
+    RequestLogin, RequestRegister, RequestTask, RequestTeamCreate, RequestTeamInvite,
     RequestUser,
 };
 use rand::{Rng, RngExt, distr::Alphanumeric};
 use uuid::Uuid;
-// use mkk_basis::usecase::models::TeamMember;
 
 pub fn private_key(len: usize) -> Vec<u8> {
     let mut key = vec![0u8; len];
@@ -34,12 +33,6 @@ pub fn bool() -> bool {
 pub fn int_range(min: usize, max: usize) -> usize {
     let mut rng = rand::rng();
     rng.random_range(min..=max) // включительно
-}
-
-pub fn request_uuid() -> RequestUUID {
-    RequestUUID {
-        uuid: Uuid::new_v4(),
-    }
 }
 
 pub fn request_register() -> RequestRegister {
@@ -84,7 +77,7 @@ pub fn request_task() -> RequestTask {
 
 pub fn request_user() -> RequestUser {
     RequestUser {
-        name: str(),
+        name: if bool() { Some(str()) } else { None },
         email: email(),
         password: str(),
         email_is_confirmed: bool(),
@@ -98,6 +91,7 @@ pub fn user() -> User {
         email: email(),
         password: str(),
         email_is_confirmed: bool(),
+        avatar: if bool() { Some(str()) } else { None },
         created_at: Default::default(),
         updated_at: Default::default(),
     }

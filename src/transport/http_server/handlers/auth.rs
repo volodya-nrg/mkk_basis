@@ -1,5 +1,7 @@
-use crate::transport::extractor::AuthenticatedUser;
-use crate::transport::models::*;
+use crate::transport::{
+    extractor::AuthenticatedUser,
+    models::{RequestLogin, RequestRegister, ResponseLogin, ResponseUUID},
+};
 use crate::usecase::UseCase;
 use axum::Json;
 use axum::extract::State;
@@ -20,7 +22,8 @@ impl Handlers {
             .await;
         match result {
             Ok(new_uuid) => {
-                (StatusCode::OK, Json(json!(ResponseUUID { uuid: new_uuid }))).into_response()
+                let resp = ResponseUUID { uuid: new_uuid };
+                (StatusCode::OK, Json(json!(resp))).into_response()
             }
             Err(e) => e.into_response(),
         }
@@ -30,14 +33,13 @@ impl Handlers {
         Json(payload): Json<RequestLogin>,
     ) -> impl IntoResponse {
         match use_case.auth.login(payload.email, payload.password).await {
-            Ok((access_token, refresh_token)) => (
-                StatusCode::OK,
-                Json(ResponseLogin {
+            Ok((access_token, refresh_token)) => {
+                let resp = ResponseLogin {
                     access_token: access_token.to_string(),
                     refresh_token: refresh_token.to_string(),
-                }),
-            )
-                .into_response(),
+                };
+                (StatusCode::OK, Json(resp)).into_response()
+            }
             Err(e) => e.into_response(),
         }
     }
@@ -45,9 +47,10 @@ impl Handlers {
         _user: AuthenticatedUser,
         State(use_case): State<UseCase>,
     ) -> impl IntoResponse {
-        match use_case.auth.logout().await {
-            Ok(_) => StatusCode::OK.into_response(),
-            Err(e) => e.into_response(),
+        if let Err(e) = use_case.auth.logout().await {
+            e.into_response()
+        } else {
+            StatusCode::OK.into_response()
         }
     }
 }

@@ -1,4 +1,4 @@
-use super::models::*;
+use super::models::{Task, TaskHistory, Team, TeamMember, User};
 use crate::adapter::db::models::{
     Task as DBTask, TaskHistory as DBTaskHistory, Team as DBTeam, TeamMember as DBTeamMember,
     User as DBUser,
@@ -71,6 +71,19 @@ pub fn user_uc_to_user_db(item: User) -> DBUser {
         email: item.email,
         password: item.password,
         email_is_confirmed: item.email_is_confirmed,
+        avatar: item.avatar,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+    }
+}
+pub fn user_db_to_user_uc(item: DBUser) -> User {
+    User {
+        user_id: item.user_id,
+        name: item.name,
+        email: item.email,
+        password: item.password,
+        email_is_confirmed: item.email_is_confirmed,
+        avatar: item.avatar,
         created_at: item.created_at,
         updated_at: item.updated_at,
     }

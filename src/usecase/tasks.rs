@@ -1,7 +1,12 @@
-use super::{UseCaseError, mapper, models::*};
-use crate::adapter::db::RepositoryError;
-use crate::adapter::db::postgres::tables::{
-    task_histories::TaskHistories as TaskHistoriesRepo, tasks::Tasks as TasksRepo,
+use super::{
+    UseCaseError, mapper,
+    models::{Task, TaskHistory},
+};
+use crate::adapter::{
+    db::RepositoryError,
+    db::postgres::tables::{
+        task_histories::TaskHistories as TaskHistoriesRepo, tasks::Tasks as TasksRepo,
+    },
 };
 use http::StatusCode;
 use uuid::Uuid;
@@ -19,7 +24,7 @@ impl Tasks {
             task_histories_repo,
         }
     }
-    pub async fn get_list(
+    pub async fn list(
         &self,
         limit: i32,
         offset: i32,
@@ -39,7 +44,7 @@ impl Tasks {
             RepositoryError::NotFoundRow => UseCaseError::ForTransport {
                 status_code: StatusCode::NOT_FOUND,
                 public_err: "item not found".to_string(),
-                internal_err: "".to_string(),
+                internal_err: None,
             },
             other => UseCaseError::Common(other.to_string()),
         })?;
@@ -63,7 +68,7 @@ impl Tasks {
     pub async fn get_history(&self, item_id: Uuid) -> Result<Vec<TaskHistory>, UseCaseError> {
         let items = self
             .task_histories_repo
-            .get_by_task_id(item_id)
+            .by_task_id(item_id)
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))?;
         Ok(items

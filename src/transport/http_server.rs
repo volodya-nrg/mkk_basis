@@ -5,7 +5,7 @@ use crate::usecase::UseCase;
 use axum::routing::{get, post, put};
 use axum::{Router, middleware as AxumMiddleware};
 use axum_server::tls_rustls::RustlsConfig;
-use handlers::{auth, etc, tasks, teams};
+use handlers::{auth, etc, tasks, teams, users};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::server::WebPkiClientVerifier;
 use rustls::{RootCertStore, ServerConfig};
@@ -58,7 +58,7 @@ impl HTTPServer {
     fn get_router(&self) -> Router {
         let public = Router::new()
             .route("/", get(etc::Handlers::index))
-            .route("/healthz", get(etc::Handlers::healthz));
+            .route("/health", get(etc::Handlers::health));
         let api = Router::new()
             // auth
             .route("/api/v1/register", post(auth::Handlers::register))
@@ -67,21 +67,26 @@ impl HTTPServer {
             // teams
             .route(
                 "/api/v1/teams",
-                get(teams::Handlers::teams_list).post(teams::Handlers::teams_create),
+                get(teams::Handlers::list).post(teams::Handlers::create),
             )
-            .route(
-                "/api/v1/teams/{id}/invite",
-                post(teams::Handlers::teams_invite),
-            )
+            .route("/api/v1/teams/{id}/invite", post(teams::Handlers::invite))
             // tasks
             .route(
                 "/api/v1/tasks",
-                get(tasks::Handlers::tasks_list).post(tasks::Handlers::tasks_create),
+                get(tasks::Handlers::list).post(tasks::Handlers::create),
             )
-            .route("/api/v1/tasks/{id}", put(tasks::Handlers::tasks_update))
+            .route("/api/v1/tasks/{id}", put(tasks::Handlers::update))
+            .route("/api/v1/tasks/{id}/history", get(tasks::Handlers::history))
+            // users
             .route(
-                "/api/v1/tasks/{id}/history",
-                get(tasks::Handlers::tasks_history),
+                "/api/v1/users",
+                get(users::Handlers::list).post(users::Handlers::create),
+            )
+            .route(
+                "/api/v1/users/{id}",
+                get(users::Handlers::one)
+                    .put(users::Handlers::update)
+                    .delete(users::Handlers::delete),
             );
         let static_loc = Router::new()
             .nest_service("/js", ServeDir::new("./web/js"))

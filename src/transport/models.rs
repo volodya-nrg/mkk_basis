@@ -2,11 +2,6 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RequestUUID {
-    pub uuid: Uuid,
-}
-
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct RequestRegister {
     pub email: String,
@@ -49,10 +44,11 @@ pub struct RequestTask {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RequestUser {
-    pub name: String,
     pub email: String,
     pub password: String,
+    pub name: Option<String>,
     pub email_is_confirmed: bool,
+    // pub avatar: Option<String>,
 }
 
 // ------------------------------------
@@ -114,4 +110,21 @@ pub struct ResponseTaskHistory {
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct ResponseUUID {
     pub uuid: Uuid,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct ResponseUser {
+    pub user_id: Uuid,
+    pub name: Option<String>,
+    pub email: String,
+    pub email_is_confirmed: bool,
+    pub avatar: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct ResponseUsersList {
+    pub items: Vec<ResponseUser>,
+    pub total: u32,
 }

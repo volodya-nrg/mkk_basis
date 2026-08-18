@@ -7,10 +7,10 @@ pub struct User {
     pub email: String,
     pub password: String,
     pub email_is_confirmed: bool,
+    pub avatar: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
-
 pub struct Team {
     pub team_id: Uuid,
     pub name: String,
@@ -18,13 +18,11 @@ pub struct Team {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
-
 pub struct TeamMember {
     pub team_id: Uuid,
     pub user_id: Uuid,
     pub created_at: DateTime<Utc>,
 }
-
 pub struct Task {
     pub task_id: Uuid,
     pub name: String,
@@ -36,7 +34,6 @@ pub struct Task {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
-
 pub struct TaskHistory {
     pub task_history_id: Uuid,
     pub task_id: Uuid,
@@ -44,7 +41,6 @@ pub struct TaskHistory {
     pub msg: String,
     pub created_at: DateTime<Utc>,
 }
-
 // pub struct TaskComment {
 //     pub task_comment_id: Uuid,
 //     pub task_id: Uuid,

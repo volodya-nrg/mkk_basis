@@ -1,6 +1,4 @@
-use crate::adapter::db::RepositoryError;
-use crate::adapter::db::models::TeamMember;
-use crate::adapter::db::postgres::table_basic::TableBasic;
+use crate::adapter::db::{RepositoryError, models::TeamMember, postgres::table_basic::TableBasic};
 use sqlx::{Pool, Postgres, QueryBuilder};
 use uuid::Uuid;
 

@@ -1,6 +1,4 @@
-use crate::adapter::db::RepositoryError;
-use crate::adapter::db::models::TaskHistory;
-use crate::adapter::db::postgres::table_basic::TableBasic;
+use crate::adapter::db::{RepositoryError, models::TaskHistory, postgres::table_basic::TableBasic};
 use sqlx::{Pool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
 
@@ -78,7 +76,7 @@ impl TaskHistories {
             None => Err(RepositoryError::NotFoundRow),
         }
     }
-    pub async fn get_by_task_id(&self, task_id: Uuid) -> Result<Vec<TaskHistory>, RepositoryError> {
+    pub async fn by_task_id(&self, task_id: Uuid) -> Result<Vec<TaskHistory>, RepositoryError> {
         let items: Vec<TaskHistory> = QueryBuilder::new(format!(
             "SELECT {} FROM {} WHERE task_id=$1 ORDER BY created_at DESC",
             self.table_basic.fields.join(","),
@@ -124,7 +122,7 @@ impl TaskHistories {
             .await
             .map_err(RepositoryError::FailedToUpdate)?;
         let amount_updated_rows = result.rows_affected();
-        
+
         if amount_updated_rows != 1 {
             return Err(RepositoryError::ExpectedOneRow(amount_updated_rows));
         }
@@ -143,7 +141,7 @@ impl TaskHistories {
             .await
             .map_err(RepositoryError::FailedToDelete)?;
         let amount_updated_rows = result.rows_affected();
-        
+
         if amount_updated_rows != 1 {
             return Err(RepositoryError::ExpectedOneRow(amount_updated_rows));
         }

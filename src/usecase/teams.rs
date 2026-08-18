@@ -1,9 +1,13 @@
-use super::UseCaseError;
-use crate::adapter::db::RepositoryError;
-use crate::adapter::db::postgres::tables::{
-    team_members::TeamMembers as TeamMembersRepo, teams::Teams as TeamsRepo,
+use super::{
+    UseCaseError, mapper,
+    models::{Team, TeamMember},
 };
-use crate::usecase::{mapper, models::*};
+use crate::adapter::{
+    db::RepositoryError,
+    db::postgres::tables::{
+        team_members::TeamMembers as TeamMembersRepo, teams::Teams as TeamsRepo,
+    },
+};
 use http::StatusCode;
 use uuid::Uuid;
 
@@ -20,7 +24,7 @@ impl Teams {
             team_members_repo,
         }
     }
-    pub async fn get_list(
+    pub async fn list(
         &self,
         limit: i32,
         offset: i32,
@@ -31,10 +35,7 @@ impl Teams {
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))?;
         Ok((
-            items
-                .into_iter()
-                .map(mapper::team_db_to_team_uc)
-                .collect(),
+            items.into_iter().map(mapper::team_db_to_team_uc).collect(),
             total,
         ))
     }
@@ -43,7 +44,7 @@ impl Teams {
             RepositoryError::NotFoundRow => UseCaseError::ForTransport {
                 status_code: StatusCode::NOT_FOUND,
                 public_err: "item not found".to_string(),
-                internal_err: "".to_string(),
+                internal_err: None,
             },
             other => UseCaseError::Common(other.to_string()),
         })?;

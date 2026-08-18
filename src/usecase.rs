@@ -3,53 +3,56 @@ mod mapper;
 pub mod models;
 pub mod tasks;
 pub mod teams;
+pub mod users;
+mod helpers;
 
-use crate::adapter::db::postgres::Postgres;
-use crate::adapter::jwt::Jwt as JWTService;
-use auth::Auth;
+use crate::adapter::{db::postgres::Postgres as PostgresService, jwt::Jwt as JWTService};
 use axum::Json;
 use axum::response::{IntoResponse, Response};
 use http::StatusCode;
 use serde_json::json;
-use tasks::Tasks;
-use teams::Teams;
-use thiserror::Error;
+use thiserror::Error as ThisError;
 
 #[derive(Clone)] // из-за axum-state
 pub struct UseCase {
-    pub auth: Auth,
-    pub tasks: Tasks,
-    pub teams: Teams,
+    pub auth: auth::Auth,
+    pub tasks: tasks::Tasks,
+    pub teams: teams::Teams,
+    pub users: users::Users,
 }
 
 impl UseCase {
-    pub fn new(postgres: Postgres, jwt_service: JWTService) -> Self {
+    pub fn new(postgres: PostgresService, jwt_service: JWTService) -> Self {
         Self {
-            auth: Auth::new(postgres.tbl_users, jwt_service),
-            tasks: Tasks::new(postgres.tbl_tasks, postgres.tbl_task_histories),
-            teams: Teams::new(postgres.tbl_teams, postgres.tbl_team_members),
+            auth: auth::Auth::new(postgres.tbl_users.clone(), jwt_service),
+            tasks: tasks::Tasks::new(postgres.tbl_tasks, postgres.tbl_task_histories),
+            teams: teams::Teams::new(postgres.tbl_teams, postgres.tbl_team_members),
+            users: users::Users::new(postgres.tbl_users),
         }
     }
 }
 
 // ------
 
-#[derive(Error, Debug)]
+#[derive(ThisError, Debug)]
 pub enum UseCaseError {
     #[error("{0}")]
     Common(String),
-    #[error("{status_code}; {public_err}; {internal_err};")]
+    #[error(
+        "{status_code}; {public_err}; {internal_err};",
+        internal_err = internal_err.as_deref().unwrap_or("none")
+    )]
     ForTransport {
         status_code: StatusCode,
         public_err: String,
-        internal_err: String,
+        internal_err: Option<String>,
     },
 }
 impl IntoResponse for UseCaseError {
     fn into_response(self) -> Response {
         let mut public_error_result = String::from("Server internal error");
-        let internal_error_result;
-        let mut status_code_result: StatusCode = StatusCode::INTERNAL_SERVER_ERROR;
+        let mut internal_error_result = String::new();
+        let mut status_code_result = StatusCode::INTERNAL_SERVER_ERROR;
 
         match self {
             UseCaseError::Common(v) => {
@@ -62,7 +65,10 @@ impl IntoResponse for UseCaseError {
             } => {
                 status_code_result = status_code;
                 public_error_result = public_err;
-                internal_error_result = internal_err;
+
+                if let Some(v) = internal_err {
+                    internal_error_result = v;
+                }
             }
         }
 

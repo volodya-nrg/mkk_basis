@@ -3,11 +3,12 @@ mod helpers;
 use chrono::Local;
 use ctor::ctor;
 use helpers::rand;
-use mkk_basis::adapter::db::RepositoryError;
-use mkk_basis::adapter::db::models::*;
-use mkk_basis::adapter::db::postgres::Postgres;
-use mkk_basis::adapter::db::postgres::tables::tasks::Status as TaskStatus;
-use mkk_basis::adapter::logger;
+
+use mkk_basis::adapter::{
+    db::RepositoryError, db::models::*, db::postgres::Postgres,
+    db::postgres::tables::tasks::Status as TaskStatus, logger,
+};
+
 use sqlx::postgres::PgPoolOptions;
 use std::assert_matches;
 use std::time::Duration;
@@ -43,7 +44,7 @@ async fn check_users() {
         Err(RepositoryError::NotFoundRow)
     );
     assert_matches!(
-        db.tbl_users.get_by_email(rand::email()).await,
+        db.tbl_users.by_email(rand::email()).await,
         Err(RepositoryError::NotFoundRow)
     );
 
@@ -73,7 +74,7 @@ async fn check_users() {
     // ok: проверим что находит по емэйлу
     let user_actual2 = db
         .tbl_users
-        .get_by_email(user_actual.email)
+        .by_email(user_actual.email)
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
     assert_eq!(user_actual1, user_actual2);
@@ -606,7 +607,7 @@ async fn check_task_histories() {
     // получим список относительно task_id
     let items = db
         .tbl_task_histories
-        .get_by_task_id(task_id)
+        .by_task_id(task_id)
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
     assert_eq!(1, items.len());

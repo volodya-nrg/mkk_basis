@@ -89,7 +89,7 @@ async fn check_etc() {
         assert!(!body_str.is_empty());
     })
     .await
-    .healthz(|result: Result<(StatusCode, String), String>| {
+    .health(|result: Result<(StatusCode, String), String>| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
         assert!(body_str.is_empty());
@@ -260,7 +260,7 @@ async fn check_teams() {
 
     let mut user_id = Uuid::nil();
     let mut req_team_create = rand::request_team_create();
-    let mut req_register = rand::request_register();
+    let req_register = rand::request_register();
     let mut team_id = Uuid::nil();
     let req_login = RequestLogin {
         email: req_register.email.clone(),
@@ -379,7 +379,6 @@ async fn check_tasks() {
     let mut team_id = Uuid::nil();
     let mut task1_id = Uuid::nil();
     let mut req_register = rand::request_register();
-    req_register.password_confirm = req_register.password.clone();
     let mut req_team_create = rand::request_team_create();
     let mut req_task1 = rand::request_task();
     let mut req_task2 = rand::request_task();
@@ -523,6 +522,193 @@ async fn check_tasks() {
             serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
         assert!(resp.items.is_empty());
         // TODO тут надо понять как добавлять историю
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn check_users() {
+    let data = run_test_server().await;
+    let cl = Client::new(
+        data.http_addr.to_string(),
+        data.ca.to_string(),
+        data.crt.to_string(),
+        data.key.to_string(),
+    );
+
+    let mut owner_id = Uuid::nil();
+    let mut user_id = Uuid::nil();
+    let req_register = rand::request_register();
+    let req_user1 = rand::request_user();
+    let req_user2 = rand::request_user();
+    let req_login = RequestLogin {
+        email: req_register.email.clone(),
+        password: req_register.password.clone(),
+    };
+    let mut saved_resp_user: ResponseUser = ResponseUser {
+        user_id,
+        name: None,
+        email: "".to_string(),
+        email_is_confirmed: false,
+        avatar: None,
+        created_at: Default::default(),
+        updated_at: Default::default(),
+    };
+
+    // проверим на 401
+    cl.users_list(-1, -1, |result: Result<(StatusCode, String), String>| {
+        let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+    })
+    .await
+    .users_create(
+        rand::request_user(),
+        |result: Result<(StatusCode, String), String>| {
+            let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+        },
+    )
+    .await
+    .users_update(
+        Uuid::new_v4(),
+        rand::request_user(),
+        |result: Result<(StatusCode, String), String>| {
+            let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+        },
+    )
+    .await
+    .users_delete(
+        Uuid::new_v4(),
+        |result: Result<(StatusCode, String), String>| {
+            let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+        },
+    )
+    .await;
+
+    // создадим пользователя, залогинимся и создадим др. пользователя
+    cl.register(
+        req_register,
+        |result: Result<(StatusCode, String), String>| {
+            let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            assert!(status_code.is_success());
+
+            let resp: ResponseUUID =
+                serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            owner_id = resp.uuid;
+        },
+    )
+    .await
+    .login(req_login, |result: Result<(StatusCode, String), String>| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await;
+
+    // err: пользователя нет
+    cl.users_one(
+        Uuid::new_v4(),
+        |result: Result<(StatusCode, String), String>| {
+            let (status_code, _body_str) = result.unwrap();
+            assert_eq!(StatusCode::NOT_FOUND, status_code);
+        },
+    )
+    .await // err: такого пользователя нет
+    .users_delete(
+        Uuid::new_v4(),
+        |result: Result<(StatusCode, String), String>| {
+            let (status_code, _body_str) = result.unwrap();
+            assert!(status_code.is_server_error()); // TODO тут под вопросом 404 надо присылать или 500
+        },
+    )
+    .await // err: такого пользователя нет
+    .users_update(
+        Uuid::new_v4(),
+        rand::request_user(),
+        |result: Result<(StatusCode, String), String>| {
+            let (status_code, _body_str) = result.unwrap();
+            assert!(status_code.is_server_error()); // TODO тут под вопросом 404 надо присылать или 500
+        },
+    )
+    .await // ok: создадим успешно
+    .users_create(
+        req_user1.clone(),
+        |result: Result<(StatusCode, String), String>| {
+            let (status_code, body_str) = result.unwrap();
+            assert!(status_code.is_success());
+
+            let resp_user_actual: ResponseUser =
+                serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            assert_eq!(req_user1.email, resp_user_actual.email);
+            assert_eq!(req_user1.name, resp_user_actual.name);
+            assert_eq!(
+                req_user1.email_is_confirmed,
+                resp_user_actual.email_is_confirmed
+            );
+
+            user_id = resp_user_actual.user_id;
+            saved_resp_user = resp_user_actual;
+        },
+    )
+    .await // ok: получим запись
+    .users_one(user_id, |result: Result<(StatusCode, String), String>| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await // ok: обновим успешно
+    .users_update(
+        user_id,
+        req_user2.clone(),
+        |result: Result<(StatusCode, String), String>| {
+            let (status_code, body_str) = result.unwrap();
+            assert!(status_code.is_success());
+
+            let resp_user_actual: ResponseUser =
+                serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            assert_ne!(saved_resp_user, resp_user_actual);
+        },
+    )
+    .await // ok: посмотрим что люди есть
+    .users_list(0, 0, |result: Result<(StatusCode, String), String>| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let list: ResponseUsersList =
+            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+        assert_eq!(list.items.len(), 0);
+        assert!(list.total > 0);
+    })
+    .await // ok: найдем нужное и сравним
+    .users_list(-1, -1, |result: Result<(StatusCode, String), String>| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let resp: ResponseUsersList =
+            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+        assert!(resp.items.len() > 0);
+        assert!(resp.total > 0);
+
+        let opt = resp.items.iter().find(|item| item.user_id == user_id);
+        assert!(opt.is_some());
+
+        let founded_user = opt.unwrap();
+        assert_eq!(req_user2.email, founded_user.email);
+        assert_eq!(req_user2.name, founded_user.name);
+        assert_eq!(
+            req_user2.email_is_confirmed,
+            founded_user.email_is_confirmed
+        );
+    })
+    .await // ок: удалим успешно
+    .users_delete(user_id, |result: Result<(StatusCode, String), String>| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await // ok: пользователя не должно быть
+    .users_one(user_id, |result: Result<(StatusCode, String), String>| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::NOT_FOUND, status_code);
     })
     .await;
 }

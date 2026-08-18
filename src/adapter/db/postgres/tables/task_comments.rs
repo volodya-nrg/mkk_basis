@@ -1,6 +1,4 @@
-use crate::adapter::db::RepositoryError;
-use crate::adapter::db::models::TaskComment;
-use crate::adapter::db::postgres::table_basic::TableBasic;
+use crate::adapter::db::{RepositoryError, models::TaskComment, postgres::table_basic::TableBasic};
 use sqlx::{Pool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
 
@@ -93,7 +91,7 @@ impl TaskComments {
             .await
             .map_err(RepositoryError::FailedToInsert)?
             .get(0);
-
+        
         Ok(result)
     }
     pub async fn update(&self, item: TaskComment) -> Result<(), RepositoryError> {
@@ -111,7 +109,7 @@ impl TaskComments {
             .await
             .map_err(RepositoryError::FailedToUpdate)?;
         let amount_updated_rows = result.rows_affected();
-        
+
         if amount_updated_rows != 1 {
             return Err(RepositoryError::ExpectedOneRow(amount_updated_rows));
         }
@@ -130,7 +128,7 @@ impl TaskComments {
             .await
             .map_err(RepositoryError::FailedToDelete)?;
         let amount_updated_rows = result.rows_affected();
-        
+
         if amount_updated_rows != 1 {
             return Err(RepositoryError::ExpectedOneRow(amount_updated_rows));
         }

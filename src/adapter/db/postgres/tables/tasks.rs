@@ -1,6 +1,4 @@
-use crate::adapter::db::RepositoryError;
-use crate::adapter::db::models::Task;
-use crate::adapter::db::postgres::table_basic::TableBasic;
+use crate::adapter::db::{RepositoryError, models::Task, postgres::table_basic::TableBasic};
 use sqlx::{Pool, Postgres, QueryBuilder, Row};
 use std::fmt::{self, Formatter};
 use uuid::Uuid;

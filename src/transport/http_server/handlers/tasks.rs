@@ -1,7 +1,10 @@
-use crate::transport::extractor::AuthenticatedUser;
-use crate::transport::mapper;
-use crate::transport::models::*;
+use crate::transport::{
+    extractor::AuthenticatedUser,
+    mapper,
+    models::{RequestLimitOffset, RequestTask, ResponseTaskHistories, ResponseTasksList},
+};
 use crate::usecase::UseCase;
+
 use axum::Json;
 use axum::extract::Path;
 use axum::extract::State;
@@ -13,24 +16,23 @@ use uuid::Uuid;
 pub struct Handlers {}
 
 impl Handlers {
-    pub async fn tasks_list(
+    pub async fn list(
         _user: AuthenticatedUser,
         State(use_case): State<UseCase>,
         Json(payload): Json<RequestLimitOffset>,
     ) -> impl IntoResponse {
-        match use_case.tasks.get_list(payload.limit, payload.offset).await {
-            Ok((items, total)) => (
-                StatusCode::OK,
-                Json(json!(ResponseTasksList {
+        match use_case.tasks.list(payload.limit, payload.offset).await {
+            Ok((items, total)) => {
+                let resp = ResponseTasksList {
                     items: items.into_iter().map(mapper::task_uc_to_task_tr).collect(),
                     total: total as u32,
-                })),
-            )
-                .into_response(),
+                };
+                (StatusCode::OK, Json(json!(resp))).into_response()
+            }
             Err(e) => e.into_response(),
         }
     }
-    pub async fn tasks_create(
+    pub async fn create(
         _user: AuthenticatedUser,
         State(use_case): State<UseCase>,
         Json(payload): Json<RequestTask>,
@@ -43,21 +45,16 @@ impl Handlers {
             Ok(v) => v,
             Err(e) => return e.into_response(),
         };
-
-        // получим запись
         let task_db = match use_case.tasks.one(new_uuid).await {
             Ok(v) => v,
             Err(e) => return e.into_response(),
         };
+        let resp = mapper::task_uc_to_task_tr(task_db);
 
-        (
-            StatusCode::OK,
-            Json(json!(mapper::task_uc_to_task_tr(task_db))),
-        )
-            .into_response()
+        (StatusCode::OK, Json(json!(resp))).into_response()
     }
 
-    pub async fn tasks_update(
+    pub async fn update(
         _user: AuthenticatedUser,
         State(use_case): State<UseCase>,
         Path(task_id): Path<Uuid>,
@@ -66,40 +63,33 @@ impl Handlers {
         let mut uc_task = mapper::task_tr_to_task_uc(payload);
         uc_task.task_id = task_id;
 
-        let result = use_case.tasks.update(uc_task).await;
-        match result {
-            Ok(_) => {}
-            Err(e) => return e.into_response(),
+        if let Err(e) = use_case.tasks.update(uc_task).await {
+            return e.into_response();
         };
 
-        // получим запись
         let task_db = match use_case.tasks.one(task_id).await {
             Ok(v) => v,
             Err(e) => return e.into_response(),
         };
+        let resp = mapper::task_uc_to_task_tr(task_db);
 
-        (
-            StatusCode::OK,
-            Json(json!(mapper::task_uc_to_task_tr(task_db))),
-        )
-            .into_response()
+        (StatusCode::OK, Json(json!(resp))).into_response()
     }
-    pub async fn tasks_history(
+    pub async fn history(
         _user: AuthenticatedUser,
         State(use_case): State<UseCase>,
         Path(task_id): Path<Uuid>,
     ) -> impl IntoResponse {
         match use_case.tasks.get_history(task_id).await {
-            Ok(v) => (
-                StatusCode::OK,
-                Json(json!(ResponseTaskHistories {
+            Ok(v) => {
+                let resp = ResponseTaskHistories {
                     items: v
                         .into_iter()
                         .map(mapper::task_history_uc_to_task_history_tr)
                         .collect(),
-                })),
-            )
-                .into_response(),
+                };
+                (StatusCode::OK, Json(json!(resp))).into_response()
+            }
             Err(e) => e.into_response(),
         }
     }

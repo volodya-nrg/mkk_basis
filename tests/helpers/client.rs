@@ -84,13 +84,13 @@ impl Client {
         cb(result);
         self
     }
-    pub async fn healthz<T>(&self, mut cb: T) -> &Self
+    pub async fn health<T>(&self, mut cb: T) -> &Self
     where
         T: FnMut(Result<(StatusCode, String), String>),
     {
         let result = self
             .client
-            .get(format!("{}/healthz", self.addr))
+            .get(format!("{}/health", self.addr))
             .send()
             .await
             .map_err(|e| format!("failed to request: {:?}", e));
@@ -387,6 +387,121 @@ impl Client {
         let result = self
             .client
             .get(format!("{}/api/v1/tasks/{}/history", self.addr, task_id))
+            .headers(self.headers().await)
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        };
+
+        cb(result);
+        self
+    }
+
+    // users
+    pub async fn users_list<T>(&self, limit: i32, offset: i32, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(StatusCode, String), String>),
+    {
+        let result = self
+            .client
+            .get(format!("{}/api/v1/users", self.addr))
+            .headers(self.headers().await)
+            .json(&RequestLimitOffset { limit, offset })
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        };
+
+        cb(result);
+        self
+    }
+    pub async fn users_one<T>(&self, uuid: Uuid, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(StatusCode, String), String>),
+    {
+        let result = self
+            .client
+            .get(format!("{}/api/v1/users/{}", self.addr, uuid))
+            .headers(self.headers().await)
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        };
+
+        cb(result);
+        self
+    }
+    pub async fn users_create<T>(&self, req: RequestUser, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(StatusCode, String), String>),
+    {
+        let result = self
+            .client
+            .post(format!("{}/api/v1/users", self.addr))
+            .headers(self.headers().await)
+            .json(&req)
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        };
+
+        cb(result);
+        self
+    }
+    pub async fn users_update<T>(&self, user_id: Uuid, req: RequestUser, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(StatusCode, String), String>),
+    {
+        let result = self
+            .client
+            .put(format!("{}/api/v1/users/{}", self.addr, user_id))
+            .headers(self.headers().await)
+            .json(&req)
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        };
+
+        cb(result);
+        self
+    }
+    pub async fn users_delete<T>(&self, user_id: Uuid, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(StatusCode, String), String>),
+    {
+        let result = self
+            .client
+            .delete(format!("{}/api/v1/users/{}", self.addr, user_id))
             .headers(self.headers().await)
             .send()
             .await

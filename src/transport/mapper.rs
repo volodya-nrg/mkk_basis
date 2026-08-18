@@ -1,7 +1,9 @@
 use super::models::{
-    RequestTask, RequestTeamCreate, ResponseTask, ResponseTaskHistory, ResponseTeam,
+    RequestTask, RequestTeamCreate, RequestUser, ResponseTask, ResponseTaskHistory, ResponseTeam,
+    ResponseUser,
 };
-use crate::usecase::models::{Task, TaskHistory, Team};
+use crate::usecase::models::{Task, TaskHistory, Team, User};
+use uuid::Uuid;
 
 pub fn team_uc_to_team_tr(item: Team) -> ResponseTeam {
     ResponseTeam {
@@ -27,7 +29,7 @@ pub fn task_uc_to_task_tr(item: Task) -> ResponseTask {
 }
 pub fn team_tr_to_team_uc(req: RequestTeamCreate) -> Team {
     Team {
-        team_id: Default::default(),
+        team_id: Uuid::nil(),
         name: req.name,
         created_by: req.created_by,
         created_at: Default::default(),
@@ -36,7 +38,7 @@ pub fn team_tr_to_team_uc(req: RequestTeamCreate) -> Team {
 }
 pub fn task_tr_to_task_uc(req: RequestTask) -> Task {
     Task {
-        task_id: Default::default(),
+        task_id: Uuid::nil(),
         name: req.name,
         description: req.description,
         created_by: req.created_by,
@@ -54,5 +56,30 @@ pub fn task_history_uc_to_task_history_tr(item: TaskHistory) -> ResponseTaskHist
         user_id: item.user_id,
         msg: item.msg,
         created_at: item.created_at,
+    }
+}
+
+pub fn user_uc_to_user_tr(item: User) -> ResponseUser {
+    ResponseUser {
+        user_id: item.user_id,
+        name: item.name,
+        email: item.email,
+        email_is_confirmed: item.email_is_confirmed,
+        avatar: item.avatar,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+    }
+}
+
+pub fn user_tr_to_user_uc(item: RequestUser) -> User {
+    User {
+        user_id: Uuid::nil(),
+        name: item.name,
+        email: item.email,
+        password: item.password,
+        email_is_confirmed: item.email_is_confirmed,
+        avatar: None,
+        created_at: Default::default(),
+        updated_at: Default::default(),
     }
 }
