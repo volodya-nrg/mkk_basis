@@ -11,14 +11,14 @@ $$
     LANGUAGE plpgsql;
 CREATE TABLE users
 (
-    user_id            UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-    name               varchar(255),
-    email              varchar(255)              NOT NULL UNIQUE,
-    password           varchar(255)              NOT NULL,
-    email_is_confirmed boolean     DEFAULT false NOT NULL,
-    avatar             varchar(255),
-    created_at         timestamptz DEFAULT now() NOT NULL,
-    updated_at         timestamptz DEFAULT now() NOT NULL
+    user_id    UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+    name       varchar(255),
+    email      varchar(255)              NOT NULL UNIQUE,
+    password   varchar(255)              NOT NULL,
+    email_code varchar(255),
+    avatar     varchar(255),
+    created_at timestamptz DEFAULT now() NOT NULL,
+    updated_at timestamptz DEFAULT now() NOT NULL
 );
 CREATE TABLE teams
 (

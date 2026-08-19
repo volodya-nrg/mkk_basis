@@ -4,8 +4,7 @@ mod err_msg;
 mod transport;
 mod usecase;
 
-use crate::adapter::jwt::Jwt;
-use adapter::{config::Config, db::postgres::Postgres, logger};
+use adapter::{config::Config, db::postgres::Postgres, email::Email, jwt::Jwt, logger};
 use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use sqlx::postgres::PgPoolOptions;
@@ -68,8 +67,17 @@ async fn run(config_filepath: &str) -> Result<(), String> {
     let http_server = HTTPServer::new(
         cfg.http_server.address.clone(),
         UseCase::new(
+            cfg.addr,
             Postgres::new(pool),
             Jwt::new(private_key_bytes, 60 * 20, 60 * 60 * 24),
+            Email::new(
+                cfg.email.host,
+                cfg.email.login,
+                cfg.email.pass,
+                cfg.email.from_email,
+                cfg.email.from_name,
+                Duration::from_secs(3),
+            ),
         ),
         tls_config_for_server.clone(),
     );

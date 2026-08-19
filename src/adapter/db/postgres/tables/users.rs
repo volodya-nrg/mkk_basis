@@ -20,7 +20,7 @@ impl Users {
                     "name".to_string(),
                     "email".to_string(),
                     "password".to_string(),
-                    "email_is_confirmed".to_string(),
+                    "email_code".to_string(),
                     "avatar".to_string(),
                     "created_at".to_string(),
                     "updated_at".to_string(),
@@ -94,7 +94,7 @@ impl Users {
     }
     pub async fn create(&self, item: User) -> Result<Uuid, RepositoryError> {
         let query = format!(
-            "INSERT INTO {} (name, email, password, email_is_confirmed, avatar) VALUES ($1,$2,$3,$4,$5) RETURNING user_id",
+            "INSERT INTO {} (name, email, password, email_code, avatar) VALUES ($1,$2,$3,$4,$5) RETURNING user_id",
             self.table_basic.name,
         );
         let result = QueryBuilder::new(query)
@@ -102,7 +102,7 @@ impl Users {
             .bind(item.name)
             .bind(item.email)
             .bind(item.password)
-            .bind(item.email_is_confirmed)
+            .bind(item.email_code)
             .bind(item.avatar)
             .fetch_one(&self.pool)
             .await
@@ -113,7 +113,7 @@ impl Users {
     }
     pub async fn update(&self, item: User) -> Result<(), RepositoryError> {
         let query = format!(
-            "UPDATE {} SET name=$1, email=$2, password=$3, email_is_confirmed=$4, avatar=$5 WHERE user_id=$6",
+            "UPDATE {} SET name=$1, email=$2, password=$3, email_code=$4, avatar=$5 WHERE user_id=$6",
             self.table_basic.name,
         );
         let result = QueryBuilder::new(query)
@@ -121,7 +121,7 @@ impl Users {
             .bind(item.name)
             .bind(item.email)
             .bind(item.password)
-            .bind(item.email_is_confirmed)
+            .bind(item.email_code)
             .bind(item.avatar)
             .bind(item.user_id)
             .execute(&self.pool)

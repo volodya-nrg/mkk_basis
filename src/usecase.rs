@@ -1,12 +1,14 @@
 pub mod auth;
+mod helpers;
 mod mapper;
 pub mod models;
 pub mod tasks;
 pub mod teams;
 pub mod users;
-mod helpers;
 
-use crate::adapter::{db::postgres::Postgres as PostgresService, jwt::Jwt as JWTService};
+use crate::adapter::{
+    db::postgres::Postgres as PostgresService, email::EmailSender, jwt::Jwt as JWTService,
+};
 use axum::Json;
 use axum::response::{IntoResponse, Response};
 use http::StatusCode;
@@ -14,17 +16,22 @@ use serde_json::json;
 use thiserror::Error as ThisError;
 
 #[derive(Clone)] // из-за axum-state
-pub struct UseCase {
-    pub auth: auth::Auth,
+pub struct UseCase<ES: EmailSender + Clone + Send + Sync> {
+    pub auth: auth::Auth<ES>,
     pub tasks: tasks::Tasks,
     pub teams: teams::Teams,
     pub users: users::Users,
 }
 
-impl UseCase {
-    pub fn new(postgres: PostgresService, jwt_service: JWTService) -> Self {
+impl<ES: EmailSender + Clone + Send + Sync> UseCase<ES> {
+    pub fn new(
+        addr: String,
+        postgres: PostgresService,
+        jwt_service: JWTService,
+        email_sender: ES,
+    ) -> Self {
         Self {
-            auth: auth::Auth::new(postgres.tbl_users.clone(), jwt_service),
+            auth: auth::Auth::new(addr, postgres.tbl_users.clone(), jwt_service, email_sender),
             tasks: tasks::Tasks::new(postgres.tbl_tasks, postgres.tbl_task_histories),
             teams: teams::Teams::new(postgres.tbl_teams, postgres.tbl_team_members),
             users: users::Users::new(postgres.tbl_users),

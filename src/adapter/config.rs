@@ -6,6 +6,7 @@ pub struct Config {
     pub service_name: String,
     pub version: String,
     pub private_key_path: String,
+    pub addr: String, // example: http://localhost.loc
     pub log: Log,
     pub postgres: Postgres,
     pub http_server: HTTPServer,

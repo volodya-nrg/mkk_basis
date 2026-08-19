@@ -4,7 +4,12 @@ use lettre::message::{Mailbox, header::ContentType};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Address, Message, SmtpTransport, Transport};
 
-struct Cfg {
+pub trait EmailSender {
+    fn send(&self, to: String, subject: String, body: String) -> Result<(), String>;
+}
+
+#[derive(Clone)] // из-за usecase-auth
+pub struct Email {
     host: String,
     login: String,
     pass: String,
@@ -13,23 +18,35 @@ struct Cfg {
     timeout: Duration,
 }
 
-struct Email {
-    cfg: Cfg,
+impl Email {
+    pub fn new(
+        host: String,
+        login: String,
+        pass: String,
+        from_email: String,
+        from_name: String,
+        timeout: Duration,
+    ) -> Self {
+        Self {
+            host,
+            login,
+            pass,
+            from_email,
+            from_name,
+            timeout,
+        }
+    }
 }
 
-impl Email {
-    pub fn new(cfg: Cfg) -> Self {
-        Self { cfg }
-    }
-    pub fn send(&self, to: String, subject: String, body: String) -> Result<(), String> {
+impl EmailSender for Email {
+    fn send(&self, to: String, subject: String, body: String) -> Result<(), String> {
         let (local_from_email, domain_from_email) = self
-            .cfg
             .from_email
             .split_once('@')
             .ok_or("invalid email: missing @ from 'from'")?;
         let address_from_email = Address::new(local_from_email, domain_from_email)
             .map_err(|e| format!("failed to create address 'from': {}", e))?;
-        let mailbox_from = Mailbox::new(Some(self.cfg.from_name.clone()), address_from_email);
+        let mailbox_from = Mailbox::new(Some(self.from_name.clone()), address_from_email);
 
         let (local_to, domain_to) = to
             .split_once('@')
@@ -47,13 +64,10 @@ impl Email {
             .body(body)
             .map_err(|e| format!("failed to create body: {}", e))?;
 
-        SmtpTransport::starttls_relay(self.cfg.host.as_str())
+        SmtpTransport::starttls_relay(self.host.as_str())
             .map_err(|e| format!("failed to create smtp-transport: {}", e))?
-            .timeout(Some(self.cfg.timeout))
-            .credentials(Credentials::new(
-                self.cfg.login.clone(),
-                self.cfg.pass.clone(),
-            ))
+            .timeout(Some(self.timeout))
+            .credentials(Credentials::new(self.login.clone(), self.pass.clone()))
             .build()
             .send(&email)
             .map_err(|e| format!("failed to send: {}", e))?;
@@ -68,15 +82,15 @@ mod tests {
 
     #[test]
     fn check_send() {
-        let email_service = Email::new(Cfg {
-            host: "smtp.yandex.ru".to_string(),
-            login: "support@altair.uz".to_string(),
-            pass: "".to_string(),
-            from_email: "support@altair.uz".to_string(),
-            from_name: "support".to_string(),
-            timeout: Duration::from_secs(3),
-        });
-        let result = email_service.send(
+        let result = Email::new(
+            "smtp.yandex.ru".to_string(),
+            "support@altair.uz".to_string(),
+            "".to_string(),
+            "support@altair.uz".to_string(),
+            "support".to_string(),
+            Duration::from_secs(3),
+        )
+        .send(
             "volodya-nrg@mail.ru".to_string(),
             "my subj".to_string(),
             "my <strong>body</strong>".to_string(),

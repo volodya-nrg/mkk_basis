@@ -1,3 +1,4 @@
+use crate::adapter::email::EmailSender;
 use crate::transport::{
     extractor::AuthenticatedUser,
     mapper,
@@ -15,11 +16,14 @@ use uuid::Uuid;
 pub struct Handlers {}
 
 impl Handlers {
-    pub async fn list(
-        _user: AuthenticatedUser,
-        State(use_case): State<UseCase>,
+    pub async fn list<ES>(
+        _user: AuthenticatedUser<ES>,
+        State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestLimitOffset>,
-    ) -> impl IntoResponse {
+    ) -> impl IntoResponse
+    where
+        ES: EmailSender + Clone + Send + Sync,
+    {
         match use_case.users.list(payload.limit, payload.offset).await {
             Ok((items, total)) => {
                 let resp = ResponseUsersList {
@@ -31,11 +35,14 @@ impl Handlers {
             Err(e) => e.into_response(),
         }
     }
-    pub async fn one(
-        _user: AuthenticatedUser,
+    pub async fn one<ES>(
+        _user: AuthenticatedUser<ES>,
         Path(item_id): Path<Uuid>,
-        State(use_case): State<UseCase>,
-    ) -> impl IntoResponse {
+        State(use_case): State<UseCase<ES>>,
+    ) -> impl IntoResponse
+    where
+        ES: EmailSender + Clone + Send + Sync,
+    {
         match use_case.users.one(item_id).await {
             Ok(v) => {
                 let resp = mapper::user_uc_to_user_tr(v);
@@ -44,11 +51,14 @@ impl Handlers {
             Err(e) => e.into_response(),
         }
     }
-    pub async fn create(
-        _user: AuthenticatedUser,
-        State(use_case): State<UseCase>,
+    pub async fn create<ES>(
+        _user: AuthenticatedUser<ES>,
+        State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestUser>,
-    ) -> impl IntoResponse {
+    ) -> impl IntoResponse
+    where
+        ES: EmailSender + Clone + Send + Sync,
+    {
         let result = use_case
             .users
             .create(mapper::user_tr_to_user_uc(payload))
@@ -65,12 +75,15 @@ impl Handlers {
 
         (StatusCode::OK, Json(json!(resp))).into_response()
     }
-    pub async fn update(
-        _user: AuthenticatedUser,
+    pub async fn update<ES>(
+        _user: AuthenticatedUser<ES>,
         Path(item_id): Path<Uuid>,
-        State(use_case): State<UseCase>,
+        State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestUser>,
-    ) -> impl IntoResponse {
+    ) -> impl IntoResponse
+    where
+        ES: EmailSender + Clone + Send + Sync,
+    {
         let mut uc_user = mapper::user_tr_to_user_uc(payload);
         uc_user.user_id = item_id;
 
@@ -86,11 +99,14 @@ impl Handlers {
 
         (StatusCode::OK, Json(json!(resp))).into_response()
     }
-    pub async fn delete(
-        _user: AuthenticatedUser,
+    pub async fn delete<ES>(
+        _user: AuthenticatedUser<ES>,
         Path(item_id): Path<Uuid>,
-        State(use_case): State<UseCase>,
-    ) -> impl IntoResponse {
+        State(use_case): State<UseCase<ES>>,
+    ) -> impl IntoResponse
+    where
+        ES: EmailSender + Clone + Send + Sync,
+    {
         if let Err(e) = use_case.users.delete(item_id).await {
             e.into_response()
         } else {

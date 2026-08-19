@@ -1,3 +1,4 @@
+use crate::adapter::email::EmailSender;
 use crate::transport::{
     extractor::AuthenticatedUser,
     mapper,
@@ -16,11 +17,14 @@ use uuid::Uuid;
 pub struct Handlers {}
 
 impl Handlers {
-    pub async fn list(
-        _user: AuthenticatedUser,
-        State(use_case): State<UseCase>,
+    pub async fn list<ES>(
+        _user: AuthenticatedUser<ES>,
+        State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestLimitOffset>,
-    ) -> impl IntoResponse {
+    ) -> impl IntoResponse
+    where
+        ES: EmailSender + Clone + Send + Sync,
+    {
         match use_case.tasks.list(payload.limit, payload.offset).await {
             Ok((items, total)) => {
                 let resp = ResponseTasksList {
@@ -32,11 +36,14 @@ impl Handlers {
             Err(e) => e.into_response(),
         }
     }
-    pub async fn create(
-        _user: AuthenticatedUser,
-        State(use_case): State<UseCase>,
+    pub async fn create<ES>(
+        _user: AuthenticatedUser<ES>,
+        State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestTask>,
-    ) -> impl IntoResponse {
+    ) -> impl IntoResponse
+    where
+        ES: EmailSender + Clone + Send + Sync,
+    {
         let result = use_case
             .tasks
             .create(mapper::task_tr_to_task_uc(payload))
@@ -54,12 +61,15 @@ impl Handlers {
         (StatusCode::OK, Json(json!(resp))).into_response()
     }
 
-    pub async fn update(
-        _user: AuthenticatedUser,
-        State(use_case): State<UseCase>,
+    pub async fn update<ES>(
+        _user: AuthenticatedUser<ES>,
+        State(use_case): State<UseCase<ES>>,
         Path(task_id): Path<Uuid>,
         Json(payload): Json<RequestTask>,
-    ) -> impl IntoResponse {
+    ) -> impl IntoResponse
+    where
+        ES: EmailSender + Clone + Send + Sync,
+    {
         let mut uc_task = mapper::task_tr_to_task_uc(payload);
         uc_task.task_id = task_id;
 
@@ -75,11 +85,14 @@ impl Handlers {
 
         (StatusCode::OK, Json(json!(resp))).into_response()
     }
-    pub async fn history(
-        _user: AuthenticatedUser,
-        State(use_case): State<UseCase>,
+    pub async fn history<ES>(
+        _user: AuthenticatedUser<ES>,
+        State(use_case): State<UseCase<ES>>,
         Path(task_id): Path<Uuid>,
-    ) -> impl IntoResponse {
+    ) -> impl IntoResponse
+    where
+        ES: EmailSender + Clone + Send + Sync,
+    {
         match use_case.tasks.get_history(task_id).await {
             Ok(v) => {
                 let resp = ResponseTaskHistories {

@@ -1,3 +1,4 @@
+use crate::adapter::email::EmailSender;
 use crate::transport::{
     extractor::AuthenticatedUser,
     mapper,
@@ -16,11 +17,14 @@ use uuid::Uuid;
 pub struct Handlers {}
 
 impl Handlers {
-    pub async fn list(
-        _user: AuthenticatedUser,
-        State(use_case): State<UseCase>,
+    pub async fn list<ES>(
+        _user: AuthenticatedUser<ES>,
+        State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestLimitOffset>,
-    ) -> impl IntoResponse {
+    ) -> impl IntoResponse
+    where
+        ES: EmailSender + Clone + Send + Sync,
+    {
         match use_case.teams.list(payload.limit, payload.offset).await {
             Ok((items, total)) => {
                 let resp = ResponseTeamsList {
@@ -32,11 +36,14 @@ impl Handlers {
             Err(e) => e.into_response(),
         }
     }
-    pub async fn create(
-        _user: AuthenticatedUser,
-        State(use_case): State<UseCase>,
+    pub async fn create<ES>(
+        _user: AuthenticatedUser<ES>,
+        State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestTeamCreate>,
-    ) -> impl IntoResponse {
+    ) -> impl IntoResponse
+    where
+        ES: EmailSender + Clone + Send + Sync,
+    {
         let result = use_case
             .teams
             .create(mapper::team_tr_to_team_uc(payload))
@@ -53,12 +60,15 @@ impl Handlers {
 
         (StatusCode::OK, Json(json!(resp))).into_response()
     }
-    pub async fn invite(
-        _user: AuthenticatedUser,
-        State(use_case): State<UseCase>,
+    pub async fn invite<ES>(
+        _user: AuthenticatedUser<ES>,
+        State(use_case): State<UseCase<ES>>,
         Path(team_id): Path<Uuid>,
         Json(payload): Json<RequestTeamInvite>,
-    ) -> impl IntoResponse {
+    ) -> impl IntoResponse
+    where
+        ES: EmailSender + Clone + Send + Sync,
+    {
         if let Err(e) = use_case.teams.invite(team_id, payload.user_id).await {
             e.into_response()
         } else {

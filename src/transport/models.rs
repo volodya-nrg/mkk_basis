@@ -49,7 +49,7 @@ pub struct RequestUser {
     pub email: String,
     pub password: String,
     pub name: Option<String>,
-    pub email_is_confirmed: bool,
+    pub email_code: Option<String>,
     // pub avatar: Option<String>,
 }
 
@@ -119,7 +119,7 @@ pub struct ResponseUser {
     pub user_id: Uuid,
     pub name: Option<String>,
     pub email: String,
-    pub email_is_confirmed: bool,
+    pub email_code: Option<String>,
     pub avatar: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

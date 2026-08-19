@@ -2,11 +2,12 @@ mod helpers;
 
 use axum::http::StatusCode;
 use helpers::client::Client;
+use helpers::mocks::EmailServiceMock;
 use helpers::rand;
 use mkk_basis::{
-    adapter::db::postgres::Postgres,
-    adapter::jwt::Jwt,
-    adapter::logger,
+    adapter::db::postgres::Postgres as PostgresService,
+    adapter::jwt::Jwt as JWTService,
+    adapter::logger as LoggerService,
     consts, transport,
     transport::http_server::HTTPServer,
     transport::models::{
@@ -36,7 +37,7 @@ static MARKER: OnceCell<ClientData> = OnceCell::const_new();
 async fn run_test_server() -> &'static ClientData {
     MARKER
         .get_or_init(|| async move {
-            logger::init("", "", "", "", true).unwrap();
+            LoggerService::init("", "", "", "", true).unwrap();
 
             let addr_socket = TcpListener::bind(format!("{}:0", helpers::certs::LOCALHOST))
                 .expect("failed to bind addr")
@@ -48,10 +49,15 @@ async fn run_test_server() -> &'static ClientData {
                 .connect(DSN)
                 .await
                 .expect("failed to connect to db");
-            let pg_service = Postgres::new(pool);
+            let pg_service = PostgresService::new(pool);
             let private_key = rand::private_key(32);
-            let jwt_service = Jwt::new(private_key, 10, 20);
-            let use_case = UseCase::new(pg_service, jwt_service);
+            let jwt_service = JWTService::new(private_key, 10, 20);
+            let use_case = UseCase::new(
+                "http://localhost.loc".to_string(),
+                pg_service,
+                jwt_service,
+                EmailServiceMock {},
+            );
             let certs = helpers::certs::gen_certs().unwrap(); // создадим серты
             let tls_config = transport::http_server::configure_tls(
                 certs.ca_cert.pem().into_bytes(),
@@ -577,7 +583,7 @@ async fn check_users() {
         user_id,
         name: None,
         email: "".to_string(),
-        email_is_confirmed: false,
+        email_code: None,
         avatar: None,
         created_at: Default::default(),
         updated_at: Default::default(),
@@ -670,10 +676,7 @@ async fn check_users() {
                 serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
             assert_eq!(req_user1.email, resp_user_actual.email);
             assert_eq!(req_user1.name, resp_user_actual.name);
-            assert_eq!(
-                req_user1.email_is_confirmed,
-                resp_user_actual.email_is_confirmed
-            );
+            assert_eq!(req_user1.email_code, resp_user_actual.email_code);
 
             user_id = resp_user_actual.user_id;
             saved_resp_user = resp_user_actual;
@@ -723,10 +726,7 @@ async fn check_users() {
         let founded_user = opt.unwrap();
         assert_eq!(req_user2.email, founded_user.email);
         assert_eq!(req_user2.name, founded_user.name);
-        assert_eq!(
-            req_user2.email_is_confirmed,
-            founded_user.email_is_confirmed
-        );
+        assert_eq!(req_user2.email_code, founded_user.email_code);
     })
     .await // ок: удалим успешно
     .users_delete(user_id, |result: Result<(StatusCode, String), String>| {

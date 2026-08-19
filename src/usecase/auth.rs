@@ -1,7 +1,7 @@
 use super::{UseCaseError, helpers, mapper, models::User};
 use crate::adapter::{
-    db::RepositoryError, db::postgres::tables::users::Users as UsersRepo,
-    helpers as helpersService, jwt::Jwt as JWTService,
+    db::RepositoryError, db::postgres::tables::users::Users as UsersRepo, email::EmailSender,
+    helpers as HelpersService, jwt::Jwt as JWTService,
 };
 use crate::consts;
 use crate::err_msg::ErrMsg;
@@ -9,16 +9,25 @@ use http::StatusCode;
 use uuid::Uuid;
 
 #[derive(Clone)] // из-за axum-state
-pub struct Auth {
+pub struct Auth<ES: EmailSender + Clone> {
+    addr: String,
     users_repo: UsersRepo,
     pub jwt_service: JWTService, // публичен для экстрактора
+    email_sender: ES,
 }
 
-impl Auth {
-    pub fn new(users_repo: UsersRepo, jwt_service: JWTService) -> Self {
+impl<ES: EmailSender + Clone> Auth<ES> {
+    pub fn new(
+        addr: String,
+        users_repo: UsersRepo,
+        jwt_service: JWTService,
+        email_sender: ES,
+    ) -> Self {
         Self {
+            addr,
             users_repo,
             jwt_service,
+            email_sender,
         }
     }
     pub async fn register(
@@ -29,7 +38,7 @@ impl Auth {
         agreement: bool,
         privacy_policy: bool,
     ) -> Result<Uuid, UseCaseError> {
-        if !helpersService::is_valid_email(&email) {
+        if !HelpersService::is_valid_email(&email) {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: ErrMsg::EmailNotCorrect.as_str(),
@@ -65,6 +74,7 @@ impl Auth {
             });
         }
 
+        let email_code = Uuid::new_v4().simple().to_string();
         let password_hash = helpers::password_hash(&password)
             .map_err(|e| UseCaseError::Common(format!("failed to create password hash: {e}")))?;
         let result = self
@@ -72,33 +82,71 @@ impl Auth {
             .create(mapper::user_uc_to_user_db(User {
                 user_id: Default::default(),
                 name: None,
-                email,
+                email: email.clone(),
                 password: password_hash.to_string(),
-                email_is_confirmed: false,
+                email_code: Some(email_code.clone()),
                 avatar: None,
                 created_at: Default::default(),
                 updated_at: Default::default(),
             }))
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))?;
-        
-        // TODO отправляем сообщение на е-мэйл
-        
+        let link = format!("{}/register/confirm?code={}", self.addr, email_code);
+        let email_subject = format!("Confirm email from {}", self.addr);
+        let email_message = format!("Confirm email: <a href=\"{}\">{}</a>", link, link);
+        self.email_sender
+            .send(email, email_subject.to_string(), email_message.to_string())
+            .map_err(|e| UseCaseError::Common(format!("failed to send email: {e}")))?;
+
         Ok(result)
     }
-    pub async fn check_register(
+    pub async fn register_confirm(
         &self,
+        email: String,
+        actual_code: String,
     ) -> Result<(), UseCaseError> {
-        //1. найти в БД запись о е-мэйле
+        let mut user = match self.users_repo.by_email(email.clone()).await {
+            Ok(v) => v,
+            Err(e) => {
+                if let RepositoryError::NotFoundRow = e {
+                    return Err(UseCaseError::ForTransport {
+                        status_code: StatusCode::BAD_REQUEST,
+                        public_err: ErrMsg::NotFoundUser.as_str(),
+                        internal_err: Some(format!("user send other email ({})", email)),
+                    });
+                }
+                return Err(UseCaseError::Common(e.to_string()));
+            }
+        };
+        let expected_code = user.email_code.ok_or_else(|| UseCaseError::ForTransport {
+            status_code: StatusCode::BAD_REQUEST,
+            public_err: ErrMsg::EmailAlreadyConfirm.as_str(),
+            internal_err: None,
+        })?;
+
+        if expected_code != actual_code {
+            return Err(UseCaseError::ForTransport {
+                status_code: StatusCode::BAD_REQUEST,
+                public_err: ErrMsg::NotCorrectVerifyEmailCode.as_str(),
+                internal_err: None,
+            });
+        }
+
+        user.email_code = None;
+        self.users_repo
+            .update(user)
+            .await
+            .map_err(|e| UseCaseError::Common(format!("failed up update: {}", e)))?;
+
         Ok(())
     }
-    
+
     pub async fn login(
         &self,
         email: String,
         password: String,
     ) -> Result<(String, String), UseCaseError> {
-        if !helpersService::is_valid_email(&email) {
+        if !HelpersService::is_valid_email(&email) {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: ErrMsg::EmailNotCorrect.as_str(),

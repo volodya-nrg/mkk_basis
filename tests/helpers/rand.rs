@@ -81,7 +81,7 @@ pub fn request_user() -> RequestUser {
         name: if bool() { Some(str()) } else { None },
         email: email(),
         password: str(),
-        email_is_confirmed: bool(),
+        email_code: if bool() { Some(str()) } else { None },
     }
 }
 
@@ -91,7 +91,7 @@ pub fn user() -> User {
         name: if bool() { Some(str()) } else { None },
         email: email(),
         password: str(),
-        email_is_confirmed: bool(),
+        email_code: if bool() { Some(str()) } else { None },
         avatar: if bool() { Some(str()) } else { None },
         created_at: Default::default(),
         updated_at: Default::default(),

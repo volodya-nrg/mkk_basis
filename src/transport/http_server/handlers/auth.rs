@@ -1,8 +1,10 @@
+use crate::adapter::email::EmailSender;
 use crate::transport::{
     extractor::AuthenticatedUser,
     models::{RequestLogin, RequestRegister, ResponseLogin, ResponseUUID},
 };
 use crate::usecase::UseCase;
+
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -12,10 +14,13 @@ use serde_json::json;
 pub struct Handlers {}
 
 impl Handlers {
-    pub async fn register(
-        State(use_case): State<UseCase>,
+    pub async fn register<ES>(
+        State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestRegister>,
-    ) -> impl IntoResponse {
+    ) -> impl IntoResponse
+    where
+        ES: EmailSender + Clone + Send + Sync,
+    {
         let result = use_case
             .auth
             .register(
@@ -34,10 +39,28 @@ impl Handlers {
             Err(e) => e.into_response(),
         }
     }
-    pub async fn login(
-        State(use_case): State<UseCase>,
+    pub async fn register_confirm<ES>(State(use_case): State<UseCase<ES>>) -> impl IntoResponse
+    where
+        ES: EmailSender + Clone + Send + Sync,
+    {
+        let email = "";
+        let code = "";
+        match use_case
+            .auth
+            .register_confirm(email.to_string(), code.to_string())
+            .await
+        {
+            Ok(_) => StatusCode::OK.into_response(),
+            Err(e) => e.into_response(),
+        }
+    }
+    pub async fn login<ES>(
+        State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestLogin>,
-    ) -> impl IntoResponse {
+    ) -> impl IntoResponse
+    where
+        ES: EmailSender + Clone + Send + Sync,
+    {
         match use_case.auth.login(payload.email, payload.password).await {
             Ok((access_token, refresh_token)) => {
                 let resp = ResponseLogin {
@@ -49,10 +72,13 @@ impl Handlers {
             Err(e) => e.into_response(),
         }
     }
-    pub async fn logout(
-        _user: AuthenticatedUser,
-        State(use_case): State<UseCase>,
-    ) -> impl IntoResponse {
+    pub async fn logout<ES>(
+        _user: AuthenticatedUser<ES>,
+        State(use_case): State<UseCase<ES>>,
+    ) -> impl IntoResponse
+    where
+        ES: EmailSender + Clone + Send + Sync,
+    {
         if let Err(e) = use_case.auth.logout().await {
             e.into_response()
         } else {

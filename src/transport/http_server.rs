@@ -1,7 +1,9 @@
 pub mod handlers;
 pub mod middleware;
 
+use crate::adapter::email::EmailSender;
 use crate::usecase::UseCase;
+
 use axum::routing::{get, post, put};
 use axum::{Router, middleware as AxumMiddleware};
 use axum_server::tls_rustls::RustlsConfig;
@@ -15,14 +17,15 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::services::{ServeDir, ServeFile};
 
-pub struct HTTPServer {
+pub struct HTTPServer<ES: EmailSender + Clone + Send + Sync> {
     addr: String,
-    use_case: UseCase,
+    use_case: UseCase<ES>,
     tls_config: Option<RustlsConfig>,
 }
 
-impl HTTPServer {
-    pub fn new(addr: String, use_case: UseCase, tls_config: Option<RustlsConfig>) -> Self {
+impl<ES: EmailSender + Clone + Send + Sync + 'static> HTTPServer<ES> {
+    // "'static" - для Router
+    pub fn new(addr: String, use_case: UseCase<ES>, tls_config: Option<RustlsConfig>) -> Self {
         Self {
             addr,
             use_case,
@@ -62,6 +65,10 @@ impl HTTPServer {
         let api = Router::new()
             // auth
             .route("/api/v1/register", post(auth::Handlers::register))
+            .route(
+                "/api/v1/register/confirm",
+                get(auth::Handlers::register_confirm),
+            )
             .route("/api/v1/login", post(auth::Handlers::login))
             .route("/api/v1/logout", post(auth::Handlers::logout))
             // teams
