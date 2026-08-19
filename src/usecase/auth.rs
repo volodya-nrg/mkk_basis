@@ -81,11 +81,18 @@ impl Auth {
             }))
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))?;
-
-        // TODO тут надо отправить сообщение на е-мэйл с ссылкой для подтверждения пароля
-
+        
+        // TODO отправляем сообщение на е-мэйл
+        
         Ok(result)
     }
+    pub async fn check_register(
+        &self,
+    ) -> Result<(), UseCaseError> {
+        //1. найти в БД запись о е-мэйле
+        Ok(())
+    }
+    
     pub async fn login(
         &self,
         email: String,

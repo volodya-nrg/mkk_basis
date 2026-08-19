@@ -9,6 +9,7 @@ pub struct Config {
     pub log: Log,
     pub postgres: Postgres,
     pub http_server: HTTPServer,
+    pub email: Email,
 }
 #[derive(Deserialize)]
 pub struct Log {
@@ -30,6 +31,14 @@ pub struct Tls {
     pub ca_filepath: String,
     pub crt_filepath: String,
     pub key_filepath: String,
+}
+#[derive(Deserialize)]
+pub struct Email {
+    pub host: String,
+    pub login: String,
+    pub pass: String,
+    pub from_email: String,
+    pub from_name: String,
 }
 
 impl Config {
