@@ -23,7 +23,7 @@ impl Handlers {
         Json(payload): Json<RequestLimitOffset>,
     ) -> impl IntoResponse
     where
-        ES: EmailSender + Clone + Send + Sync,
+        ES: EmailSender,
     {
         match use_case.teams.list(payload.limit, payload.offset).await {
             Ok((items, total)) => {
@@ -42,7 +42,7 @@ impl Handlers {
         Json(payload): Json<RequestTeamCreate>,
     ) -> impl IntoResponse
     where
-        ES: EmailSender + Clone + Send + Sync,
+        ES: EmailSender,
     {
         let result = use_case
             .teams
@@ -67,7 +67,7 @@ impl Handlers {
         Json(payload): Json<RequestTeamInvite>,
     ) -> impl IntoResponse
     where
-        ES: EmailSender + Clone + Send + Sync,
+        ES: EmailSender,
     {
         if let Err(e) = use_case.teams.invite(team_id, payload.user_id).await {
             e.into_response()

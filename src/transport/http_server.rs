@@ -17,14 +17,13 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::services::{ServeDir, ServeFile};
 
-pub struct HTTPServer<ES: EmailSender + Clone + Send + Sync> {
+pub struct HTTPServer<ES: EmailSender> {
     addr: String,
     use_case: UseCase<ES>,
     tls_config: Option<RustlsConfig>,
 }
 
-impl<ES: EmailSender + Clone + Send + Sync + 'static> HTTPServer<ES> {
-    // "'static" - для Router
+impl<ES: EmailSender> HTTPServer<ES> {
     pub fn new(addr: String, use_case: UseCase<ES>, tls_config: Option<RustlsConfig>) -> Self {
         Self {
             addr,

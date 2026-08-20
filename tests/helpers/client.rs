@@ -7,6 +7,8 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+// type StatusCodeBodyError = Result<(StatusCode, String), String>;
+
 pub struct Client {
     addr: String,
     client: ReqwestClient,
@@ -175,6 +177,30 @@ impl Client {
         cb(result);
         self
     }
+    pub async fn register_confirm<T>(&self, code: String, mut cb: T) -> &Self
+    where
+        T: FnMut(Result<(StatusCode, String), String>),
+    {
+        let result = self
+            .client
+            .get(format!(
+                "{}/api/v1/register/confirm?code={}",
+                self.addr, code
+            ))
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        };
+
+        cb(result);
+        self
+    }
     pub async fn login<T>(&self, req: RequestLogin, mut cb: T) -> &Self
     where
         T: FnMut(Result<(StatusCode, String), String>),
@@ -288,7 +314,7 @@ impl Client {
     }
     pub async fn teams_invite<T>(&self, team_id: Uuid, req: RequestTeamInvite, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>), // + 'static,
+        T: FnMut(Result<(StatusCode, String), String>),
     {
         let result = self
             .client

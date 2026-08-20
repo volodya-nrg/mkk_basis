@@ -19,7 +19,7 @@ pub struct AuthenticatedUser<ES> {
 impl<S,ES> FromRequestParts<S> for AuthenticatedUser<ES>
 where
     S: Send + Sync,
-    ES: EmailSender + Clone + Send + Sync,
+    ES: EmailSender,
     UseCase<ES>: FromRef<S>,
 {
     type Rejection = StatusCode;

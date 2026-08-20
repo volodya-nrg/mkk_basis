@@ -16,14 +16,14 @@ use serde_json::json;
 use thiserror::Error as ThisError;
 
 #[derive(Clone)] // из-за axum-state
-pub struct UseCase<ES: EmailSender + Clone + Send + Sync> {
+pub struct UseCase<ES: EmailSender> {
     pub auth: auth::Auth<ES>,
     pub tasks: tasks::Tasks,
     pub teams: teams::Teams,
     pub users: users::Users,
 }
 
-impl<ES: EmailSender + Clone + Send + Sync> UseCase<ES> {
+impl<ES: EmailSender> UseCase<ES> {
     pub fn new(
         addr: String,
         postgres: PostgresService,

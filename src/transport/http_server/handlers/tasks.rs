@@ -23,7 +23,7 @@ impl Handlers {
         Json(payload): Json<RequestLimitOffset>,
     ) -> impl IntoResponse
     where
-        ES: EmailSender + Clone + Send + Sync,
+        ES: EmailSender,
     {
         match use_case.tasks.list(payload.limit, payload.offset).await {
             Ok((items, total)) => {
@@ -42,7 +42,7 @@ impl Handlers {
         Json(payload): Json<RequestTask>,
     ) -> impl IntoResponse
     where
-        ES: EmailSender + Clone + Send + Sync,
+        ES: EmailSender,
     {
         let result = use_case
             .tasks
@@ -68,7 +68,7 @@ impl Handlers {
         Json(payload): Json<RequestTask>,
     ) -> impl IntoResponse
     where
-        ES: EmailSender + Clone + Send + Sync,
+        ES: EmailSender,
     {
         let mut uc_task = mapper::task_tr_to_task_uc(payload);
         uc_task.task_id = task_id;
@@ -91,7 +91,7 @@ impl Handlers {
         Path(task_id): Path<Uuid>,
     ) -> impl IntoResponse
     where
-        ES: EmailSender + Clone + Send + Sync,
+        ES: EmailSender,
     {
         match use_case.tasks.get_history(task_id).await {
             Ok(v) => {

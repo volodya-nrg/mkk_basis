@@ -9,14 +9,14 @@ use http::StatusCode;
 use uuid::Uuid;
 
 #[derive(Clone)] // из-за axum-state
-pub struct Auth<ES: EmailSender + Clone> {
+pub struct Auth<ES: EmailSender> {
     addr: String,
     users_repo: UsersRepo,
     pub jwt_service: JWTService, // публичен для экстрактора
     email_sender: ES,
 }
 
-impl<ES: EmailSender + Clone> Auth<ES> {
+impl<ES: EmailSender> Auth<ES> {
     pub fn new(
         addr: String,
         users_repo: UsersRepo,

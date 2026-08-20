@@ -1,7 +1,7 @@
 mod helpers;
 
 use axum::http::StatusCode;
-use helpers::client::Client;
+use helpers::client::{Client};
 use helpers::mocks::EmailServiceMock;
 use helpers::rand;
 use mkk_basis::{
@@ -149,6 +149,17 @@ async fn check_auth() {
     req_register.email = wrong_email.clone();
     req_login.email = wrong_email.clone();
 
+    // -----------------------------------
+    cl.register_confirm(
+        rand::str(),
+        |result: Result<(StatusCode, String), String>| {
+            let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            assert!(status_code.is_success());
+        },
+    )
+        .await;
+    // -----------------------------------
+
     // err: проверка е-мэйла на валидность
     cl.register(
         req_register.clone(),
@@ -210,8 +221,20 @@ async fn check_auth() {
             assert!(status_code.is_success());
         },
     )
-    .await // err: проверим е-мэйлу не некорректный
-    .login(
+    .await;
+
+    // err: -
+    cl.register_confirm(
+        "".to_string(),
+        |result: Result<(StatusCode, String), String>| {
+            let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            assert!(status_code.is_success());
+        },
+    )
+        .await;
+
+    // err: проверим е-мэйлу не некорректный
+    cl.login(
         req_login.clone(),
         |result: Result<(StatusCode, String), String>| {
             let (status_code, _body_str) = result.unwrap();
@@ -269,8 +292,10 @@ async fn check_auth() {
             assert!(!resp_login.refresh_token.is_empty());
         },
     )
-    .await // ok
-    .logout(|result: Result<(StatusCode, String), String>| {
+    .await;
+
+    // ok
+    cl.logout(|result: Result<(StatusCode, String), String>| {
         let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_success());
     })

@@ -19,7 +19,7 @@ impl Handlers {
         Json(payload): Json<RequestRegister>,
     ) -> impl IntoResponse
     where
-        ES: EmailSender + Clone + Send + Sync,
+        ES: EmailSender,
     {
         let result = use_case
             .auth
@@ -41,7 +41,7 @@ impl Handlers {
     }
     pub async fn register_confirm<ES>(State(use_case): State<UseCase<ES>>) -> impl IntoResponse
     where
-        ES: EmailSender + Clone + Send + Sync,
+        ES: EmailSender,
     {
         let email = "";
         let code = "";
@@ -59,7 +59,7 @@ impl Handlers {
         Json(payload): Json<RequestLogin>,
     ) -> impl IntoResponse
     where
-        ES: EmailSender + Clone + Send + Sync,
+        ES: EmailSender,
     {
         match use_case.auth.login(payload.email, payload.password).await {
             Ok((access_token, refresh_token)) => {
@@ -77,7 +77,7 @@ impl Handlers {
         State(use_case): State<UseCase<ES>>,
     ) -> impl IntoResponse
     where
-        ES: EmailSender + Clone + Send + Sync,
+        ES: EmailSender,
     {
         if let Err(e) = use_case.auth.logout().await {
             e.into_response()

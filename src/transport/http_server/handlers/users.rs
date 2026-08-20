@@ -22,7 +22,7 @@ impl Handlers {
         Json(payload): Json<RequestLimitOffset>,
     ) -> impl IntoResponse
     where
-        ES: EmailSender + Clone + Send + Sync,
+        ES: EmailSender,
     {
         match use_case.users.list(payload.limit, payload.offset).await {
             Ok((items, total)) => {
@@ -41,7 +41,7 @@ impl Handlers {
         State(use_case): State<UseCase<ES>>,
     ) -> impl IntoResponse
     where
-        ES: EmailSender + Clone + Send + Sync,
+        ES: EmailSender,
     {
         match use_case.users.one(item_id).await {
             Ok(v) => {
@@ -57,7 +57,7 @@ impl Handlers {
         Json(payload): Json<RequestUser>,
     ) -> impl IntoResponse
     where
-        ES: EmailSender + Clone + Send + Sync,
+        ES: EmailSender,
     {
         let result = use_case
             .users
@@ -82,7 +82,7 @@ impl Handlers {
         Json(payload): Json<RequestUser>,
     ) -> impl IntoResponse
     where
-        ES: EmailSender + Clone + Send + Sync,
+        ES: EmailSender,
     {
         let mut uc_user = mapper::user_tr_to_user_uc(payload);
         uc_user.user_id = item_id;
@@ -105,7 +105,7 @@ impl Handlers {
         State(use_case): State<UseCase<ES>>,
     ) -> impl IntoResponse
     where
-        ES: EmailSender + Clone + Send + Sync,
+        ES: EmailSender,
     {
         if let Err(e) = use_case.users.delete(item_id).await {
             e.into_response()
