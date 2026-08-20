@@ -60,14 +60,11 @@ impl<ES: EmailSender> HTTPServer<ES> {
     fn get_router(&self) -> Router {
         let public = Router::new()
             .route("/", get(etc::Handlers::index))
-            .route("/health", get(etc::Handlers::health));
+            .route("/health", get(etc::Handlers::health))
+            .route("/register/confirm", get(auth::Handlers::register_confirm));
         let api = Router::new()
             // auth
             .route("/api/v1/register", post(auth::Handlers::register))
-            .route(
-                "/api/v1/register/confirm",
-                get(auth::Handlers::register_confirm),
-            )
             .route("/api/v1/login", post(auth::Handlers::login))
             .route("/api/v1/logout", post(auth::Handlers::logout))
             // teams

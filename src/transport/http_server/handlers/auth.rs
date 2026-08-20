@@ -1,12 +1,12 @@
 use crate::adapter::email::EmailSender;
 use crate::transport::{
     extractor::AuthenticatedUser,
-    models::{RequestLogin, RequestRegister, ResponseLogin, ResponseUUID},
+    models::{RequestLogin, RequestRegister, RequestRegisterConfirm, ResponseLogin, ResponseUUID},
 };
 use crate::usecase::UseCase;
 
 use axum::Json;
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde_json::json;
@@ -39,17 +39,16 @@ impl Handlers {
             Err(e) => e.into_response(),
         }
     }
-    pub async fn register_confirm<ES>(State(use_case): State<UseCase<ES>>) -> impl IntoResponse
+    pub async fn register_confirm<ES>(
+        State(use_case): State<UseCase<ES>>,
+        Query(query): Query<RequestRegisterConfirm>,
+    ) -> impl IntoResponse
     where
         ES: EmailSender,
     {
-        let email = "";
-        let code = "";
-        match use_case
-            .auth
-            .register_confirm(email.to_string(), code.to_string())
-            .await
-        {
+        let email = query.email.unwrap_or("".to_string());
+        let code = query.code.unwrap_or("".to_string());
+        match use_case.auth.register_confirm(email, code).await {
             Ok(_) => StatusCode::OK.into_response(),
             Err(e) => e.into_response(),
         }

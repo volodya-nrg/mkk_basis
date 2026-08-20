@@ -1,13 +1,14 @@
 mod table_basic;
 pub mod tables;
 
-use sqlx::{Pool, Postgres as SQLXPostgres};
+use sqlx::{FromRow, Pool, Postgres as SQLXPostgres};
 use tables::{
     task_comments::TaskComments, task_histories::TaskHistories, tasks::Tasks,
     team_members::TeamMembers, teams::Teams, users::Users,
 };
 
-#[allow(dead_code)]
+// #[allow(dead_code), derive(Clone)]
+#[derive(Clone)] // даем возможность клонирования для тестов
 pub struct Postgres {
     pub tbl_users: Users,
     pub tbl_teams: Teams,

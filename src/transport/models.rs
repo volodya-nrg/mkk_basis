@@ -50,7 +50,12 @@ pub struct RequestUser {
     pub password: String,
     pub name: Option<String>,
     pub email_code: Option<String>,
-    // pub avatar: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RequestRegisterConfirm {
+    pub email: Option<String>,
+    pub code: Option<String>,
 }
 
 // ------------------------------------

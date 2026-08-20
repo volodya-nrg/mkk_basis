@@ -74,7 +74,7 @@ impl<ES: EmailSender> Auth<ES> {
             });
         }
 
-        let email_code = Uuid::new_v4().simple().to_string();
+        let code = Uuid::new_v4().simple().to_string();
         let password_hash = helpers::password_hash(&password)
             .map_err(|e| UseCaseError::Common(format!("failed to create password hash: {e}")))?;
         let result = self
@@ -84,14 +84,17 @@ impl<ES: EmailSender> Auth<ES> {
                 name: None,
                 email: email.clone(),
                 password: password_hash.to_string(),
-                email_code: Some(email_code.clone()),
+                email_code: Some(code.clone()),
                 avatar: None,
                 created_at: Default::default(),
                 updated_at: Default::default(),
             }))
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))?;
-        let link = format!("{}/register/confirm?code={}", self.addr, email_code);
+        let link = format!(
+            "{}/register/confirm?email={}&code={}",
+            self.addr, email, code
+        );
         let email_subject = format!("Confirm email from {}", self.addr);
         let email_message = format!("Confirm email: <a href=\"{}\">{}</a>", link, link);
         self.email_sender
@@ -105,6 +108,28 @@ impl<ES: EmailSender> Auth<ES> {
         email: String,
         actual_code: String,
     ) -> Result<(), UseCaseError> {
+        if email == "" {
+            return Err(UseCaseError::ForTransport {
+                status_code: StatusCode::BAD_REQUEST,
+                public_err: ErrMsg::EmailNotBeEmpty.as_str(),
+                internal_err: None,
+            });
+        }
+        if actual_code == "" {
+            return Err(UseCaseError::ForTransport {
+                status_code: StatusCode::BAD_REQUEST,
+                public_err: ErrMsg::VerifyCodeNotBeEmpty.as_str(),
+                internal_err: None,
+            });
+        }
+        if !HelpersService::is_valid_email(&email) {
+            return Err(UseCaseError::ForTransport {
+                status_code: StatusCode::BAD_REQUEST,
+                public_err: ErrMsg::EmailNotCorrect.as_str(),
+                internal_err: None,
+            });
+        }
+        
         let mut user = match self.users_repo.by_email(email.clone()).await {
             Ok(v) => v,
             Err(e) => {
@@ -175,6 +200,15 @@ impl<ES: EmailSender> Auth<ES> {
                 return Err(UseCaseError::Common(e.to_string()));
             }
         };
+
+        if user.email_code.is_some() {
+            return Err(UseCaseError::ForTransport {
+                status_code: StatusCode::BAD_REQUEST,
+                public_err: ErrMsg::VerifyYourEmail.as_str(),
+                internal_err: None,
+            });
+        }
+
         let password_is_eq = helpers::password_verify(password.as_str(), user.password.as_str())
             .map_err(|e| UseCaseError::Common(format!("failed to verify password: {e}")))?;
 

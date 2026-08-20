@@ -1,23 +1,34 @@
 use super::rand;
 use http::StatusCode;
-use mkk_basis::transport::models::*;
+use mkk_basis::adapter::db::postgres::Postgres as PostgresService;
+use mkk_basis::transport::models::{
+    RequestLimitOffset, RequestLogin, RequestRegister, RequestTask, RequestTeamCreate,
+    RequestTeamInvite, RequestUser, ResponseLogin,
+};
 use reqwest::{Certificate, Client as ReqwestClient, Identity, Response, header};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-// type StatusCodeBodyError = Result<(StatusCode, String), String>;
+pub type StatusCodeBodyError = Result<(StatusCode, String), String>;
 
-pub struct Client {
+pub struct Client<'pg> {
     addr: String,
     client: ReqwestClient,
     access_token: Arc<Mutex<String>>,
     refresh_token: Arc<Mutex<String>>,
+    pg_service: &'pg PostgresService,
 }
 
-impl Client {
-    pub fn new(addr: String, ca: String, crt: String, key: String) -> Self {
+impl<'pg> Client<'pg> {
+    pub fn new(
+        addr: String,
+        ca: String,
+        crt: String,
+        key: String,
+        pg_service: &'pg PostgresService,
+    ) -> Self {
         // ca-сертификат - чтоб проверить сервер
         // crt - чтоб сервер мог проверить клиента
         // key - доказательство владения crt
@@ -40,6 +51,7 @@ impl Client {
                 .unwrap(),
             access_token: Arc::new(Default::default()),
             refresh_token: Arc::new(Default::default()),
+            pg_service,
         }
     }
     async fn headers(&self) -> header::HeaderMap {
@@ -55,7 +67,7 @@ impl Client {
 
         headers
     }
-    async fn parse_response(&self, resp: Response) -> Result<(StatusCode, String), String> {
+    async fn parse_response(&self, resp: Response) -> StatusCodeBodyError {
         let status_code = resp.status();
         let result = resp
             .text()
@@ -67,7 +79,7 @@ impl Client {
     // etc
     pub async fn index<T>(&self, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
@@ -88,7 +100,7 @@ impl Client {
     }
     pub async fn health<T>(&self, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
@@ -109,7 +121,7 @@ impl Client {
     }
     pub async fn page404<T>(&self, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
@@ -130,7 +142,7 @@ impl Client {
     }
     pub async fn get_file<T>(&self, url_filepath: String, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
         let url_filepath = url_filepath
             .strip_prefix('/')
@@ -154,9 +166,9 @@ impl Client {
     }
 
     // auth
-    pub async fn register<T>(&self, req: RequestRegister, mut cb: T) -> &Self
+    pub async fn register<T>(&self, req: RequestRegister, is_full: bool, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
@@ -174,19 +186,52 @@ impl Client {
             Err(e) => Err(e),
         };
 
+        if is_full {
+            let email_code = self
+                .pg_service
+                .tbl_users
+                .by_email(req.email.clone())
+                .await
+                .unwrap()
+                .email_code
+                .unwrap();
+
+            self.register_confirm(
+                Some(req.email),
+                Some(email_code),
+                |_: StatusCodeBodyError| {},
+            )
+            .await;
+        }
+
         cb(result);
         self
     }
-    pub async fn register_confirm<T>(&self, code: String, mut cb: T) -> &Self
+    pub async fn register_confirm<T>(
+        &self,
+        email: Option<String>,
+        code: Option<String>,
+        mut cb: T,
+    ) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
+        let mut address = format!("{}/register/confirm", self.addr);
+        let mut query_items: Vec<String> = Vec::new();
+
+        if let Some(v) = email {
+            query_items.push(format!("email={}", v));
+        }
+        if let Some(v) = code {
+            query_items.push(format!("code={}", v));
+        }
+        if query_items.len() > 0 {
+            address = address + "?" + &query_items.join("&").to_string();
+        }
+
         let result = self
             .client
-            .get(format!(
-                "{}/api/v1/register/confirm?code={}",
-                self.addr, code
-            ))
+            .get(address)
             .send()
             .await
             .map_err(|e| format!("failed to request: {:?}", e));
@@ -203,7 +248,7 @@ impl Client {
     }
     pub async fn login<T>(&self, req: RequestLogin, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
@@ -236,7 +281,7 @@ impl Client {
     }
     pub async fn logout<T>(&self, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
@@ -268,7 +313,7 @@ impl Client {
     // teams
     pub async fn teams_list<T>(&self, limit: i32, offset: i32, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
@@ -291,7 +336,7 @@ impl Client {
     }
     pub async fn teams_create<T>(&self, req: RequestTeamCreate, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
@@ -314,7 +359,7 @@ impl Client {
     }
     pub async fn teams_invite<T>(&self, team_id: Uuid, req: RequestTeamInvite, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
@@ -339,7 +384,7 @@ impl Client {
     // tasks
     pub async fn tasks_list<T>(&self, limit: i32, offset: i32, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
@@ -362,7 +407,7 @@ impl Client {
     }
     pub async fn tasks_create<T>(&self, req: RequestTask, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
@@ -385,7 +430,7 @@ impl Client {
     }
     pub async fn tasks_update<T>(&self, task_id: Uuid, req: RequestTask, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
@@ -408,7 +453,7 @@ impl Client {
     }
     pub async fn tasks_history<T>(&self, task_id: Uuid, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
@@ -432,7 +477,7 @@ impl Client {
     // users
     pub async fn users_list<T>(&self, limit: i32, offset: i32, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
@@ -455,7 +500,7 @@ impl Client {
     }
     pub async fn users_one<T>(&self, uuid: Uuid, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
@@ -477,7 +522,7 @@ impl Client {
     }
     pub async fn users_create<T>(&self, req: RequestUser, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
@@ -500,7 +545,7 @@ impl Client {
     }
     pub async fn users_update<T>(&self, user_id: Uuid, req: RequestUser, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
@@ -523,7 +568,7 @@ impl Client {
     }
     pub async fn users_delete<T>(&self, user_id: Uuid, mut cb: T) -> &Self
     where
-        T: FnMut(Result<(StatusCode, String), String>),
+        T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client

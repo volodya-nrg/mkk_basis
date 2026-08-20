@@ -3,6 +3,9 @@ use super::consts;
 pub enum ErrMsg {
     EmailNotCorrect,
     EmailAlreadyConfirm,
+    EmailNotBeEmpty,
+    VerifyYourEmail,
+    VerifyCodeNotBeEmpty,
     PasswordsNotEquals,
     PasswordIsShort,
     NotFoundUser,
@@ -16,6 +19,9 @@ impl ErrMsg {
         match self {
             ErrMsg::EmailNotCorrect => "е-мэйл не корректен".to_string(),
             ErrMsg::EmailAlreadyConfirm => "е-мэйл уже подтверждён".to_string(),
+            ErrMsg::EmailNotBeEmpty => "отсутствует е-мэйл".to_string(),
+            ErrMsg::VerifyYourEmail => "е-мэйл необходимо верифицировать".to_string(),
+            ErrMsg::VerifyCodeNotBeEmpty => "проверочный код для е-мэйла отсутствует".to_string(),
             ErrMsg::PasswordsNotEquals => "пароли не равны".to_string(),
             ErrMsg::PasswordIsShort => {
                 format!(
