@@ -46,18 +46,27 @@ impl TaskHistories {
             query.push_bind(offset);
         }
 
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(RepositoryError::TransactionError)?;
         let items: Vec<TaskHistory> = query
             .build_query_as()
-            .fetch_all(&self.pool)
+            .fetch_all(&mut *tx)
             .await
             .map_err(RepositoryError::FailedToQuery)?;
         let total: (i64,) =
             QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.table_basic.name)) // возвращает такой же диапазон как и i64
                 .build_query_as()
-                .fetch_one(&self.pool)
+                .fetch_one(&mut *tx)
                 .await
                 .map_err(RepositoryError::FailedToCount)?;
 
+        tx.commit()
+            .await
+            .map_err(RepositoryError::TransactionError)?;
+        
         Ok((items, total.0))
     }
     pub async fn one(&self, item_id: Uuid) -> Result<TaskHistory, RepositoryError> {
