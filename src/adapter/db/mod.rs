@@ -1,6 +1,7 @@
 pub mod models;
 pub mod postgres;
 
+use std::time::Duration;
 use thiserror::Error as ThisError;
 
 #[derive(ThisError, Debug)]
@@ -21,4 +22,10 @@ pub enum RepositoryError {
 
     #[error("expected one row, but has {0}")]
     ExpectedOneRow(u64),
+
+    #[error("{0}")]
+    Common(sqlx::Error),
 }
+
+const QUERY_TIMEOUT: Duration = Duration::from_secs(3);
+const EXECUTE_TIMEOUT: Duration = Duration::from_secs(3);

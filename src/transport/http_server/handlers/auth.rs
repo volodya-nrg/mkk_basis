@@ -1,15 +1,15 @@
+use axum::Json;
+use axum::extract::{Query, State};
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use serde_json::json;
+
 use crate::adapter::email::EmailSender;
 use crate::transport::{
     extractor::AuthenticatedUser,
     models::{RequestLogin, RequestRegister, RequestRegisterConfirm, ResponseLogin, ResponseUUID},
 };
 use crate::usecase::UseCase;
-
-use axum::Json;
-use axum::extract::{Query, State};
-use axum::http::StatusCode;
-use axum::response::IntoResponse;
-use serde_json::json;
 
 pub struct Handlers {}
 

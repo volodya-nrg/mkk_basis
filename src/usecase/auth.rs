@@ -1,12 +1,14 @@
-use super::{UseCaseError, helpers, mapper, models::User};
+use http::StatusCode;
+use uuid::Uuid;
+
 use crate::adapter::{
     db::RepositoryError, db::postgres::tables::users::Users as UsersRepo, email::EmailSender,
     helpers as HelpersService, jwt::Jwt as JWTService,
 };
 use crate::consts;
 use crate::err_msg::ErrMsg;
-use http::StatusCode;
-use uuid::Uuid;
+
+use super::{UseCaseError, helpers, mapper, models::User};
 
 #[derive(Clone)] // из-за axum-state
 pub struct Auth<ES: EmailSender> {
@@ -77,6 +79,13 @@ impl<ES: EmailSender> Auth<ES> {
         let code = Uuid::new_v4().simple().to_string();
         let password_hash = helpers::password_hash(&password)
             .map_err(|e| UseCaseError::Common(format!("failed to create password hash: {e}")))?;
+        let link = format!(
+            "{}/register/confirm?email={}&code={}",
+            self.addr, email, code
+        );
+        let email_subject = format!("Confirm email from {}", self.addr);
+        let email_message = format!("Confirm email: <a href=\"{}\">{}</a>", link, link);
+        
         let result = self
             .users_repo
             .create(mapper::user_uc_to_user_db(User {
@@ -91,12 +100,7 @@ impl<ES: EmailSender> Auth<ES> {
             }))
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))?;
-        let link = format!(
-            "{}/register/confirm?email={}&code={}",
-            self.addr, email, code
-        );
-        let email_subject = format!("Confirm email from {}", self.addr);
-        let email_message = format!("Confirm email: <a href=\"{}\">{}</a>", link, link);
+
         self.email_sender
             .send(email, email_subject.to_string(), email_message.to_string())
             .map_err(|e| UseCaseError::Common(format!("failed to send email: {e}")))?;
@@ -129,7 +133,7 @@ impl<ES: EmailSender> Auth<ES> {
                 internal_err: None,
             });
         }
-        
+
         let mut user = match self.users_repo.by_email(email.clone()).await {
             Ok(v) => v,
             Err(e) => {

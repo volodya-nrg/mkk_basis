@@ -1,6 +1,7 @@
-use crate::adapter::db::{RepositoryError, models::User, postgres::table_basic::TableBasic};
 use sqlx::{Pool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
+
+use crate::adapter::db::{RepositoryError, models::User, postgres::table_basic::TableBasic};
 
 #[derive(Clone)]
 pub struct Users {
@@ -64,16 +65,13 @@ impl Users {
             self.table_basic.fields.join(","),
             self.table_basic.name,
         );
-        let opt = QueryBuilder::new(query)
+        QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
             .fetch_optional(&self.pool)
             .await
-            .map_err(RepositoryError::FailedToQuery)?;
-        match opt {
-            Some(v) => Ok(v),
-            None => Err(RepositoryError::NotFoundRow),
-        }
+            .map_err(RepositoryError::FailedToQuery)?
+            .ok_or(RepositoryError::NotFoundRow)
     }
     pub async fn by_email(&self, email: String) -> Result<User, RepositoryError> {
         let query = format!(
@@ -81,23 +79,20 @@ impl Users {
             self.table_basic.fields.join(","),
             self.table_basic.name,
         );
-        let opt = QueryBuilder::new(query)
+        QueryBuilder::new(query)
             .build_query_as()
             .bind(email)
             .fetch_optional(&self.pool)
             .await
-            .map_err(RepositoryError::FailedToQuery)?;
-        match opt {
-            Some(v) => Ok(v),
-            None => Err(RepositoryError::NotFoundRow),
-        }
+            .map_err(RepositoryError::FailedToQuery)?
+            .ok_or(RepositoryError::NotFoundRow)
     }
     pub async fn create(&self, item: User) -> Result<Uuid, RepositoryError> {
         let query = format!(
             "INSERT INTO {} (name, email, password, email_code, avatar) VALUES ($1,$2,$3,$4,$5) RETURNING user_id",
             self.table_basic.name,
         );
-        let result = QueryBuilder::new(query)
+        QueryBuilder::new(query)
             .build()
             .bind(item.name)
             .bind(item.email)
@@ -107,16 +102,15 @@ impl Users {
             .fetch_one(&self.pool)
             .await
             .map_err(RepositoryError::FailedToInsert)?
-            .get(0);
-
-        Ok(result)
+            .try_get(0)
+            .map_err(|e| RepositoryError::Common(e))
     }
     pub async fn update(&self, item: User) -> Result<(), RepositoryError> {
         let query = format!(
             "UPDATE {} SET name=$1, email=$2, password=$3, email_code=$4, avatar=$5 WHERE user_id=$6",
             self.table_basic.name,
         );
-        let result = QueryBuilder::new(query)
+        QueryBuilder::new(query)
             .build()
             .bind(item.name)
             .bind(item.email)
@@ -126,29 +120,31 @@ impl Users {
             .bind(item.user_id)
             .execute(&self.pool)
             .await
-            .map_err(RepositoryError::FailedToUpdate)?;
-        let amount_updated_rows = result.rows_affected();
-
-        if amount_updated_rows != 1 {
-            return Err(RepositoryError::ExpectedOneRow(amount_updated_rows));
-        }
-
-        Ok(())
+            .map_err(RepositoryError::FailedToUpdate)
+            .and_then(|result| {
+                let rows = result.rows_affected();
+                if rows == 1 {
+                    Ok(())
+                } else {
+                    Err(RepositoryError::ExpectedOneRow(rows))
+                }
+            })
     }
     pub async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE user_id=$1", self.table_basic.name);
-        let result = QueryBuilder::new(query)
+        QueryBuilder::new(query)
             .build()
             .bind(item_id)
             .execute(&self.pool)
             .await
-            .map_err(RepositoryError::FailedToDelete)?;
-        let amount_updated_rows = result.rows_affected();
-
-        if amount_updated_rows != 1 {
-            return Err(RepositoryError::ExpectedOneRow(amount_updated_rows));
-        }
-
-        Ok(())
+            .map_err(RepositoryError::FailedToDelete)
+            .and_then(|result| {
+                let rows = result.rows_affected();
+                if rows == 1 {
+                    Ok(())
+                } else {
+                    Err(RepositoryError::ExpectedOneRow(rows))
+                }
+            })
     }
 }

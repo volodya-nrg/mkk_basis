@@ -1,7 +1,8 @@
-use crate::adapter::db::{RepositoryError, models::Task, postgres::table_basic::TableBasic};
 use sqlx::{Pool, Postgres, QueryBuilder, Row};
 use std::fmt::{self, Formatter};
 use uuid::Uuid;
+
+use crate::adapter::db::{RepositoryError, models::Task, postgres::table_basic::TableBasic};
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -86,23 +87,20 @@ impl Tasks {
             self.table_basic.fields.join(","),
             self.table_basic.name,
         );
-        let opt = QueryBuilder::new(query)
+        QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
             .fetch_optional(&self.pool)
             .await
-            .map_err(RepositoryError::FailedToQuery)?;
-        match opt {
-            Some(v) => Ok(v),
-            None => Err(RepositoryError::NotFoundRow),
-        }
+            .map_err(RepositoryError::FailedToQuery)?
+            .ok_or(RepositoryError::NotFoundRow)
     }
     pub async fn create(&self, item: Task) -> Result<Uuid, RepositoryError> {
         let query = format!(
             "INSERT INTO {} (name, description, created_by, team_id, assignee_id, status) VALUES ($1,$2,$3,$4,$5,$6::task_status_enum) RETURNING task_id",
             self.table_basic.name,
         );
-        let result = QueryBuilder::new(query)
+        QueryBuilder::new(query)
             .build()
             .bind(item.name)
             .bind(item.description)
@@ -113,16 +111,15 @@ impl Tasks {
             .fetch_one(&self.pool)
             .await
             .map_err(RepositoryError::FailedToInsert)?
-            .get(0);
-
-        Ok(result)
+            .try_get(0)
+            .map_err(|e| RepositoryError::Common(e))
     }
     pub async fn update(&self, item: Task) -> Result<(), RepositoryError> {
         let query = format!(
             "UPDATE {} SET name=$1, description=$2, created_by=$3, team_id=$4, assignee_id=$5, status=$6::task_status_enum WHERE task_id=$7",
             self.table_basic.name,
         );
-        let result = QueryBuilder::new(query)
+        QueryBuilder::new(query)
             .build()
             .bind(item.name)
             .bind(item.description)
@@ -133,30 +130,32 @@ impl Tasks {
             .bind(item.task_id)
             .execute(&self.pool)
             .await
-            .map_err(RepositoryError::FailedToUpdate)?;
-        let amount_updated_rows = result.rows_affected();
-
-        if amount_updated_rows != 1 {
-            return Err(RepositoryError::ExpectedOneRow(amount_updated_rows));
-        }
-
-        Ok(())
+            .map_err(RepositoryError::FailedToUpdate)
+            .and_then(|result| {
+                let rows = result.rows_affected();
+                if rows == 1 {
+                    Ok(())
+                } else {
+                    Err(RepositoryError::ExpectedOneRow(rows))
+                }
+            })
     }
     #[allow(dead_code)]
     pub async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE task_id=$1", self.table_basic.name);
-        let result = QueryBuilder::new(query)
+        QueryBuilder::new(query)
             .build()
             .bind(item_id)
             .execute(&self.pool)
             .await
-            .map_err(RepositoryError::FailedToDelete)?;
-        let amount_updated_rows = result.rows_affected();
-
-        if amount_updated_rows != 1 {
-            return Err(RepositoryError::ExpectedOneRow(amount_updated_rows));
-        }
-
-        Ok(())
+            .map_err(RepositoryError::FailedToDelete)
+            .and_then(|result| {
+                let rows = result.rows_affected();
+                if rows == 1 {
+                    Ok(())
+                } else {
+                    Err(RepositoryError::ExpectedOneRow(rows))
+                }
+            })
     }
 }
