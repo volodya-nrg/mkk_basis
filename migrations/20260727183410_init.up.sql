@@ -17,6 +17,7 @@ CREATE TABLE users
     password   varchar(255)              NOT NULL,
     email_code varchar(255),
     avatar     varchar(255),
+    role       varchar(255),
     created_at timestamptz DEFAULT now() NOT NULL,
     updated_at timestamptz DEFAULT now() NOT NULL
 );

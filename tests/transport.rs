@@ -11,6 +11,7 @@ use helpers::client::{Client, StatusCodeBodyError};
 use helpers::mocks::EmailServiceMock;
 use helpers::rand;
 
+use mkk_basis::transport::models::{RequestRefreshToken, ResponseRefreshToken};
 use mkk_basis::{
     adapter::db::postgres::Postgres as PostgresService,
     adapter::jwt::Jwt as JWTService,
@@ -33,6 +34,9 @@ struct ClientData {
     pool: PostgresService,
 }
 
+const ACCESS_TOKEN_TTL_SEC: i64 = 3;
+const REFRESH_TOKEN_TTL_SEC: i64 = ACCESS_TOKEN_TTL_SEC * 2;
+
 const DSN: &str =
     "postgres://postgres:postgres@127.0.0.1:5432/postgres?options=-c%20search_path%3Dmkk_basis";
 static MARKER: OnceCell<ClientData> = OnceCell::const_new();
@@ -54,7 +58,8 @@ async fn run_test_server() -> &'static ClientData {
                 .expect("failed to connect to db");
             let pg_service = PostgresService::new(pool.clone());
             let private_key = rand::private_key(32);
-            let jwt_service = JWTService::new(private_key, 10, 20);
+            let jwt_service =
+                JWTService::new(private_key, ACCESS_TOKEN_TTL_SEC, REFRESH_TOKEN_TTL_SEC);
             let use_case = UseCase::new(
                 "http://localhost.loc".to_string(),
                 pg_service.clone(),
@@ -359,6 +364,35 @@ async fn check_auth() {
     })
     .await;
 
+    // err - не верный токен
+    let mut req_refresh_token = rand::request_refresh_token();
+    cl.refresh_tokens(req_refresh_token.clone(), |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_client_error());
+    })
+    .await;
+
+    // err - подставим явно access-token
+    req_refresh_token.token = cl.access_token.clone().lock().await.to_string();
+    cl.refresh_tokens(req_refresh_token.clone(), |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_client_error());
+    })
+    .await;
+
+    // ok
+    req_refresh_token.token = cl.refresh_token.clone().lock().await.to_string();
+    cl.refresh_tokens(req_refresh_token.clone(), |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let resp_login: ResponseRefreshToken =
+            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+        assert!(!resp_login.access_token.is_empty());
+        assert!(!resp_login.refresh_token.is_empty());
+    })
+    .await;
+
     // ok
     cl.logout(|result: StatusCodeBodyError| {
         let (status_code, _body_str) = result.unwrap();
@@ -370,6 +404,24 @@ async fn check_auth() {
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await;
+
+    // залогинимся и подождем пока токен обновления не протухнет
+    cl.login(req_login.clone(), |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await;
+    sleep(Duration::from_secs(
+        REFRESH_TOKEN_TTL_SEC.cast_unsigned() + 1,
+    ))
+    .await;
+    req_refresh_token.token = cl.refresh_token.clone().lock().await.to_string();
+    cl.refresh_tokens(req_refresh_token.clone(), |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_client_error());
+    })
+    .await;
+    //\
 }
 
 #[tokio::test]
@@ -651,6 +703,7 @@ async fn check_users() {
         email: "".to_string(),
         email_code: None,
         avatar: None,
+        role: None,
         created_at: Default::default(),
         updated_at: Default::default(),
     };

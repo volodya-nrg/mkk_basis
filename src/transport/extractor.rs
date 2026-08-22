@@ -1,22 +1,23 @@
-use crate::adapter::email::EmailSender;
-use crate::usecase::UseCase;
 use axum::{
     extract::{FromRef, FromRequestParts},
     http::request::Parts,
 };
 use http::StatusCode;
-use uuid::Uuid;
 use std::marker::PhantomData;
+use uuid::Uuid;
+
+use crate::adapter::{email::EmailSender, jwt};
+use crate::usecase::UseCase;
 
 pub struct AuthenticatedUser<ES> {
     #[allow(dead_code)]
     pub user_id: Uuid,
     #[allow(dead_code)]
-    pub role: String,
+    pub role: Option<String>,
     pub _marker: PhantomData<ES>,
 }
 
-impl<S,ES> FromRequestParts<S> for AuthenticatedUser<ES>
+impl<S, ES> FromRequestParts<S> for AuthenticatedUser<ES>
 where
     S: Send + Sync,
     ES: EmailSender,
@@ -44,10 +45,14 @@ where
                 StatusCode::UNAUTHORIZED
             })?;
 
-        Ok(AuthenticatedUser {
+        if claim.token_type != jwt::TYPE_ACCESS {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+
+        Ok(Self {
             user_id: claim.sub,
             role: claim.role,
             _marker: Default::default(),
-        })  
+        })
     }
 }

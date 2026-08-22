@@ -1,7 +1,8 @@
 use mkk_basis::adapter::db::models::{Task, TaskComment, TaskHistory, Team, TeamMember, User};
 use mkk_basis::adapter::db::postgres::tables::tasks::Status as TaskStatuses;
 use mkk_basis::transport::models::{
-    RequestLogin, RequestRegister, RequestTask, RequestTeamCreate, RequestTeamInvite, RequestUser,
+    RequestLogin, RequestRefreshToken, RequestRegister, RequestTask, RequestTeamCreate,
+    RequestTeamInvite, RequestUser,
 };
 use rand::{Rng, RngExt, distr::Alphanumeric};
 use uuid::Uuid;
@@ -82,7 +83,12 @@ pub fn request_user() -> RequestUser {
         email: email(),
         password: str(),
         email_code: if bool() { Some(str()) } else { None },
+        role: if bool() { Some(str()) } else { None },
     }
+}
+
+pub fn request_refresh_token() -> RequestRefreshToken {
+    RequestRefreshToken { token: str() }
 }
 
 pub fn user() -> User {
@@ -93,6 +99,7 @@ pub fn user() -> User {
         password: str(),
         email_code: if bool() { Some(str()) } else { None },
         avatar: if bool() { Some(str()) } else { None },
+        role: if bool() { Some(str()) } else { None },
         created_at: Default::default(),
         updated_at: Default::default(),
     }

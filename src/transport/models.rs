@@ -50,12 +50,18 @@ pub struct RequestUser {
     pub password: String,
     pub name: Option<String>,
     pub email_code: Option<String>,
+    pub role: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RequestRegisterConfirm {
     pub email: Option<String>,
     pub code: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RequestRefreshToken {
+    pub token: String,
 }
 
 // ------------------------------------
@@ -126,6 +132,7 @@ pub struct ResponseUser {
     pub email: String,
     pub email_code: Option<String>,
     pub avatar: Option<String>,
+    pub role: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -134,4 +141,10 @@ pub struct ResponseUser {
 pub struct ResponseUsersList {
     pub items: Vec<ResponseUser>,
     pub total: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct ResponseRefreshToken {
+    pub access_token: String,
+    pub refresh_token: String,
 }

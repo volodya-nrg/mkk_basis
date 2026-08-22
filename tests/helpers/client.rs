@@ -1,23 +1,22 @@
-use super::rand;
 use http::StatusCode;
-use mkk_basis::adapter::db::postgres::Postgres as PostgresService;
-use mkk_basis::transport::models::{
-    RequestLimitOffset, RequestLogin, RequestRegister, RequestTask, RequestTeamCreate,
-    RequestTeamInvite, RequestUser, ResponseLogin,
-};
 use reqwest::{Certificate, Client as ReqwestClient, Identity, Response, header};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+use mkk_basis::adapter::db::postgres::Postgres as PostgresService;
+use mkk_basis::transport::models::{RequestLimitOffset, RequestLogin, RequestRefreshToken, RequestRegister, RequestTask, RequestTeamCreate, RequestTeamInvite, RequestUser, ResponseLogin, ResponseRefreshToken};
+
+use super::rand;
+
 pub type StatusCodeBodyError = Result<(StatusCode, String), String>;
 
 pub struct Client<'pg> {
     addr: String,
     client: ReqwestClient,
-    access_token: Arc<Mutex<String>>,
-    refresh_token: Arc<Mutex<String>>,
+    pub access_token: Arc<Mutex<String>>,
+    pub refresh_token: Arc<Mutex<String>>,
     pg_service: &'pg PostgresService,
 }
 
@@ -75,7 +74,7 @@ impl<'pg> Client<'pg> {
             .map_err(|e| format!("failed to read body: {:?}", e))?;
         Ok((status_code, result))
     }
-
+    
     // etc
     pub async fn index<T>(&self, mut cb: T) -> &Self
     where
@@ -306,6 +305,40 @@ impl<'pg> Client<'pg> {
             Err(e) => Err(e),
         };
 
+        cb(result);
+        self
+    }
+
+    pub async fn refresh_tokens<T>(&self, req: RequestRefreshToken, mut cb: T) -> &Self
+    where
+        T: FnMut(StatusCodeBodyError),
+    {
+        let result = self
+            .client
+            .post(format!("{}/api/v1/refresh_tokens", self.addr))
+            .json(&req)
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        };
+
+        if let Ok((status_code, body_str)) = &result
+            && status_code.is_success()
+        {
+            let resp_login: ResponseRefreshToken =
+                serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            let mut at = self.access_token.lock().await;
+            let mut rt = self.refresh_token.lock().await;
+            *at = resp_login.access_token;
+            *rt = resp_login.refresh_token;
+        }
+        
         cb(result);
         self
     }

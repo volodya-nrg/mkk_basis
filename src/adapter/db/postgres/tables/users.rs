@@ -23,6 +23,7 @@ impl Users {
                     "password".to_string(),
                     "email_code".to_string(),
                     "avatar".to_string(),
+                    "role".to_string(),
                     "created_at".to_string(),
                     "updated_at".to_string(),
                 ],
@@ -65,7 +66,7 @@ impl Users {
         tx.commit()
             .await
             .map_err(RepositoryError::TransactionError)?;
-        
+
         Ok((items, total.0))
     }
     pub async fn one(&self, item_id: Uuid) -> Result<User, RepositoryError> {
@@ -98,7 +99,7 @@ impl Users {
     }
     pub async fn create(&self, item: User) -> Result<Uuid, RepositoryError> {
         let query = format!(
-            "INSERT INTO {} (name, email, password, email_code, avatar) VALUES ($1,$2,$3,$4,$5) RETURNING user_id",
+            "INSERT INTO {} (name, email, password, email_code, avatar, role) VALUES ($1,$2,$3,$4,$5,$6) RETURNING user_id",
             self.table_basic.name,
         );
         QueryBuilder::new(query)
@@ -108,6 +109,7 @@ impl Users {
             .bind(item.password)
             .bind(item.email_code)
             .bind(item.avatar)
+            .bind(item.role)
             .fetch_one(&self.pool)
             .await
             .map_err(RepositoryError::FailedToInsert)?
@@ -116,7 +118,7 @@ impl Users {
     }
     pub async fn update(&self, item: User) -> Result<(), RepositoryError> {
         let query = format!(
-            "UPDATE {} SET name=$1, email=$2, password=$3, email_code=$4, avatar=$5 WHERE user_id=$6",
+            "UPDATE {} SET name=$1, email=$2, password=$3, email_code=$4, avatar=$5, role=$6 WHERE user_id=$7",
             self.table_basic.name,
         );
         QueryBuilder::new(query)
@@ -126,6 +128,7 @@ impl Users {
             .bind(item.password)
             .bind(item.email_code)
             .bind(item.avatar)
+            .bind(item.role)
             .bind(item.user_id)
             .execute(&self.pool)
             .await

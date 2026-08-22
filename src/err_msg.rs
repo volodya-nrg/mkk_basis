@@ -13,6 +13,9 @@ pub enum ErrMsg {
     NeedAcceptAgreement,
     NeedAcceptPrivacyPolicy,
     NotCorrectVerifyEmailCode,
+    TokenExpired,
+    TokenNotValid,
+    TokenIsNotRefresh,
 }
 impl ErrMsg {
     pub fn as_str(&self) -> String {
@@ -36,6 +39,9 @@ impl ErrMsg {
                 "необходимо принять политику конфиденциальности".to_string()
             }
             ErrMsg::NotCorrectVerifyEmailCode => "проверочный код е-мэйла не верный".to_string(),
+            ErrMsg::TokenExpired => "токен просрочен".to_string(),
+            ErrMsg::TokenNotValid => "токен не действителен".to_string(),
+            ErrMsg::TokenIsNotRefresh => "токен не является токеном обновления".to_string(),
         }
     }
 }

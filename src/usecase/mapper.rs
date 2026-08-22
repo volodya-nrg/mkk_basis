@@ -72,6 +72,7 @@ pub fn user_uc_to_user_db(item: User) -> DBUser {
         password: item.password,
         email_code: item.email_code,
         avatar: item.avatar,
+        role: item.role,
         created_at: item.created_at,
         updated_at: item.updated_at,
     }
@@ -84,6 +85,7 @@ pub fn user_db_to_user_uc(item: DBUser) -> User {
         password: item.password,
         email_code: item.email_code,
         avatar: item.avatar,
+        role: item.role,
         created_at: item.created_at,
         updated_at: item.updated_at,
     }

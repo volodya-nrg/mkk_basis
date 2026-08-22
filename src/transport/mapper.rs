@@ -66,6 +66,7 @@ pub fn user_uc_to_user_tr(item: User) -> ResponseUser {
         email: item.email,
         email_code: item.email_code,
         avatar: item.avatar,
+        role: item.role,
         created_at: item.created_at,
         updated_at: item.updated_at,
     }
@@ -79,6 +80,7 @@ pub fn user_tr_to_user_uc(item: RequestUser) -> User {
         password: item.password,
         email_code: item.email_code,
         avatar: None,
+        role: item.role,
         created_at: Default::default(),
         updated_at: Default::default(),
     }

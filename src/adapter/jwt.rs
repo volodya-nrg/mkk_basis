@@ -4,24 +4,24 @@ use jsonwebtoken::{
     errors::ErrorKind as JWTErrorKind,
 };
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use thiserror::Error as ThisError;
+use uuid::Uuid;
 
-const TYPE_ACCESS: &str = "access";
-const TYPE_REFRESH: &str = "refresh";
+pub const TYPE_ACCESS: &str = "access";
+pub const TYPE_REFRESH: &str = "refresh";
 
 #[derive(ThisError, Debug)]
-pub enum Error {
+pub enum JWTError {
     #[error("expired token")]
     ExpiredToken,
     #[error("{0}")]
     Common(String),
 }
-impl From<jsonwebtoken::errors::Error> for Error {
+impl From<jsonwebtoken::errors::Error> for JWTError {
     fn from(value: jsonwebtoken::errors::Error) -> Self {
         match value.kind() {
-            JWTErrorKind::ExpiredSignature => Error::ExpiredToken,
-            _ => Error::Common(value.to_string()),
+            JWTErrorKind::ExpiredSignature => JWTError::ExpiredToken,
+            _ => JWTError::Common(value.to_string()),
         }
     }
 }
@@ -32,7 +32,7 @@ pub struct AccessClaims {
     pub exp: usize,
     pub iat: usize,
     pub token_type: String,
-    pub role: String,
+    pub role: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -61,7 +61,7 @@ impl Jwt {
             refresh_expire_secs,
         }
     }
-    pub fn generate_access_token(&self, user_id: Uuid, role: String) -> Result<String, Error> {
+    pub fn generate_access_token(&self, user_id: Uuid, role: Option<String>) -> Result<String, JWTError> {
         let now = Utc::now();
         let expire = now + Duration::seconds(self.access_expire_secs);
         encode(
@@ -75,9 +75,9 @@ impl Jwt {
             },
             &EncodingKey::from_secret(self.private_key_bytes.as_slice()),
         )
-        .map_err(|e| Error::Common(e.to_string()))
+        .map_err(|e| JWTError::Common(e.to_string()))
     }
-    pub fn generate_refresh_token(&self, user_id: Uuid) -> Result<String, Error> {
+    pub fn generate_refresh_token(&self, user_id: Uuid) -> Result<String, JWTError> {
         let now = Utc::now();
         let expire = now + Duration::seconds(self.refresh_expire_secs);
         encode(
@@ -90,9 +90,9 @@ impl Jwt {
             },
             &EncodingKey::from_secret(self.private_key_bytes.as_slice()),
         )
-        .map_err(|e| Error::Common(e.to_string()))
+        .map_err(|e| JWTError::Common(e.to_string()))
     }
-    pub fn validate_access_token(&self, token: String) -> Result<AccessClaims, Error> {
+    pub fn validate_access_token(&self, token: String) -> Result<AccessClaims, JWTError> {
         decode::<AccessClaims>(
             token,
             &DecodingKey::from_secret(self.private_key_bytes.as_slice()),
@@ -102,7 +102,7 @@ impl Jwt {
         .map_err(|e| e.into())
     }
     #[allow(dead_code)]
-    pub fn validate_refresh_token(&self, token: String) -> Result<RefreshClaims, Error> {
+    pub fn validate_refresh_token(&self, token: String) -> Result<RefreshClaims, JWTError> {
         decode::<RefreshClaims>(
             token,
             &DecodingKey::from_secret(self.private_key_bytes.as_slice()),
@@ -141,7 +141,7 @@ mod tests {
         let user_id = Uuid::new_v4();
 
         let access_token = jwt
-            .generate_access_token(user_id, ROLE_ADMIN.to_string())
+            .generate_access_token(user_id, Some(ROLE_ADMIN.to_string()))
             .unwrap();
         assert!(!access_token.is_empty());
 
@@ -151,7 +151,8 @@ mod tests {
         let access_claims = jwt.validate_access_token(access_token.clone()).unwrap();
         assert_eq!(TYPE_ACCESS, access_claims.token_type);
         assert_eq!(user_id, access_claims.sub);
-        assert_eq!(ROLE_ADMIN, access_claims.role);
+        assert!(access_claims.role.is_some());
+        assert_eq!(ROLE_ADMIN, access_claims.role.unwrap());
 
         let refresh_claims = jwt.validate_refresh_token(refresh_token.clone()).unwrap();
         assert_eq!(TYPE_REFRESH, refresh_claims.token_type);
@@ -162,11 +163,11 @@ mod tests {
 
         assert_matches!(
             jwt.validate_access_token(access_token.clone()),
-            Err(Error::ExpiredToken),
+            Err(JWTError::ExpiredToken),
         );
         assert_matches!(
             jwt.validate_refresh_token(refresh_token.clone()),
-            Err(Error::ExpiredToken),
+            Err(JWTError::ExpiredToken),
         );
     }
 }

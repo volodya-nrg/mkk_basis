@@ -1,5 +1,8 @@
 use super::{UseCaseError, helpers, mapper, models::User};
-use crate::adapter::{db::RepositoryError, db::postgres::tables::users::Users as UsersRepo};
+use crate::adapter::{
+    db::RepositoryError, db::models::User as DBUser,
+    db::postgres::tables::users::Users as UsersRepo,
+};
 use http::StatusCode;
 use uuid::Uuid;
 
@@ -38,25 +41,25 @@ impl Users {
         let password_hash = helpers::password_hash(&user.password)
             .map_err(|e| UseCaseError::Common(format!("failed to create password hash: {e}")))?;
         user.password = password_hash;
-        
+
         let new_uuid = self
             .users_repo
             .create(mapper::user_uc_to_user_db(user))
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))?;
-        
+
         Ok(new_uuid)
     }
     pub async fn update(&self, mut user: User) -> Result<(), UseCaseError> {
         let password_hash = helpers::password_hash(&user.password)
             .map_err(|e| UseCaseError::Common(format!("failed to create password hash: {e}")))?;
         user.password = password_hash;
-        
+
         self.users_repo
             .update(mapper::user_uc_to_user_db(user))
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to update: {e}")))?;
-        
+
         Ok(())
     }
     pub async fn delete(&self, user_id: Uuid) -> Result<(), UseCaseError> {

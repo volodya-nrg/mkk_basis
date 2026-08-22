@@ -7,7 +7,10 @@ use serde_json::json;
 use crate::adapter::email::EmailSender;
 use crate::transport::{
     extractor::AuthenticatedUser,
-    models::{RequestLogin, RequestRegister, RequestRegisterConfirm, ResponseLogin, ResponseUUID},
+    models::{
+        RequestLogin, RequestRegister, RequestRegisterConfirm, ResponseLogin,
+        ResponseRefreshToken, RequestRefreshToken, ResponseUUID,
+    },
 };
 use crate::usecase::UseCase;
 
@@ -82,6 +85,24 @@ impl Handlers {
             e.into_response()
         } else {
             StatusCode::OK.into_response()
+        }
+    }
+    pub async fn refresh_tokens<ES>(
+        State(use_case): State<UseCase<ES>>,
+        Json(payload): Json<RequestRefreshToken>,
+    ) -> impl IntoResponse
+    where
+        ES: EmailSender,
+    {
+        match use_case.auth.refresh_tokens(payload.token.to_string()).await {
+            Ok((access_token, refresh_token)) => {
+                let resp = ResponseRefreshToken {
+                    access_token: access_token.to_string(),
+                    refresh_token: refresh_token.to_string(),
+                };
+                (StatusCode::OK, Json(resp)).into_response()
+            }
+            Err(e) => e.into_response(),
         }
     }
 }

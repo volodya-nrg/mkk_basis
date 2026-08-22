@@ -2,8 +2,11 @@ use http::StatusCode;
 use uuid::Uuid;
 
 use crate::adapter::{
-    db::RepositoryError, db::postgres::tables::users::Users as UsersRepo, email::EmailSender,
-    helpers as HelpersService, jwt::Jwt as JWTService,
+    db::RepositoryError,
+    db::postgres::tables::users::Users as UsersRepo,
+    email::EmailSender,
+    helpers as HelpersService,
+    jwt::{JWTError, Jwt as JWTService, TYPE_REFRESH},
 };
 use crate::consts;
 use crate::err_msg::ErrMsg;
@@ -85,7 +88,7 @@ impl<ES: EmailSender> Auth<ES> {
         );
         let email_subject = format!("Confirm email from {}", self.addr);
         let email_message = format!("Confirm email: <a href=\"{}\">{}</a>", link, link);
-        
+
         let result = self
             .users_repo
             .create(mapper::user_uc_to_user_db(User {
@@ -95,6 +98,7 @@ impl<ES: EmailSender> Auth<ES> {
                 password: password_hash.to_string(),
                 email_code: Some(code.clone()),
                 avatar: None,
+                role: None,
                 created_at: Default::default(),
                 updated_at: Default::default(),
             }))
@@ -226,7 +230,7 @@ impl<ES: EmailSender> Auth<ES> {
 
         let access_token = self
             .jwt_service
-            .generate_access_token(user.user_id, "".to_string())
+            .generate_access_token(user.user_id, user.role)
             .map_err(|e| UseCaseError::Common(e.to_string()))?;
         let refresh_token = self
             .jwt_service
@@ -237,5 +241,55 @@ impl<ES: EmailSender> Auth<ES> {
     }
     pub async fn logout(&self) -> Result<(), UseCaseError> {
         Ok(())
+    }
+    pub async fn refresh_tokens(&self, token: String) -> Result<(String, String), UseCaseError> {
+        let claims = self
+            .jwt_service
+            .validate_refresh_token(token)
+            .map_err(|e| match e {
+                JWTError::ExpiredToken => UseCaseError::ForTransport {
+                    status_code: StatusCode::BAD_REQUEST,
+                    public_err: ErrMsg::TokenExpired.as_str(),
+                    internal_err: None,
+                },
+                _ => UseCaseError::ForTransport {
+                    status_code: StatusCode::BAD_REQUEST,
+                    public_err: ErrMsg::TokenNotValid.as_str(),
+                    internal_err: None,
+                },
+            })?;
+        if claims.token_type != TYPE_REFRESH {
+            return Err(UseCaseError::ForTransport {
+                status_code: StatusCode::BAD_REQUEST,
+                public_err: ErrMsg::TokenIsNotRefresh.as_str(),
+                internal_err: None,
+            });
+        }
+
+        let result = self.users_repo.one(claims.sub.clone()).await;
+        let user = match result {
+            Ok(v) => v,
+            Err(e) => {
+                if let RepositoryError::NotFoundRow = e {
+                    return Err(UseCaseError::ForTransport {
+                        status_code: StatusCode::BAD_REQUEST,
+                        public_err: ErrMsg::NotFoundUser.as_str(),
+                        internal_err: None,
+                    });
+                }
+                return Err(UseCaseError::Common(e.to_string()));
+            }
+        };
+
+        let access_token = self
+            .jwt_service
+            .generate_access_token(user.user_id, user.role)
+            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+        let new_refresh_token = self
+            .jwt_service
+            .generate_refresh_token(user.user_id)
+            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+
+        Ok((access_token, new_refresh_token)) // чтоб пользователь максимально не логинился больше в системе, генерируем новый токен обновления
     }
 }

@@ -67,6 +67,7 @@ impl<ES: EmailSender> HTTPServer<ES> {
             .route("/api/v1/register", post(auth::Handlers::register))
             .route("/api/v1/login", post(auth::Handlers::login))
             .route("/api/v1/logout", post(auth::Handlers::logout))
+            .route("/api/v1/refresh_tokens", post(auth::Handlers::refresh_tokens))
             // teams
             .route(
                 "/api/v1/teams",
