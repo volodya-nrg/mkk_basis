@@ -31,7 +31,7 @@ pub fn team_tr_to_team_uc(req: RequestTeam) -> Team {
     Team {
         team_id: Uuid::nil(),
         name: req.name,
-        created_by: req.created_by,
+        created_by: Uuid::nil(),
         created_at: Default::default(),
         updated_at: Default::default(),
     }

@@ -26,7 +26,6 @@ pub struct RequestLimitOffset {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RequestTeam {
     pub name: String,
-    pub created_by: Uuid,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

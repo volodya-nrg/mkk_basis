@@ -5,6 +5,7 @@ use crate::adapter::{
 };
 use http::StatusCode;
 use uuid::Uuid;
+use crate::err_msg::ErrMsg;
 
 #[derive(Clone)] // из-за axum-state
 pub struct Users {
@@ -30,7 +31,7 @@ impl Users {
         let user_db = self.users_repo.one(item_id).await.map_err(|e| match e {
             RepositoryError::NotFoundRow => UseCaseError::ForTransport {
                 status_code: StatusCode::NOT_FOUND,
-                public_err: "item not found".to_string(),
+                public_err: ErrMsg::NotFoundItem.as_str(),
                 internal_err: None,
             },
             other => UseCaseError::Common(other.to_string()),

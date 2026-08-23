@@ -14,6 +14,7 @@ use helpers::rand;
 use mkk_basis::transport::models::ResponseRefreshToken;
 use mkk_basis::{
     adapter::db::postgres::Postgres as PostgresService,
+    adapter::db::postgres::tables::users::Role as UsersRole,
     adapter::jwt::Jwt as JWTService,
     adapter::logger as LoggerService,
     consts, transport,
@@ -500,15 +501,8 @@ async fn check_teams() {
     })
     .await;
 
-    // err: пользователя нет
+    // ok
     cl.teams_create(req_team.clone(), |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap();
-        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status_code);
-
-        req_team.created_by = user_id;
-    })
-    .await // ок
-    .teams_create(req_team.clone(), |result: StatusCodeBodyError| {
         let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
         assert!(status_code.is_success());
 
@@ -566,25 +560,214 @@ async fn check_teams() {
         assert_eq!(req_team.name, resp.name)
     })
     .await // ok
-    .teams_invite(
-        team_id,
-        RequestTeamInvite { user_id },
+    .teams_delete(team_id, |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await
+    .teams_one(team_id, |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::NOT_FOUND, status_code);
+    })
+    .await;
+
+    // проверим приглашения
+    let mut admin_id = Uuid::nil();
+    let mut owner_id = Uuid::nil();
+    let mut other_id = Uuid::nil();
+    let req_register_admin = rand::request_register();
+    let req_register_owner = rand::request_register();
+    let req_register_other = rand::request_register();
+
+    // создадим admin, owner, other
+    cl.register(
+        req_register_admin.clone(),
+        true,
+        |result: StatusCodeBodyError| {
+            let (status_code, body_str) = result.unwrap();
+            assert!(status_code.is_success());
+
+            let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            admin_id = resp.uuid;
+        },
+    )
+    .await
+    .register(
+        req_register_owner.clone(),
+        true,
+        |result: StatusCodeBodyError| {
+            let (status_code, body_str) = result.unwrap();
+            assert!(status_code.is_success());
+
+            let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            owner_id = resp.uuid;
+        },
+    )
+    .await
+    .register(
+        req_register_other.clone(),
+        true,
+        |result: StatusCodeBodyError| {
+            let (status_code, body_str) = result.unwrap();
+            assert!(status_code.is_success());
+
+            let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            other_id = resp.uuid;
+        },
+    )
+    .await;
+
+    // TODO не удобно чуть назначать права, обновлять пользователя
+    // дадим права админу
+    let mut admin = rand::request_user();
+    cl.users_one(admin_id, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let resp: ResponseUser = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        admin.name = resp.name;
+        admin.password = req_register_admin.password.clone();
+        admin.email = resp.email;
+        admin.email_code = resp.email_code;
+        admin.role = Some(UsersRole::Admin.as_str());
+    })
+    .await
+    .users_update(admin_id, admin, None, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await;
+
+    // зайдем под owner и создадим команду
+    let mut team_id = Uuid::nil();
+    cl.login(
+        RequestLogin {
+            email: req_register_owner.email.clone(),
+            password: req_register_owner.password.clone(),
+        },
         |result: StatusCodeBodyError| {
             let (status_code, _body_str) = result.unwrap();
             assert!(status_code.is_success());
         },
     )
-    .await // err
+    .await
+    .teams_create(rand::request_team(), |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        assert!(status_code.is_success());
+
+        let resp: ResponseTeam = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        team_id = resp.team_id;
+    })
+    .await
+    .logout(|result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await;
+
+    // зайдем под other и пригласим кого-то, но у него нет доступа
+    cl.login(
+        RequestLogin {
+            email: req_register_other.email,
+            password: req_register_other.password,
+        },
+        |result: StatusCodeBodyError| {
+            let (status_code, _body_str) = result.unwrap();
+            assert!(status_code.is_success());
+        },
+    )
+    .await
     .teams_invite(
-        Uuid::new_v4(),
-        RequestTeamInvite { user_id },
+        team_id,
+        RequestTeamInvite { user_id: owner_id },
+        |result: StatusCodeBodyError| {
+            let (status_code, _body_str) = result.unwrap();
+            assert_eq!(StatusCode::FORBIDDEN, status_code);
+        },
+    )
+    .await
+    .logout(|result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await;
+
+    // зайдем под owner и пригласим admin
+    cl.login(
+        RequestLogin {
+            email: req_register_owner.email.clone(),
+            password: req_register_owner.password.clone(),
+        },
+        |result: StatusCodeBodyError| {
+            let (status_code, _body_str) = result.unwrap();
+            assert!(status_code.is_success());
+        },
+    )
+    .await
+    .teams_invite(
+        team_id,
+        RequestTeamInvite { user_id: admin_id },
+        |result: StatusCodeBodyError| {
+            let (status_code, _body_str) = result.unwrap();
+            assert!(status_code.is_success());
+        },
+    )
+    .await
+    .logout(|result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await;
+
+    // зайдем под admin и пригласим owner
+    cl.login(
+        RequestLogin {
+            email: req_register_admin.email,
+            password: req_register_admin.password,
+        },
+        |result: StatusCodeBodyError| {
+            let (status_code, _body_str) = result.unwrap();
+            assert!(status_code.is_success());
+        },
+    )
+    .await
+    .teams_invite(
+        team_id,
+        RequestTeamInvite { user_id: owner_id },
+        |result: StatusCodeBodyError| {
+            let (status_code, _body_str) = result.unwrap();
+            assert!(status_code.is_success());
+        },
+    )
+    .await // выйдем
+    .logout(|result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await;
+
+    // зайдем под owner и пригласим себя же, будет ошибка, т.к. он уже есть среди приглашенных
+    cl.login(
+        RequestLogin {
+            email: req_register_owner.email,
+            password: req_register_owner.password,
+        },
+        |result: StatusCodeBodyError| {
+            let (status_code, _body_str) = result.unwrap();
+            assert!(status_code.is_success());
+        },
+    )
+    .await
+    .teams_invite(
+        team_id,
+        RequestTeamInvite { user_id: owner_id },
         |result: StatusCodeBodyError| {
             let (status_code, _body_str) = result.unwrap();
             assert!(status_code.is_server_error());
         },
     )
     .await
-    .teams_delete(team_id, |result: StatusCodeBodyError| {
+    .logout(|result: StatusCodeBodyError| {
         let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_success());
     })
@@ -606,7 +789,7 @@ async fn check_tasks() {
     let mut team_id = Uuid::nil();
     let mut task1_id = Uuid::nil();
     let req_register = rand::request_register();
-    let mut req_team_create = rand::request_team();
+    let req_team = rand::request_team();
     let mut req_task1 = rand::request_task();
     let mut req_task2 = rand::request_task();
     let req_login = RequestLogin {
@@ -657,7 +840,6 @@ async fn check_tasks() {
 
         let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         user_id = resp.uuid;
-        req_team_create.created_by = user_id;
     })
     .await
     .login(req_login, |result: StatusCodeBodyError| {
@@ -665,7 +847,7 @@ async fn check_tasks() {
         assert!(status_code.is_success());
     })
     .await
-    .teams_create(req_team_create, |result: StatusCodeBodyError| {
+    .teams_create(req_team, |result: StatusCodeBodyError| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 

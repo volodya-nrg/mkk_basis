@@ -53,18 +53,17 @@ impl Handlers {
         }
     }
     pub async fn create<ES>(
-        _user: AuthenticatedUser<ES>,
+        user: AuthenticatedUser<ES>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestTeam>,
     ) -> impl IntoResponse
     where
         ES: EmailSender,
     {
-        let result = use_case
-            .teams
-            .create(mapper::team_tr_to_team_uc(payload))
-            .await;
-        let new_uuid = match result {
+        let mut team_uc = mapper::team_tr_to_team_uc(payload);
+        team_uc.created_by = user.user_id; // зададим id профиля
+
+        let new_uuid = match use_case.teams.create(team_uc).await {
             Ok(v) => v,
             Err(e) => return e.into_response(),
         };
@@ -115,7 +114,7 @@ impl Handlers {
         }
     }
     pub async fn invite<ES>(
-        _user: AuthenticatedUser<ES>,
+        user: AuthenticatedUser<ES>,
         State(use_case): State<UseCase<ES>>,
         Path(team_id): Path<Uuid>,
         Json(payload): Json<RequestTeamInvite>,
@@ -123,7 +122,11 @@ impl Handlers {
     where
         ES: EmailSender,
     {
-        if let Err(e) = use_case.teams.invite(team_id, payload.user_id).await {
+        if let Err(e) = use_case
+            .teams
+            .invite(user.user_id, user.role, team_id, payload.user_id)
+            .await
+        {
             e.into_response()
         } else {
             StatusCode::OK.into_response()

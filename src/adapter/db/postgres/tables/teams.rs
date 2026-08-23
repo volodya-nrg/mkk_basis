@@ -95,13 +95,12 @@ impl Teams {
     #[allow(dead_code)]
     pub async fn update(&self, item: Team) -> Result<(), RepositoryError> {
         let query = format!(
-            "UPDATE {} SET name=$1, created_by=$2 WHERE team_id=$3",
+            "UPDATE {} SET name=$1 WHERE team_id=$2", // создателя не меняем
             self.table_basic.name,
         );
         QueryBuilder::new(query)
             .build()
             .bind(item.name)
-            .bind(item.created_by)
             .bind(item.team_id)
             .execute(&self.pool)
             .await

@@ -9,6 +9,7 @@ pub enum ErrMsg {
     PasswordsNotEquals,
     PasswordIsShort,
     NotFoundUser,
+    NotFoundItem,
     LoginOrPasswordNotCorrect,
     NeedAcceptAgreement,
     NeedAcceptPrivacyPolicy,
@@ -16,6 +17,7 @@ pub enum ErrMsg {
     TokenExpired,
     TokenNotValid,
     TokenIsNotRefresh,
+    NoRules,
 }
 impl ErrMsg {
     pub fn as_str(&self) -> String {
@@ -33,6 +35,7 @@ impl ErrMsg {
                 )
             }
             ErrMsg::NotFoundUser => "такой пользователь не найден".to_string(),
+            ErrMsg::NotFoundItem => "запись не найдена".to_string(),
             ErrMsg::LoginOrPasswordNotCorrect => "логин или пароль не верные".to_string(),
             ErrMsg::NeedAcceptAgreement => "необходимо принять условия оферты".to_string(),
             ErrMsg::NeedAcceptPrivacyPolicy => {
@@ -42,6 +45,7 @@ impl ErrMsg {
             ErrMsg::TokenExpired => "токен просрочен".to_string(),
             ErrMsg::TokenNotValid => "токен не действителен".to_string(),
             ErrMsg::TokenIsNotRefresh => "токен не является токеном обновления".to_string(),
+            ErrMsg::NoRules => "у вас нет прав на данное действие".to_string(),
         }
     }
 }

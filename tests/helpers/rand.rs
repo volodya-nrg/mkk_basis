@@ -56,7 +56,6 @@ pub fn request_login() -> RequestLogin {
 pub fn request_team() -> RequestTeam {
     RequestTeam {
         name: str(),
-        created_by: Uuid::new_v4(),
     }
 }
 

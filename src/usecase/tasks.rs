@@ -8,6 +8,7 @@ use crate::adapter::{
         task_histories::TaskHistories as TaskHistoriesRepo, tasks::Tasks as TasksRepo,
     },
 };
+use crate::err_msg::ErrMsg;
 use http::StatusCode;
 use uuid::Uuid;
 
@@ -24,11 +25,7 @@ impl Tasks {
             task_histories_repo,
         }
     }
-    pub async fn list(
-        &self,
-        limit: i32,
-        offset: i32,
-    ) -> Result<(Vec<Task>, i64), UseCaseError> {
+    pub async fn list(&self, limit: i32, offset: i32) -> Result<(Vec<Task>, i64), UseCaseError> {
         let (items, total) = self
             .tasks_repo
             .list(limit, offset)
@@ -43,7 +40,7 @@ impl Tasks {
         let task_db = self.tasks_repo.one(item_id).await.map_err(|e| match e {
             RepositoryError::NotFoundRow => UseCaseError::ForTransport {
                 status_code: StatusCode::NOT_FOUND,
-                public_err: "item not found".to_string(),
+                public_err: ErrMsg::NotFoundItem.as_str(),
                 internal_err: None,
             },
             other => UseCaseError::Common(other.to_string()),

@@ -6,8 +6,10 @@ use crate::adapter::{
     db::RepositoryError,
     db::postgres::tables::{
         team_members::TeamMembers as TeamMembersRepo, teams::Teams as TeamsRepo,
+        users::Role as UserRole,
     },
 };
+use crate::err_msg::ErrMsg;
 
 use http::StatusCode;
 use uuid::Uuid;
@@ -40,7 +42,7 @@ impl Teams {
         let team_db = self.teams_repo.one(item_id).await.map_err(|e| match e {
             RepositoryError::NotFoundRow => UseCaseError::ForTransport {
                 status_code: StatusCode::NOT_FOUND,
-                public_err: "item not found".to_string(),
+                public_err: ErrMsg::NotFoundItem.as_str(),
                 internal_err: None,
             },
             other => UseCaseError::Common(other.to_string()),
@@ -70,8 +72,38 @@ impl Teams {
         Ok(())
     }
     // invite. Пригласить может только owner или admin.
-    pub async fn invite(&self, team_id: Uuid, user_id: Uuid) -> Result<(), UseCaseError> {
-        // TODO надо сделать авторизацию, чтоб можно было узнать кто приглашает
+    pub async fn invite(
+        &self,
+        profile_id: Uuid,
+        profile_role: Option<String>,
+        team_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), UseCaseError> {
+        let mut is_access = false;
+
+        if let Some(role) = profile_role
+            && role == UserRole::Admin.as_str()
+        {
+            is_access = true;
+        } else {
+            let team = self
+                .teams_repo
+                .one(team_id)
+                .await
+                .map_err(|e| UseCaseError::Common(format!("failed to get: {e}")))?;
+            if team.created_by == profile_id {
+                is_access = true;
+            }
+        }
+
+        if !is_access {
+            return Err(UseCaseError::ForTransport {
+                status_code: StatusCode::FORBIDDEN,
+                public_err: ErrMsg::NoRules.as_str(),
+                internal_err: None,
+            });
+        }
+
         self.team_members_repo
             .create(mapper::team_member_uc_to_team_member_db(TeamMember {
                 team_id,

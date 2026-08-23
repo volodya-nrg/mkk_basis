@@ -3,6 +3,17 @@ use uuid::Uuid;
 
 use crate::adapter::db::{RepositoryError, models::User, postgres::table_basic::TableBasic};
 
+pub enum Role {
+    Admin,
+}
+impl Role {
+    pub fn as_str(&self) -> String {
+        match self {
+            Role::Admin => "admin".to_string(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Users {
     pool: Pool<Postgres>,
