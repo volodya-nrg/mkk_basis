@@ -44,7 +44,7 @@ pub struct RequestTask {
     pub status: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct RequestUser {
     pub email: String,
     pub password: String,

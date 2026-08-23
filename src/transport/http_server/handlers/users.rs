@@ -1,3 +1,13 @@
+use axum::Json;
+use axum::body::Bytes;
+use axum::extract::multipart::Field;
+use axum::extract::{Multipart, Path, State};
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use lettre::transport::smtp::client::CertificateStore::Default;
+use serde_json::json;
+use uuid::Uuid;
+
 use crate::adapter::email::EmailSender;
 use crate::transport::{
     extractor::AuthenticatedUser,
@@ -6,12 +16,7 @@ use crate::transport::{
 };
 use crate::usecase::UseCase;
 
-use axum::Json;
-use axum::extract::{Path, State};
-use axum::http::StatusCode;
-use axum::response::IntoResponse;
-use serde_json::json;
-use uuid::Uuid;
+const MAX_FILE_SIZE: usize = 10 * 1024 * 1024; // 10 MB
 
 pub struct Handlers {}
 
@@ -55,13 +60,18 @@ impl Handlers {
         _user: AuthenticatedUser<ES>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestUser>,
+        // multipart: Multipart,
     ) -> impl IntoResponse
     where
         ES: EmailSender,
     {
+        // let (user_data, file_data) = match handle_multipart(multipart).await {
+        //     Ok(v) => v,
+        //     Err(e) => return e.into_response(),
+        // };
         let result = use_case
             .users
-            .create(mapper::user_tr_to_user_uc(payload))
+            .create(mapper::user_tr_to_user_uc(payload), vec![])
             .await;
         let new_uuid = match result {
             Ok(v) => v,
@@ -80,14 +90,20 @@ impl Handlers {
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestUser>,
+        // multipart: Multipart,
     ) -> impl IntoResponse
     where
         ES: EmailSender,
     {
+        // let (user_data, file_data) = match handle_multipart(multipart).await {
+        //     Ok(v) => v,
+        //     Err(e) => return e.into_response(),
+        // };
+
         let mut uc_user = mapper::user_tr_to_user_uc(payload);
         uc_user.user_id = item_id;
 
-        if let Err(e) = use_case.users.update(uc_user).await {
+        if let Err(e) = use_case.users.update(uc_user, vec![]).await {
             return e.into_response();
         }
 
@@ -113,4 +129,42 @@ impl Handlers {
             StatusCode::OK.into_response()
         }
     }
+}
+
+async fn handle_multipart(mut multipart: Multipart) -> Result<(RequestUser, Vec<u8>), StatusCode> {
+    let mut user_data = RequestUser {
+        email: "".to_string(),
+        password: "".to_string(),
+        name: None,
+        email_code: None,
+        role: None,
+    };
+    let mut file_data: Vec<u8> = Vec::new();
+
+    while let field_result = multipart.next_field().await {
+        let field = match field_result {
+            Ok(v) => match v {
+                Some(field_loc) => field_loc,
+                None => continue,
+            },
+            Err(e) => {
+                log::error!("failed to handle multipart-data: {}", e);
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        };
+
+        // берем только два поля
+        match field.name() {
+            Some("user_data") => {
+                let bytes = field.bytes().await.unwrap_or_default();
+                user_data = serde_json::from_slice(&bytes).unwrap_or_default();
+            }
+            Some("avatar") => {
+                file_data = field.bytes().await.unwrap_or_default().to_vec();
+            }
+            _ => {}
+        }
+    }
+
+    Ok((user_data, file_data))
 }

@@ -1,12 +1,15 @@
 use http::StatusCode;
-use reqwest::{Certificate, Client as ReqwestClient, Identity, Response, header};
+use reqwest::{Certificate, Client as ReqwestClient, Identity, Response, header, multipart::Form};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use mkk_basis::adapter::db::postgres::Postgres as PostgresService;
-use mkk_basis::transport::models::{RequestLimitOffset, RequestLogin, RequestRefreshToken, RequestRegister, RequestTask, RequestTeamCreate, RequestTeamInvite, RequestUser, ResponseLogin, ResponseRefreshToken};
+use mkk_basis::transport::models::{
+    RequestLimitOffset, RequestLogin, RequestRefreshToken, RequestRegister, RequestTask,
+    RequestTeamCreate, RequestTeamInvite, RequestUser, ResponseLogin, ResponseRefreshToken,
+};
 
 use super::rand;
 
@@ -74,7 +77,7 @@ impl<'pg> Client<'pg> {
             .map_err(|e| format!("failed to read body: {:?}", e))?;
         Ok((status_code, result))
     }
-    
+
     // etc
     pub async fn index<T>(&self, mut cb: T) -> &Self
     where
@@ -338,7 +341,7 @@ impl<'pg> Client<'pg> {
             *at = resp_login.access_token;
             *rt = resp_login.refresh_token;
         }
-        
+
         cb(result);
         self
     }
@@ -553,14 +556,26 @@ impl<'pg> Client<'pg> {
         cb(result);
         self
     }
-    pub async fn users_create<T>(&self, req: RequestUser, mut cb: T) -> &Self
+    pub async fn users_create<T>(
+        &self,
+        req: RequestUser,
+        filepath: Option<String>,
+        mut cb: T,
+    ) -> &Self
     where
         T: FnMut(StatusCodeBodyError),
     {
+        // let mut form = Form::new().text("user_data", serde_json::to_string(&req).unwrap());
+        //
+        // if let Some(v) = filepath {
+        //     form = form.file("avatar", v).await.unwrap();
+        // }
+
         let result = self
             .client
             .post(format!("{}/api/v1/users", self.addr))
             .headers(self.headers().await)
+            // .multipart(form)
             .json(&req)
             .send()
             .await
@@ -576,14 +591,27 @@ impl<'pg> Client<'pg> {
         cb(result);
         self
     }
-    pub async fn users_update<T>(&self, user_id: Uuid, req: RequestUser, mut cb: T) -> &Self
+    pub async fn users_update<T>(
+        &self,
+        user_id: Uuid,
+        req: RequestUser,
+        filepath: Option<String>,
+        mut cb: T,
+    ) -> &Self
     where
         T: FnMut(StatusCodeBodyError),
     {
+        // let mut form = Form::new().text("user_data", serde_json::to_string(&req).unwrap());
+        //
+        // if let Some(v) = filepath {
+        //     form = form.file("avatar", v).await.unwrap();
+        // }
+
         let result = self
             .client
             .put(format!("{}/api/v1/users/{}", self.addr, user_id))
             .headers(self.headers().await)
+            // .multipart(form)
             .json(&req)
             .send()
             .await

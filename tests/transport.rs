@@ -714,7 +714,7 @@ async fn check_users() {
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await
-    .users_create(rand::request_user(), |result: StatusCodeBodyError| {
+    .users_create(rand::request_user(), None, |result: StatusCodeBodyError| {
         let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
@@ -722,6 +722,7 @@ async fn check_users() {
     .users_update(
         Uuid::new_v4(),
         rand::request_user(),
+        None,
         |result: StatusCodeBodyError| {
             let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
             assert_eq!(StatusCode::UNAUTHORIZED, status_code);
@@ -764,13 +765,14 @@ async fn check_users() {
     .users_update(
         Uuid::new_v4(),
         rand::request_user(),
+        None,
         |result: StatusCodeBodyError| {
             let (status_code, _body_str) = result.unwrap();
             assert!(status_code.is_server_error()); // TODO тут под вопросом 404 надо присылать или 500
         },
     )
     .await // ok: создадим успешно
-    .users_create(req_user1.clone(), |result: StatusCodeBodyError| {
+    .users_create(req_user1.clone(), None, |result: StatusCodeBodyError| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
@@ -789,7 +791,7 @@ async fn check_users() {
         assert!(status_code.is_success());
     })
     .await // ok: обновим успешно
-    .users_update(user_id, req_user2.clone(), |result: StatusCodeBodyError| {
+    .users_update(user_id, req_user2.clone(), None, |result: StatusCodeBodyError| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 

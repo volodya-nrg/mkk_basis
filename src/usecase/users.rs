@@ -37,7 +37,7 @@ impl Users {
         })?;
         Ok(mapper::user_db_to_user_uc(user_db))
     }
-    pub async fn create(&self, mut user: User) -> Result<Uuid, UseCaseError> {
+    pub async fn create(&self, mut user: User, file_data: Vec<u8>) -> Result<Uuid, UseCaseError> {
         let password_hash = helpers::password_hash(&user.password)
             .map_err(|e| UseCaseError::Common(format!("failed to create password hash: {e}")))?;
         user.password = password_hash;
@@ -50,7 +50,7 @@ impl Users {
 
         Ok(new_uuid)
     }
-    pub async fn update(&self, mut user: User) -> Result<(), UseCaseError> {
+    pub async fn update(&self, mut user: User, file_data: Vec<u8>) -> Result<(), UseCaseError> {
         let password_hash = helpers::password_hash(&user.password)
             .map_err(|e| UseCaseError::Common(format!("failed to create password hash: {e}")))?;
         user.password = password_hash;
