@@ -8,7 +8,7 @@ use crate::adapter::{
         team_members::TeamMembers as TeamMembersRepo, teams::Teams as TeamsRepo,
     },
 };
-use crate::usecase::models::Task;
+
 use http::StatusCode;
 use uuid::Uuid;
 
