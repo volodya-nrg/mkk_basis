@@ -1,7 +1,7 @@
 use mkk_basis::adapter::db::models::{Task, TaskComment, TaskHistory, Team, TeamMember, User};
 use mkk_basis::adapter::db::postgres::tables::tasks::Status as TaskStatuses;
 use mkk_basis::transport::models::{
-    RequestLogin, RequestRefreshToken, RequestRegister, RequestTask, RequestTeamCreate,
+    RequestLogin, RequestRefreshToken, RequestRegister, RequestTask, RequestTeam,
     RequestTeamInvite, RequestUser,
 };
 use rand::{Rng, RngExt, distr::Alphanumeric};
@@ -53,8 +53,8 @@ pub fn request_login() -> RequestLogin {
     }
 }
 
-pub fn request_team_create() -> RequestTeamCreate {
-    RequestTeamCreate {
+pub fn request_team() -> RequestTeam {
+    RequestTeam {
         name: str(),
         created_by: Uuid::new_v4(),
     }

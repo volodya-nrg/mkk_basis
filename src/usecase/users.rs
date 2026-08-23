@@ -26,8 +26,8 @@ impl Users {
             total,
         ))
     }
-    pub async fn one(&self, user_id: Uuid) -> Result<User, UseCaseError> {
-        let user_db = self.users_repo.one(user_id).await.map_err(|e| match e {
+    pub async fn one(&self, item_id: Uuid) -> Result<User, UseCaseError> {
+        let user_db = self.users_repo.one(item_id).await.map_err(|e| match e {
             RepositoryError::NotFoundRow => UseCaseError::ForTransport {
                 status_code: StatusCode::NOT_FOUND,
                 public_err: "item not found".to_string(),
@@ -62,9 +62,9 @@ impl Users {
 
         Ok(())
     }
-    pub async fn delete(&self, user_id: Uuid) -> Result<(), UseCaseError> {
+    pub async fn delete(&self, item_id: Uuid) -> Result<(), UseCaseError> {
         self.users_repo
-            .delete(user_id)
+            .delete(item_id)
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to delete: {e}")))?;
         Ok(())

@@ -1,11 +1,3 @@
-use crate::adapter::email::EmailSender;
-use crate::transport::{
-    extractor::AuthenticatedUser,
-    mapper,
-    models::{RequestLimitOffset, RequestTask, ResponseTaskHistories, ResponseTasksList},
-};
-use crate::usecase::UseCase;
-
 use axum::Json;
 use axum::extract::Path;
 use axum::extract::State;
@@ -13,6 +5,14 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde_json::json;
 use uuid::Uuid;
+
+use crate::adapter::email::EmailSender;
+use crate::transport::{
+    extractor::AuthenticatedUser,
+    mapper,
+    models::{RequestLimitOffset, RequestTask, ResponseTaskHistories, ResponseTasksList},
+};
+use crate::usecase::UseCase;
 
 pub struct Handlers {}
 
@@ -31,6 +31,22 @@ impl Handlers {
                     items: items.into_iter().map(mapper::task_uc_to_task_tr).collect(),
                     total: total as u32,
                 };
+                (StatusCode::OK, Json(json!(resp))).into_response()
+            }
+            Err(e) => e.into_response(),
+        }
+    }
+    pub async fn one<ES>(
+        _user: AuthenticatedUser<ES>,
+        Path(item_id): Path<Uuid>,
+        State(use_case): State<UseCase<ES>>,
+    ) -> impl IntoResponse
+    where
+        ES: EmailSender,
+    {
+        match use_case.tasks.one(item_id).await {
+            Ok(v) => {
+                let resp = mapper::task_uc_to_task_tr(v);
                 (StatusCode::OK, Json(json!(resp))).into_response()
             }
             Err(e) => e.into_response(),
@@ -60,7 +76,6 @@ impl Handlers {
 
         (StatusCode::OK, Json(json!(resp))).into_response()
     }
-
     pub async fn update<ES>(
         _user: AuthenticatedUser<ES>,
         State(use_case): State<UseCase<ES>>,
@@ -84,6 +99,20 @@ impl Handlers {
         let resp = mapper::task_uc_to_task_tr(task_db);
 
         (StatusCode::OK, Json(json!(resp))).into_response()
+    }
+    pub async fn delete<ES>(
+        _user: AuthenticatedUser<ES>,
+        Path(item_id): Path<Uuid>,
+        State(use_case): State<UseCase<ES>>,
+    ) -> impl IntoResponse
+    where
+        ES: EmailSender,
+    {
+        if let Err(e) = use_case.tasks.delete(item_id).await {
+            e.into_response()
+        } else {
+            StatusCode::OK.into_response()
+        }
     }
     pub async fn history<ES>(
         _user: AuthenticatedUser<ES>,

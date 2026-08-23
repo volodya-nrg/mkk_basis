@@ -1,5 +1,5 @@
 use super::models::{
-    RequestTask, RequestTeamCreate, RequestUser, ResponseTask, ResponseTaskHistory, ResponseTeam,
+    RequestTask, RequestTeam, RequestUser, ResponseTask, ResponseTaskHistory, ResponseTeam,
     ResponseUser,
 };
 use crate::usecase::models::{Task, TaskHistory, Team, User};
@@ -27,7 +27,7 @@ pub fn task_uc_to_task_tr(item: Task) -> ResponseTask {
         updated_at: item.updated_at,
     }
 }
-pub fn team_tr_to_team_uc(req: RequestTeamCreate) -> Team {
+pub fn team_tr_to_team_uc(req: RequestTeam) -> Team {
     Team {
         team_id: Uuid::nil(),
         name: req.name,

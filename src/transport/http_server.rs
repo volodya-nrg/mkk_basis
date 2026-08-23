@@ -67,11 +67,20 @@ impl<ES: EmailSender> HTTPServer<ES> {
             .route("/api/v1/register", post(auth::Handlers::register))
             .route("/api/v1/login", post(auth::Handlers::login))
             .route("/api/v1/logout", post(auth::Handlers::logout))
-            .route("/api/v1/refresh_tokens", post(auth::Handlers::refresh_tokens))
+            .route(
+                "/api/v1/refresh_tokens",
+                post(auth::Handlers::refresh_tokens),
+            )
             // teams
             .route(
                 "/api/v1/teams",
                 get(teams::Handlers::list).post(teams::Handlers::create),
+            )
+            .route(
+                "/api/v1/teams/{id}",
+                get(teams::Handlers::one)
+                    .put(teams::Handlers::update)
+                    .delete(teams::Handlers::delete),
             )
             .route("/api/v1/teams/{id}/invite", post(teams::Handlers::invite))
             // tasks
@@ -79,7 +88,12 @@ impl<ES: EmailSender> HTTPServer<ES> {
                 "/api/v1/tasks",
                 get(tasks::Handlers::list).post(tasks::Handlers::create),
             )
-            .route("/api/v1/tasks/{id}", put(tasks::Handlers::update))
+            .route(
+                "/api/v1/tasks/{id}",
+                get(tasks::Handlers::one)
+                    .put(tasks::Handlers::update)
+                    .delete(tasks::Handlers::delete),
+            )
             .route("/api/v1/tasks/{id}/history", get(tasks::Handlers::history))
             // users
             .route(

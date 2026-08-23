@@ -8,6 +8,7 @@ use crate::adapter::{
         team_members::TeamMembers as TeamMembersRepo, teams::Teams as TeamsRepo,
     },
 };
+use crate::usecase::models::Task;
 use http::StatusCode;
 use uuid::Uuid;
 
@@ -24,11 +25,7 @@ impl Teams {
             team_members_repo,
         }
     }
-    pub async fn list(
-        &self,
-        limit: i32,
-        offset: i32,
-    ) -> Result<(Vec<Team>, i64), UseCaseError> {
+    pub async fn list(&self, limit: i32, offset: i32) -> Result<(Vec<Team>, i64), UseCaseError> {
         let (items, total) = self
             .teams_repo
             .list(limit, offset)
@@ -39,8 +36,8 @@ impl Teams {
             total,
         ))
     }
-    pub async fn one(&self, team_id: Uuid) -> Result<Team, UseCaseError> {
-        let team_db = self.teams_repo.one(team_id).await.map_err(|e| match e {
+    pub async fn one(&self, item_id: Uuid) -> Result<Team, UseCaseError> {
+        let team_db = self.teams_repo.one(item_id).await.map_err(|e| match e {
             RepositoryError::NotFoundRow => UseCaseError::ForTransport {
                 status_code: StatusCode::NOT_FOUND,
                 public_err: "item not found".to_string(),
@@ -57,6 +54,20 @@ impl Teams {
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))?;
         Ok(new_uuid)
+    }
+    pub async fn update(&self, team: Team) -> Result<(), UseCaseError> {
+        self.teams_repo
+            .update(mapper::team_uc_to_team_db(team))
+            .await
+            .map_err(|e| UseCaseError::Common(format!("failed to update: {e}")))?;
+        Ok(())
+    }
+    pub async fn delete(&self, item_id: Uuid) -> Result<(), UseCaseError> {
+        self.teams_repo
+            .delete(item_id)
+            .await
+            .map_err(|e| UseCaseError::Common(format!("failed to delete: {e}")))?;
+        Ok(())
     }
     // invite. Пригласить может только owner или admin.
     pub async fn invite(&self, team_id: Uuid, user_id: Uuid) -> Result<(), UseCaseError> {

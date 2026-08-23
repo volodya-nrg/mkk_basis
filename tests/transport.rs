@@ -11,7 +11,7 @@ use helpers::client::{Client, StatusCodeBodyError};
 use helpers::mocks::EmailServiceMock;
 use helpers::rand;
 
-use mkk_basis::transport::models::{RequestRefreshToken, ResponseRefreshToken};
+use mkk_basis::transport::models::ResponseRefreshToken;
 use mkk_basis::{
     adapter::db::postgres::Postgres as PostgresService,
     adapter::jwt::Jwt as JWTService,
@@ -39,6 +39,7 @@ const REFRESH_TOKEN_TTL_SEC: i64 = ACCESS_TOKEN_TTL_SEC * 2;
 
 const DSN: &str =
     "postgres://postgres:postgres@127.0.0.1:5432/postgres?options=-c%20search_path%3Dmkk_basis";
+const ERR_PARSE_JSON: &str = "failed to parse str to json";
 static MARKER: OnceCell<ClientData> = OnceCell::const_new();
 
 async fn run_test_server() -> &'static ClientData {
@@ -358,7 +359,7 @@ async fn check_auth() {
         assert!(status_code.is_success());
 
         let resp_login: ResponseLogin =
-            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         assert!(!resp_login.access_token.is_empty());
         assert!(!resp_login.refresh_token.is_empty());
     })
@@ -387,7 +388,7 @@ async fn check_auth() {
         assert!(status_code.is_success());
 
         let resp_login: ResponseRefreshToken =
-            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         assert!(!resp_login.access_token.is_empty());
         assert!(!resp_login.refresh_token.is_empty());
     })
@@ -436,7 +437,7 @@ async fn check_teams() {
     );
 
     let mut user_id = Uuid::nil();
-    let mut req_team_create = rand::request_team_create();
+    let mut req_team = rand::request_team();
     let req_register = rand::request_register();
     let mut team_id = Uuid::nil();
     let req_login = RequestLogin {
@@ -450,13 +451,29 @@ async fn check_teams() {
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await
-    .teams_create(
-        rand::request_team_create(),
+    .teams_one(Uuid::new_v4(), |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+    })
+    .await
+    .teams_create(rand::request_team(), |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+    })
+    .await
+    .teams_update(
+        Uuid::new_v4(),
+        rand::request_team(),
         |result: StatusCodeBodyError| {
             let (status_code, _body_str) = result.unwrap();
             assert_eq!(StatusCode::UNAUTHORIZED, status_code);
         },
     )
+    .await
+    .teams_delete(Uuid::new_v4(), |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+    })
     .await
     .teams_invite(
         Uuid::new_v4(),
@@ -473,8 +490,7 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID =
-            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         user_id = resp.uuid;
     })
     .await
@@ -485,43 +501,71 @@ async fn check_teams() {
     .await;
 
     // err: пользователя нет
-    cl.teams_create(req_team_create.clone(), |result: StatusCodeBodyError| {
+    cl.teams_create(req_team.clone(), |result: StatusCodeBodyError| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status_code);
 
-        req_team_create.created_by = user_id;
+        req_team.created_by = user_id;
     })
     .await // ок
-    .teams_create(req_team_create, |result: StatusCodeBodyError| {
+    .teams_create(req_team.clone(), |result: StatusCodeBodyError| {
         let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
         assert!(status_code.is_success());
 
         let resp_team_actual: ResponseTeam =
-            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         assert_eq!(user_id, resp_team_actual.created_by);
         team_id = resp_team_actual.team_id;
     })
-    .await
+    .await // err - нельзя создать дубликат
+    .teams_create(req_team.clone(), |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        assert!(status_code.is_server_error());
+    })
+    .await // ok
     .teams_list(100, 0, |result: StatusCodeBodyError| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
         let resp: ResponseTeamsList =
-            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         assert!(!resp.items.is_empty());
         assert!(resp.total > 0);
     })
-    .await
+    .await // ok
     .teams_list(0, 0, |result: StatusCodeBodyError| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
         let resp: ResponseTeamsList =
-            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         assert!(resp.items.is_empty());
         assert!(resp.total > 0);
     })
-    .await
+    .await // ok
+    .teams_one(team_id, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let resp: ResponseTeam = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        assert_eq!(team_id, resp.team_id)
+    })
+    .await // err
+    .teams_one(Uuid::new_v4(), |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert_eq!(StatusCode::NOT_FOUND, status_code);
+
+        req_team.name = rand::str()
+    })
+    .await // ok - обновим имя и проверим его
+    .teams_update(team_id, req_team.clone(), |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let resp: ResponseTeam = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        assert_eq!(req_team.name, resp.name)
+    })
+    .await // ok
     .teams_invite(
         team_id,
         RequestTeamInvite { user_id },
@@ -530,6 +574,20 @@ async fn check_teams() {
             assert!(status_code.is_success());
         },
     )
+    .await // err
+    .teams_invite(
+        Uuid::new_v4(),
+        RequestTeamInvite { user_id },
+        |result: StatusCodeBodyError| {
+            let (status_code, _body_str) = result.unwrap();
+            assert!(status_code.is_server_error());
+        },
+    )
+    .await
+    .teams_delete(team_id, |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
     .await;
 }
 
@@ -547,8 +605,8 @@ async fn check_tasks() {
     let mut user_id = Uuid::nil();
     let mut team_id = Uuid::nil();
     let mut task1_id = Uuid::nil();
-    let mut req_register = rand::request_register();
-    let mut req_team_create = rand::request_team_create();
+    let req_register = rand::request_register();
+    let mut req_team_create = rand::request_team();
     let mut req_task1 = rand::request_task();
     let mut req_task2 = rand::request_task();
     let req_login = RequestLogin {
@@ -567,6 +625,11 @@ async fn check_tasks() {
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await
+    .tasks_one(Uuid::new_v4(), |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+    })
+    .await
     .tasks_update(
         Uuid::new_v4(),
         rand::request_task(),
@@ -575,6 +638,11 @@ async fn check_tasks() {
             assert_eq!(StatusCode::UNAUTHORIZED, status_code);
         },
     )
+    .await
+    .tasks_delete(Uuid::new_v4(), |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+    })
     .await
     .tasks_history(Uuid::new_v4(), |result: StatusCodeBodyError| {
         let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
@@ -587,8 +655,7 @@ async fn check_tasks() {
         let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID =
-            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         user_id = resp.uuid;
         req_team_create.created_by = user_id;
     })
@@ -603,7 +670,7 @@ async fn check_tasks() {
         assert!(status_code.is_success());
 
         let resp_ream_actual: ResponseTeam =
-            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         team_id = resp_ream_actual.team_id;
 
         req_task1.created_by = user_id;
@@ -622,7 +689,7 @@ async fn check_tasks() {
         assert!(status_code.is_success());
 
         let resp_task: ResponseTask =
-            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         task1_id = resp_task.task_id;
     })
     .await // err: с теми же данными
@@ -630,25 +697,38 @@ async fn check_tasks() {
         let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
         assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status_code);
     })
-    .await
+    .await // ok
     .tasks_list(100, 0, |result: StatusCodeBodyError| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
         let resp: ResponseTasksList =
-            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         assert!(!resp.items.is_empty());
         assert!(resp.total > 0);
     })
-    .await
+    .await // ok
     .tasks_list(0, 0, |result: StatusCodeBodyError| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
         let resp: ResponseTasksList =
-            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         assert!(resp.items.is_empty());
         assert!(resp.total > 0);
+    })
+    .await // err
+    .tasks_one(Uuid::new_v4(), |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::NOT_FOUND, status_code);
+    })
+    .await // ok
+    .tasks_one(task1_id, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let resp: ResponseTask = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        assert_eq!(task1_id, resp.task_id)
     })
     .await
     .tasks_update(
@@ -658,8 +738,7 @@ async fn check_tasks() {
             let (status_code, body_str) = result.unwrap();
             assert!(status_code.is_success());
 
-            let resp: ResponseTask =
-                serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            let resp: ResponseTask = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
             assert_eq!(req_task2.status, resp.status);
             assert_eq!(task1_id, resp.task_id);
         },
@@ -670,9 +749,19 @@ async fn check_tasks() {
         assert!(status_code.is_success());
 
         let resp: ResponseTaskHistories =
-            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         assert!(resp.items.is_empty());
         // TODO тут надо понять как добавлять историю
+    })
+    .await // err
+    .tasks_delete(Uuid::new_v4(), |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_server_error());
+    })
+    .await // ok
+    .tasks_delete(task1_id, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
     })
     .await;
 }
@@ -740,8 +829,7 @@ async fn check_users() {
         let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID =
-            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         owner_id = resp.uuid;
     })
     .await
@@ -777,7 +865,7 @@ async fn check_users() {
         assert!(status_code.is_success());
 
         let resp_user_actual: ResponseUser =
-            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         assert_eq!(req_user1.email, resp_user_actual.email);
         assert_eq!(req_user1.name, resp_user_actual.name);
         assert_eq!(req_user1.email_code, resp_user_actual.email_code);
@@ -791,21 +879,26 @@ async fn check_users() {
         assert!(status_code.is_success());
     })
     .await // ok: обновим успешно
-    .users_update(user_id, req_user2.clone(), None, |result: StatusCodeBodyError| {
-        let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+    .users_update(
+        user_id,
+        req_user2.clone(),
+        None,
+        |result: StatusCodeBodyError| {
+            let (status_code, body_str) = result.unwrap();
+            assert!(status_code.is_success());
 
-        let resp_user_actual: ResponseUser =
-            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
-        assert_ne!(saved_resp_user, resp_user_actual);
-    })
+            let resp_user_actual: ResponseUser =
+                serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            assert_ne!(saved_resp_user, resp_user_actual);
+        },
+    )
     .await // ok: посмотрим что люди есть
     .users_list(0, 0, |result: StatusCodeBodyError| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
         let list: ResponseUsersList =
-            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         assert_eq!(list.items.len(), 0);
         assert!(list.total > 0);
     })
@@ -815,7 +908,7 @@ async fn check_users() {
         assert!(status_code.is_success());
 
         let resp: ResponseUsersList =
-            serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         assert!(resp.items.len() > 0);
         assert!(resp.total > 0);
 

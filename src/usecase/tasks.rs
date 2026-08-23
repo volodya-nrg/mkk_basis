@@ -39,8 +39,8 @@ impl Tasks {
             total,
         ))
     }
-    pub async fn one(&self, task_id: Uuid) -> Result<Task, UseCaseError> {
-        let task_db = self.tasks_repo.one(task_id).await.map_err(|e| match e {
+    pub async fn one(&self, item_id: Uuid) -> Result<Task, UseCaseError> {
+        let task_db = self.tasks_repo.one(item_id).await.map_err(|e| match e {
             RepositoryError::NotFoundRow => UseCaseError::ForTransport {
                 status_code: StatusCode::NOT_FOUND,
                 public_err: "item not found".to_string(),
@@ -63,6 +63,13 @@ impl Tasks {
             .update(mapper::task_uc_to_task_db(task))
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to update: {e}")))?;
+        Ok(())
+    }
+    pub async fn delete(&self, item_id: Uuid) -> Result<(), UseCaseError> {
+        self.tasks_repo
+            .delete(item_id)
+            .await
+            .map_err(|e| UseCaseError::Common(format!("failed to delete: {e}")))?;
         Ok(())
     }
     pub async fn get_history(&self, item_id: Uuid) -> Result<Vec<TaskHistory>, UseCaseError> {

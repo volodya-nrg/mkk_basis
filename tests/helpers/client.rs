@@ -1,5 +1,5 @@
 use http::StatusCode;
-use reqwest::{Certificate, Client as ReqwestClient, Identity, Response, header, multipart::Form};
+use reqwest::{Certificate, Client as ReqwestClient, Identity, Response, header}; // multipart::Form
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
@@ -8,7 +8,7 @@ use uuid::Uuid;
 use mkk_basis::adapter::db::postgres::Postgres as PostgresService;
 use mkk_basis::transport::models::{
     RequestLimitOffset, RequestLogin, RequestRefreshToken, RequestRegister, RequestTask,
-    RequestTeamCreate, RequestTeamInvite, RequestUser, ResponseLogin, ResponseRefreshToken,
+    RequestTeam, RequestTeamInvite, RequestUser, ResponseLogin, ResponseRefreshToken,
 };
 
 use super::rand;
@@ -370,7 +370,29 @@ impl<'pg> Client<'pg> {
         cb(result);
         self
     }
-    pub async fn teams_create<T>(&self, req: RequestTeamCreate, mut cb: T) -> &Self
+    pub async fn teams_one<T>(&self, uuid: Uuid, mut cb: T) -> &Self
+    where
+        T: FnMut(StatusCodeBodyError),
+    {
+        let result = self
+            .client
+            .get(format!("{}/api/v1/teams/{}", self.addr, uuid))
+            .headers(self.headers().await)
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        };
+
+        cb(result);
+        self
+    }
+    pub async fn teams_create<T>(&self, req: RequestTeam, mut cb: T) -> &Self
     where
         T: FnMut(StatusCodeBodyError),
     {
@@ -393,13 +415,58 @@ impl<'pg> Client<'pg> {
         cb(result);
         self
     }
-    pub async fn teams_invite<T>(&self, team_id: Uuid, req: RequestTeamInvite, mut cb: T) -> &Self
+    pub async fn teams_update<T>(&self, item_id: Uuid, req: RequestTeam, mut cb: T) -> &Self
     where
         T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
-            .post(format!("{}/api/v1/teams/{}/invite", self.addr, team_id))
+            .put(format!("{}/api/v1/teams/{}", self.addr, item_id))
+            .headers(self.headers().await)
+            .json(&req)
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        };
+
+        cb(result);
+        self
+    }
+    pub async fn teams_delete<T>(&self, item_id: Uuid, mut cb: T) -> &Self
+    where
+        T: FnMut(StatusCodeBodyError),
+    {
+        let result = self
+            .client
+            .delete(format!("{}/api/v1/teams/{}", self.addr, item_id))
+            .headers(self.headers().await)
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        };
+
+        cb(result);
+        self
+    }
+    pub async fn teams_invite<T>(&self, item_id: Uuid, req: RequestTeamInvite, mut cb: T) -> &Self
+    where
+        T: FnMut(StatusCodeBodyError),
+    {
+        let result = self
+            .client
+            .post(format!("{}/api/v1/teams/{}/invite", self.addr, item_id))
             .headers(self.headers().await)
             .json(&req)
             .send()
@@ -441,6 +508,28 @@ impl<'pg> Client<'pg> {
         cb(result);
         self
     }
+    pub async fn tasks_one<T>(&self, item_id: Uuid, mut cb: T) -> &Self
+    where
+        T: FnMut(StatusCodeBodyError),
+    {
+        let result = self
+            .client
+            .get(format!("{}/api/v1/tasks/{}", self.addr, item_id))
+            .headers(self.headers().await)
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        };
+
+        cb(result);
+        self
+    }
     pub async fn tasks_create<T>(&self, req: RequestTask, mut cb: T) -> &Self
     where
         T: FnMut(StatusCodeBodyError),
@@ -464,13 +553,13 @@ impl<'pg> Client<'pg> {
         cb(result);
         self
     }
-    pub async fn tasks_update<T>(&self, task_id: Uuid, req: RequestTask, mut cb: T) -> &Self
+    pub async fn tasks_update<T>(&self, item_id: Uuid, req: RequestTask, mut cb: T) -> &Self
     where
         T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
-            .put(format!("{}/api/v1/tasks/{}", self.addr, task_id))
+            .put(format!("{}/api/v1/tasks/{}", self.addr, item_id))
             .headers(self.headers().await)
             .json(&req)
             .send()
@@ -487,13 +576,35 @@ impl<'pg> Client<'pg> {
         cb(result);
         self
     }
-    pub async fn tasks_history<T>(&self, task_id: Uuid, mut cb: T) -> &Self
+    pub async fn tasks_delete<T>(&self, item_id: Uuid, mut cb: T) -> &Self
     where
         T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
-            .get(format!("{}/api/v1/tasks/{}/history", self.addr, task_id))
+            .delete(format!("{}/api/v1/tasks/{}", self.addr, item_id))
+            .headers(self.headers().await)
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        };
+
+        cb(result);
+        self
+    }
+    pub async fn tasks_history<T>(&self, item_id: Uuid, mut cb: T) -> &Self
+    where
+        T: FnMut(StatusCodeBodyError),
+    {
+        let result = self
+            .client
+            .get(format!("{}/api/v1/tasks/{}/history", self.addr, item_id))
             .headers(self.headers().await)
             .send()
             .await
@@ -534,13 +645,13 @@ impl<'pg> Client<'pg> {
         cb(result);
         self
     }
-    pub async fn users_one<T>(&self, uuid: Uuid, mut cb: T) -> &Self
+    pub async fn users_one<T>(&self, item_id: Uuid, mut cb: T) -> &Self
     where
         T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
-            .get(format!("{}/api/v1/users/{}", self.addr, uuid))
+            .get(format!("{}/api/v1/users/{}", self.addr, item_id))
             .headers(self.headers().await)
             .send()
             .await
@@ -593,7 +704,7 @@ impl<'pg> Client<'pg> {
     }
     pub async fn users_update<T>(
         &self,
-        user_id: Uuid,
+        item_id: Uuid,
         req: RequestUser,
         filepath: Option<String>,
         mut cb: T,
@@ -609,7 +720,7 @@ impl<'pg> Client<'pg> {
 
         let result = self
             .client
-            .put(format!("{}/api/v1/users/{}", self.addr, user_id))
+            .put(format!("{}/api/v1/users/{}", self.addr, item_id))
             .headers(self.headers().await)
             // .multipart(form)
             .json(&req)
@@ -627,13 +738,13 @@ impl<'pg> Client<'pg> {
         cb(result);
         self
     }
-    pub async fn users_delete<T>(&self, user_id: Uuid, mut cb: T) -> &Self
+    pub async fn users_delete<T>(&self, item_id: Uuid, mut cb: T) -> &Self
     where
         T: FnMut(StatusCodeBodyError),
     {
         let result = self
             .client
-            .delete(format!("{}/api/v1/users/{}", self.addr, user_id))
+            .delete(format!("{}/api/v1/users/{}", self.addr, item_id))
             .headers(self.headers().await)
             .send()
             .await
