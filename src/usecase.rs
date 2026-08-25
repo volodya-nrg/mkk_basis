@@ -2,6 +2,7 @@ pub mod auth;
 mod helpers;
 mod mapper;
 pub mod models;
+pub mod task_comments;
 pub mod tasks;
 pub mod teams;
 pub mod users;
@@ -19,6 +20,7 @@ use thiserror::Error as ThisError;
 pub struct UseCase<ES: EmailSender> {
     pub auth: auth::Auth<ES>,
     pub tasks: tasks::Tasks,
+    pub task_comments: task_comments::TaskComments,
     pub teams: teams::Teams,
     pub users: users::Users,
 }
@@ -33,6 +35,7 @@ impl<ES: EmailSender> UseCase<ES> {
         Self {
             auth: auth::Auth::new(addr, postgres.tbl_users.clone(), jwt_service, email_sender),
             tasks: tasks::Tasks::new(postgres.tbl_tasks, postgres.tbl_task_histories),
+            task_comments: task_comments::TaskComments::new(postgres.tbl_task_comments),
             teams: teams::Teams::new(postgres.tbl_teams, postgres.tbl_team_members),
             users: users::Users::new(postgres.tbl_users),
         }

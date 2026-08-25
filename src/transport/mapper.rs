@@ -1,9 +1,11 @@
-use super::models::{
-    RequestTask, RequestTeam, RequestUser, ResponseTask, ResponseTaskHistory, ResponseTeam,
-    ResponseUser,
-};
-use crate::usecase::models::{Task, TaskHistory, Team, User};
 use uuid::Uuid;
+
+use crate::usecase::models::{Task, TaskComment, TaskHistory, Team, User};
+
+use super::models::{
+    RequestTask, RequestTeam, RequestUser, ResponseTask, ResponseTaskComment, ResponseTaskHistory,
+    ResponseTeam, ResponseUser,
+};
 
 pub fn team_uc_to_team_tr(item: Team) -> ResponseTeam {
     ResponseTeam {
@@ -83,5 +85,31 @@ pub fn user_tr_to_user_uc(item: RequestUser) -> User {
         role: item.role,
         created_at: Default::default(),
         updated_at: Default::default(),
+    }
+}
+
+pub fn task_comment_tr_to_task_comment_uc(
+    msg: String,
+    task_id: Uuid,
+    user_id: Uuid,
+) -> TaskComment {
+    TaskComment {
+        task_comment_id: Default::default(),
+        task_id,
+        user_id,
+        msg,
+        created_at: Default::default(),
+        updated_at: Default::default(),
+    }
+}
+
+pub fn task_comment_uc_to_task_comment_tr(item: TaskComment) -> ResponseTaskComment {
+    ResponseTaskComment {
+        task_comment_id: item.task_comment_id,
+        task_id: item.task_id,
+        user_id: item.user_id,
+        msg: item.msg,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
     }
 }

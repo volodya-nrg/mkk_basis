@@ -840,7 +840,7 @@ async fn check_task_comments() {
     // ok: проверим что список не пустой
     let (items, total) = db
         .tbl_task_comments
-        .list(-1, -1)
+        .list(task_id, -1, -1)
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
     assert!(!items.is_empty());
@@ -849,7 +849,7 @@ async fn check_task_comments() {
     // ok: проверим пустой результат
     let (items, total) = db
         .tbl_task_comments
-        .list(0, 0)
+        .list(task_id, 0, 0)
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
     assert!(items.is_empty());

@@ -1,8 +1,9 @@
-use super::models::{Task, TaskHistory, Team, TeamMember, User};
 use crate::adapter::db::models::{
-    Task as DBTask, TaskHistory as DBTaskHistory, Team as DBTeam, TeamMember as DBTeamMember,
-    User as DBUser,
+    Task as DBTask, TaskComment as DBTaskComment, TaskHistory as DBTaskHistory, Team as DBTeam,
+    TeamMember as DBTeamMember, User as DBUser,
 };
+
+use super::models::{Task, TaskComment, TaskHistory, Team, TeamMember, User};
 
 pub fn task_db_to_task_uc(item: DBTask) -> Task {
     Task {
@@ -86,6 +87,26 @@ pub fn user_db_to_user_uc(item: DBUser) -> User {
         email_code: item.email_code,
         avatar: item.avatar,
         role: item.role,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+    }
+}
+pub fn task_comment_db_to_task_comment_uc(item: DBTaskComment) -> TaskComment {
+    TaskComment {
+        task_comment_id: item.task_comment_id,
+        task_id: item.task_id,
+        user_id: item.user_id,
+        msg: item.msg,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+    }
+}
+pub fn task_comment_uc_to_task_comment_db(item: TaskComment) -> DBTaskComment {
+    DBTaskComment {
+        task_comment_id: item.task_comment_id,
+        task_id: item.task_id,
+        user_id: item.user_id,
+        msg: item.msg,
         created_at: item.created_at,
         updated_at: item.updated_at,
     }

@@ -6,10 +6,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use mkk_basis::adapter::db::postgres::Postgres as PostgresService;
-use mkk_basis::transport::models::{
-    RequestLimitOffset, RequestLogin, RequestRefreshToken, RequestRegister, RequestTask,
-    RequestTeam, RequestTeamInvite, RequestUser, ResponseLogin, ResponseRefreshToken,
-};
+use mkk_basis::transport::models::{RequestLimitOffset, RequestLogin, RequestRefreshToken, RequestRegister, RequestTask, RequestTaskComment, RequestTeam, RequestTeamInvite, RequestUser, ResponseLogin, ResponseRefreshToken};
 
 use super::rand;
 
@@ -745,6 +742,76 @@ impl<'pg> Client<'pg> {
         let result = self
             .client
             .delete(format!("{}/api/v1/users/{}", self.addr, item_id))
+            .headers(self.headers().await)
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        };
+
+        cb(result);
+        self
+    }
+    
+    // task comments
+    pub async fn task_comments_list<T>(&self, task_id: Uuid, limit: i32, offset: i32, mut cb: T) -> &Self
+    where
+        T: FnMut(StatusCodeBodyError),
+    {
+        let result = self
+            .client
+            .get(format!("{}/api/v1/tasks/{}/comments", self.addr, task_id))
+            .headers(self.headers().await)
+            .json(&RequestLimitOffset { limit, offset })
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        };
+
+        cb(result);
+        self
+    }
+    pub async fn task_comments_create<T>(&self, task_id: Uuid, req: RequestTaskComment, mut cb: T) -> &Self
+    where
+        T: FnMut(StatusCodeBodyError),
+    {
+        let result = self
+            .client
+            .post(format!("{}/api/v1/tasks/{}/comments", self.addr, task_id))
+            .headers(self.headers().await)
+            .json(&req)
+            .send()
+            .await
+            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = match result {
+            Ok(v) => match self.parse_response(v).await {
+                Ok(v) => Ok(v),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        };
+
+        cb(result);
+        self
+    }
+    pub async fn task_comments_delete<T>(&self, item_id: Uuid, mut cb: T) -> &Self
+    where
+        T: FnMut(StatusCodeBodyError),
+    {
+        let result = self
+            .client
+            .delete(format!("{}/api/v1/tasks/comment/{}", self.addr, item_id))
             .headers(self.headers().await)
             .send()
             .await

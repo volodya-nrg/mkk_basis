@@ -11,7 +11,7 @@ use helpers::client::{Client, StatusCodeBodyError};
 use helpers::mocks::EmailServiceMock;
 use helpers::rand;
 
-use mkk_basis::transport::models::ResponseRefreshToken;
+use mkk_basis::transport::models::{ResponseRefreshToken, ResponseTaskCommentsList};
 use mkk_basis::{
     adapter::db::postgres::Postgres as PostgresService,
     adapter::db::postgres::tables::users::Role as UsersRole,
@@ -20,9 +20,9 @@ use mkk_basis::{
     consts, transport,
     transport::http_server::HTTPServer,
     transport::models::{
-        RequestLogin, RequestTeamInvite, ResponseLogin, ResponseTask, ResponseTaskHistories,
-        ResponseTasksList, ResponseTeam, ResponseTeamsList, ResponseUUID, ResponseUser,
-        ResponseUsersList,
+        RequestLogin, RequestTeamInvite, ResponseLogin, ResponseTask, ResponseTaskComment,
+        ResponseTaskHistories, ResponseTasksList, ResponseTeam, ResponseTeamsList, ResponseUUID,
+        ResponseUser, ResponseUsersList,
     },
     usecase::UseCase,
 };
@@ -1111,6 +1111,206 @@ async fn check_users() {
     .users_one(user_id, |result: StatusCodeBodyError| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::NOT_FOUND, status_code);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn check_task_comments() {
+    let client_data = run_test_server().await;
+    let cl = Client::new(
+        client_data.http_addr.to_string(),
+        client_data.ca.to_string(),
+        client_data.crt.to_string(),
+        client_data.key.to_string(),
+        &client_data.pool,
+    );
+
+    let mut user_id = Uuid::nil();
+    let mut team_id = Uuid::nil();
+    let mut task_id = Uuid::nil();
+    let req_register = rand::request_register();
+    let req_team = rand::request_team();
+    let mut req_task = rand::request_task();
+    let req_task_comment = rand::request_task_comment();
+    let req_login = RequestLogin {
+        email: req_register.email.clone(),
+        password: req_register.password.clone(),
+    };
+
+    // проверим на 401
+    cl.task_comments_list(Uuid::new_v4(), -1, -1, |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+    })
+    .await
+    .task_comments_create(
+        Uuid::new_v4(),
+        rand::request_task_comment(),
+        |result: StatusCodeBodyError| {
+            let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+        },
+    )
+    .await
+    .task_comments_delete(Uuid::new_v4(), |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+    })
+    .await;
+
+    // создадим пользователя, залогинимся и создадим команду
+    cl.register(req_register, true, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        assert!(status_code.is_success());
+
+        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        user_id = resp.uuid;
+    })
+    .await
+    .login(req_login, |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await
+    .teams_create(req_team, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let resp_ream_actual: ResponseTeam =
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        team_id = resp_ream_actual.team_id;
+
+        req_task.created_by = user_id;
+        req_task.team_id = team_id;
+        req_task.assignee_id = None;
+    })
+    .await
+    .tasks_create(req_task, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        assert!(status_code.is_success());
+
+        let resp_task: ResponseTask =
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        task_id = resp_task.task_id;
+    })
+    .await;
+
+    let mut task_comment_id1 = Uuid::nil();
+    let mut task_comment_id2 = Uuid::nil();
+
+    // ok
+    cl.task_comments_create(
+        task_id,
+        req_task_comment.clone(),
+        |result: StatusCodeBodyError| {
+            let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            assert!(status_code.is_success());
+
+            let resp: ResponseTaskComment =
+                serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+
+            assert_ne!(Uuid::nil(), resp.task_comment_id);
+            assert_eq!(task_id, resp.task_id);
+            assert_eq!(user_id, resp.user_id);
+            assert_eq!(req_task_comment.msg, resp.msg);
+
+            task_comment_id1 = resp.task_comment_id;
+        },
+    )
+    .await // ok - с теми же данными ожидаем ошибку
+    .task_comments_create(
+        task_id,
+        req_task_comment.clone(),
+        |result: StatusCodeBodyError| {
+            let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            assert!(status_code.is_success());
+
+            let resp: ResponseTaskComment =
+                serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+
+            assert_ne!(Uuid::nil(), resp.task_comment_id);
+            assert_eq!(task_id, resp.task_id);
+            assert_eq!(user_id, resp.user_id);
+            assert_eq!(req_task_comment.msg, resp.msg);
+
+            task_comment_id2 = resp.task_comment_id;
+        },
+    )
+    .await // ok
+    .task_comments_list(task_id, 100, 0, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let resp: ResponseTaskCommentsList =
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        assert_eq!(2, resp.items.len());
+        assert_eq!(2, resp.total);
+    })
+    .await // ok
+    .task_comments_list(task_id, -1, -1, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let resp: ResponseTaskCommentsList =
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        assert_eq!(2, resp.items.len());
+        assert_eq!(2, resp.total);
+    })
+    .await // ok
+    .task_comments_list(task_id, 0, 0, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let resp: ResponseTaskCommentsList =
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        assert!(resp.items.is_empty());
+        assert_eq!(2, resp.total);
+    })
+    .await // ok: с другим task_id
+    .task_comments_list(Uuid::new_v4(), 100, 0, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let resp: ResponseTaskCommentsList =
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        assert!(resp.items.is_empty());
+        assert_eq!(0, resp.total);
+    })
+    .await // err
+    .task_comments_delete(Uuid::new_v4(), |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_server_error());
+    })
+    .await // ok
+    .task_comments_delete(task_comment_id1, |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await // ok
+    .task_comments_list(task_id, 100, 0, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let resp: ResponseTaskCommentsList =
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        assert_eq!(1, resp.items.len());
+        assert_eq!(1, resp.total);
+    })
+    .await
+    .task_comments_delete(task_comment_id2, |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await // ok
+    .task_comments_list(task_id, 100, 0, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let resp: ResponseTaskCommentsList =
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        assert_eq!(0, resp.items.len());
+        assert_eq!(0, resp.total);
     })
     .await;
 }

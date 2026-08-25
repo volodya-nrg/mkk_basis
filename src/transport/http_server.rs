@@ -4,10 +4,10 @@ pub mod middleware;
 use crate::adapter::email::EmailSender;
 use crate::usecase::UseCase;
 
-use axum::routing::{get, post, put};
+use axum::routing::{delete, get, post, put};
 use axum::{Router, middleware as AxumMiddleware};
 use axum_server::tls_rustls::RustlsConfig;
-use handlers::{auth, etc, tasks, teams, users};
+use handlers::{auth, etc, task_comments, tasks, teams, users};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::server::WebPkiClientVerifier;
 use rustls::{RootCertStore, ServerConfig};
@@ -95,6 +95,14 @@ impl<ES: EmailSender> HTTPServer<ES> {
                     .delete(tasks::Handlers::delete),
             )
             .route("/api/v1/tasks/{id}/history", get(tasks::Handlers::history))
+            .route(
+                "/api/v1/tasks/{id}/comments",
+                get(task_comments::Handlers::list).post(task_comments::Handlers::create),
+            )
+            .route(
+                "/api/v1/tasks/comment/{id}",
+                delete(task_comments::Handlers::delete),
+            )
             // users
             .route(
                 "/api/v1/users",

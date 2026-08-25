@@ -63,6 +63,11 @@ pub struct RequestRefreshToken {
     pub token: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RequestTaskComment {
+    pub msg: String,
+}
+
 // ------------------------------------
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -146,4 +151,19 @@ pub struct ResponseUsersList {
 pub struct ResponseRefreshToken {
     pub access_token: String,
     pub refresh_token: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct ResponseTaskComment {
+    pub task_comment_id: Uuid,
+    pub task_id: Uuid,
+    pub user_id: Uuid,
+    pub msg: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct ResponseTaskCommentsList {
+    pub items: Vec<ResponseTaskComment>,
+    pub total: u32,
 }

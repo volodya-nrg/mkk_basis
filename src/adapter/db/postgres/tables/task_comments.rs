@@ -29,14 +29,19 @@ impl TaskComments {
     }
     pub async fn list(
         &self,
+        task_id: Uuid,
         limit: i32,
         offset: i32,
     ) -> Result<(Vec<TaskComment>, i64), RepositoryError> {
         let mut query = QueryBuilder::new(format!(
-            "SELECT {} FROM {} ORDER BY created_at DESC",
+            "SELECT {} FROM {}",
             self.table_basic.fields.join(","),
             self.table_basic.name,
         ));
+
+        query.push(" WHERE task_id=");
+        query.push_bind(task_id);
+        query.push(" ORDER BY created_at DESC");
 
         if limit > -1 {
             query.push(" LIMIT ");
@@ -54,15 +59,19 @@ impl TaskComments {
             .map_err(RepositoryError::TransactionError)?;
         let items: Vec<TaskComment> = query
             .build_query_as()
+            // .bind(task_id)
             .fetch_all(&mut *tx)
             .await
             .map_err(RepositoryError::FailedToQuery)?;
-        let total: (i64,) =
-            QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.table_basic.name)) // возвращает такой же диапазон как и i64
-                .build_query_as()
-                .fetch_one(&mut *tx)
-                .await
-                .map_err(RepositoryError::FailedToCount)?;
+        let total: (i64,) = QueryBuilder::new(format!(
+            "SELECT COUNT(*) FROM {} WHERE task_id=$1",
+            self.table_basic.name
+        )) // возвращает такой же диапазон как и i64
+        .build_query_as()
+        .bind(task_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(RepositoryError::FailedToCount)?;
 
         tx.commit()
             .await

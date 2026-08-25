@@ -42,11 +42,11 @@ pub struct TaskHistory {
     pub msg: String,
     pub created_at: DateTime<Utc>,
 }
-// pub struct TaskComment {
-//     pub task_comment_id: Uuid,
-//     pub task_id: Uuid,
-//     pub user_id: Uuid,
-//     pub msg: String,
-//     pub created_at: DateTime<Utc>,
-//     pub updated_at: DateTime<Utc>,
-// }
+pub struct TaskComment {
+    pub task_comment_id: Uuid,
+    pub task_id: Uuid,
+    pub user_id: Uuid,
+    pub msg: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
