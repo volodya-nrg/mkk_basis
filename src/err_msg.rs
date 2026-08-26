@@ -18,6 +18,7 @@ pub enum ErrMsg {
     TokenNotValid,
     TokenIsNotRefresh,
     NoRules,
+    NoAccessTeamMemberOnly,
 }
 impl ErrMsg {
     pub fn as_str(&self) -> String {
@@ -46,6 +47,9 @@ impl ErrMsg {
             ErrMsg::TokenNotValid => "токен не действителен".to_string(),
             ErrMsg::TokenIsNotRefresh => "токен не является токеном обновления".to_string(),
             ErrMsg::NoRules => "у вас нет прав на данное действие".to_string(),
+            ErrMsg::NoAccessTeamMemberOnly => {
+                "у вас нет доступа к данному действию, только для участника команды".to_string()
+            }
         }
     }
 }

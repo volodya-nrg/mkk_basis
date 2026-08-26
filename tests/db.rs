@@ -1,6 +1,6 @@
 mod helpers;
 
-use chrono::Local;
+use chrono::{DateTime, Local};
 use ctor::ctor;
 use helpers::rand;
 
@@ -9,7 +9,9 @@ use mkk_basis::adapter::{
     db::postgres::tables::tasks::Status as TaskStatus, logger,
 };
 
+use sqlx::__rt::sleep;
 use sqlx::postgres::PgPoolOptions;
+use sqlx::testing::TestTermination;
 use std::assert_matches;
 use std::time::Duration;
 use uuid::Uuid;
@@ -24,19 +26,19 @@ fn init() {
 
 // Почему-то лучше подключаться к пулу постоянно.
 // Через OnceCell получаю "failed to delete: pool timed out while waiting for an open connection".
-async fn get_postgres() -> Postgres {
+async fn get_postgres() -> (Postgres, DateTime<Local>) {
+    let time_now = Local::now();
     let pool = PgPoolOptions::new()
         .acquire_timeout(Duration::new(3, 0))
         .connect(DSN)
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
-    Postgres::new(pool)
+    (Postgres::new(pool), time_now)
 }
 
 #[tokio::test]
 async fn check_users() {
-    let db = get_postgres().await;
-    let time_now = Local::now();
+    let (db, time_now) = get_postgres().await;
 
     // err: проверим что запись не находит
     assert_matches!(
@@ -49,82 +51,60 @@ async fn check_users() {
     );
 
     // ok: проверим что запись создается
-    let mut user_expected: User = rand::user();
-    user_expected.user_id = db
-        .tbl_users
-        .create(user_expected.clone())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    let mut user_expected = rand::user();
+    user_expected.user_id = db.tbl_users.create(user_expected.clone()).await.unwrap();
+    assert!(!user_expected.user_id.is_nil());
 
     // err: проверим что нельзя добавить такую же запись
     assert!(db.tbl_users.create(user_expected.clone()).await.is_err());
 
     // ok: проверим что запись можно получить и данные их равны
-    let user_actual = db
-        .tbl_users
-        .one(user_expected.user_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    let mut user_actual = db.tbl_users.one(user_expected.user_id).await.unwrap();
+    assert!(user_actual.created_at.gt(&time_now));
+    assert_eq!(user_actual.created_at, user_actual.updated_at);
     user_expected.created_at = user_actual.created_at; // подменим на валидное явно
     user_expected.updated_at = user_actual.updated_at; // подменим на валидное явно
-    let user_actual1 = user_actual.clone();
     assert_eq!(user_expected, user_actual);
-    assert!(user_expected.created_at.gt(&time_now));
 
-    // ok: проверим что находит по емэйлу
-    let user_actual2 = db
-        .tbl_users
-        .by_email(user_actual.email)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    assert_eq!(user_actual1, user_actual2);
+    // ok: проверим что находит по е-мэйлу
+    assert_eq!(
+        user_actual.clone(),
+        db.tbl_users.by_email(user_actual.email).await.unwrap()
+    );
 
     // ok: проверим что список не пустой
-    let (items, total) = db
-        .tbl_users
-        .list(-1, -1)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    let (items, total) = db.tbl_users.list(-1, -1).await.unwrap();
     assert!(!items.is_empty());
     assert!(total > 0);
 
-    // ok: проверим пустой результат
-    let (items, total) = db
-        .tbl_users
-        .list(0, 0)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    // ok: проверим пустой результат, но общее кол-во есть
+    let (items, total) = db.tbl_users.list(0, 0).await.unwrap();
     assert!(items.is_empty());
-    assert!(total > 0); // список пустой, но общее кол-во есть
+    assert!(total > 0);
 
-    // err: изменим
+    // err: изменим не понятно у кого
     assert!(db.tbl_users.update(rand::user()).await.is_err());
 
     // ok: изменим и проверим пользователя
-    let mut user_expected = rand::user();
+    user_expected = rand::user();
     user_expected.user_id = user_actual.user_id; // подменим на валидное явно
-    db.tbl_users
-        .update(user_expected.clone())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    let user_actual = db
-        .tbl_users
-        .one(user_expected.user_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    assert!(
+        db.tbl_users
+            .update(user_expected.clone())
+            .await
+            .is_success()
+    );
+    user_actual = db.tbl_users.one(user_expected.user_id).await.unwrap();
+    assert!(user_actual.updated_at.gt(&user_actual.created_at));
     user_expected.created_at = user_actual.created_at; // подменим на валидное явно
     user_expected.updated_at = user_actual.updated_at; // подменим на валидное явно
     assert_eq!(user_expected, user_actual);
-    assert!(user_actual.updated_at.gt(&user_actual.created_at));
 
     // err: удалим не известного пользователя
     assert!(db.tbl_users.delete(Uuid::new_v4()).await.is_err());
 
     // ok: удалим пользователя
-    db.tbl_users
-        .delete(user_actual.user_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    assert!(db.tbl_users.delete(user_actual.user_id).await.is_success());
 
     // ok: не нашли пользователя, как и задумано
     assert_matches!(
@@ -135,15 +115,8 @@ async fn check_users() {
 
 #[tokio::test]
 async fn check_teams() {
-    let db = get_postgres().await;
-    let time_now = Local::now();
-
-    // ok: создадим пользователя
-    let user_id = db
-        .tbl_users
-        .create(rand::user())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    let (db, time_now) = get_postgres().await;
+    let user_id = db.tbl_users.create(rand::user()).await.unwrap();
 
     // err: проверим что команду не находит
     assert_matches!(
@@ -151,82 +124,73 @@ async fn check_teams() {
         Err(RepositoryError::NotFoundRow)
     );
 
-    // err: попытаемся создать команду, но такой нет
+    // err: попытаемся создать команду, но такого пользователя нет
     assert!(db.tbl_teams.create(rand::team()).await.is_err());
 
-    // ok: проверим что создается
-    let mut team_expected: Team = rand::team();
-    team_expected.created_by = user_id; // зависит от user-а
-    team_expected.team_id = db
-        .tbl_teams
-        .create(team_expected.clone())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    // ok: проверим что создается, с существующим пользователем
+    let mut team_expected = rand::team();
+    team_expected.created_by = user_id;
+    team_expected.team_id = db.tbl_teams.create(team_expected.clone()).await.unwrap();
+    assert!(!team_expected.team_id.is_nil());
 
-    // err: проверим что нельзя добавить такую же запись
+    // err: проверим что нельзя добавить такую же запись, т.к. поле "name" уникально
     assert!(db.tbl_teams.create(team_expected.clone()).await.is_err());
 
-    // ok: проверим что можно получить и их данные равны
-    let team_actual = db
-        .tbl_teams
-        .one(team_expected.team_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    // ok: проверим что можно получить и данные равны
+    let mut team_actual = db.tbl_teams.one(team_expected.team_id).await.unwrap();
+    assert!(team_actual.created_at.gt(&time_now));
+    assert_eq!(team_actual.created_at, team_actual.updated_at);
     team_expected.created_at = team_actual.created_at; // подменим на валидное явно
     team_expected.updated_at = team_actual.updated_at; // подменим на валидное явно
     assert_eq!(team_expected, team_actual);
-    assert!(team_expected.created_at.gt(&time_now));
 
     // ok: проверим что список не пустой
-    let (items, total) = db
-        .tbl_teams
-        .list(-1, -1)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    let (items, total) = db.tbl_teams.list(-1, -1).await.unwrap();
     assert!(!items.is_empty());
     assert!(total > 0);
 
-    // ok: проверим пустой результат
-    let (items, total) = db
-        .tbl_teams
-        .list(0, 0)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    // ok: проверим пустой результат, но общее кол-во есть
+    let (items, total) = db.tbl_teams.list(0, 0).await.unwrap();
     assert!(items.is_empty());
-    assert!(total > 0); // список пустой, но общее кол-во есть
+    assert!(total > 0);
 
     // err: изменим неизвестного
     assert!(db.tbl_teams.update(rand::team()).await.is_err());
 
     // ok: изменим и проверим
-    let mut team_expected = rand::team();
+    team_expected = rand::team();
     team_expected.team_id = team_actual.team_id; // подменим на валидное явно
     team_expected.created_by = user_id;
-    db.tbl_teams
-        .update(team_expected.clone())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    let team_actual = db
-        .tbl_teams
-        .one(team_expected.team_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    assert!(
+        db.tbl_teams
+            .update(team_expected.clone())
+            .await
+            .is_success()
+    );
+    team_actual = db.tbl_teams.one(team_expected.team_id).await.unwrap();
+    assert!(team_actual.updated_at.gt(&team_actual.created_at));
     team_expected.created_at = team_actual.created_at; // подменим на валидное явно
     team_expected.updated_at = team_actual.updated_at; // подменим на валидное явно
     assert_eq!(team_expected, team_actual);
-    assert!(team_actual.updated_at.gt(&team_actual.created_at));
 
-    // err: попытаемся удалить
+    // err: попытаемся удалить не известную команду
     assert!(db.tbl_teams.delete(Uuid::new_v4()).await.is_err());
 
     // err: нельзя удалить пользователя пока есть привязанная команда
     assert!(db.tbl_users.delete(user_id).await.is_err());
 
-    // ok: удалим
-    db.tbl_teams
-        .delete(team_actual.team_id)
+    // ok: проверим что появилась запись в таблице team_members
+    let team_member = db
+        .tbl_team_members
+        .one(team_actual.team_id, team_actual.created_by)
         .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+        .unwrap();
+    assert_eq!(team_actual.team_id, team_member.team_id);
+    assert_eq!(team_actual.created_by, team_member.user_id);
+    assert!(team_member.created_at.gt(&time_now));
+
+    // ok: удалим
+    assert!(db.tbl_teams.delete(team_actual.team_id).await.is_success());
 
     // ok: не нашли, как и задумано
     assert_matches!(
@@ -234,31 +198,28 @@ async fn check_teams() {
         Err(RepositoryError::NotFoundRow)
     );
 
+    // ok: каскадно удалилась
+    assert_matches!(
+        db.tbl_team_members
+            .one(team_actual.team_id, team_actual.created_by)
+            .await,
+        Err(RepositoryError::NotFoundRow)
+    );
+
     // ok: почистим за собой
-    db.tbl_users
-        .delete(user_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    db.tbl_users.delete(user_id).await.unwrap();
 }
 
 #[tokio::test]
 async fn check_team_members() {
-    let db = get_postgres().await;
-    let time_now = Local::now();
+    let (db, time_now) = get_postgres().await;
 
-    // ok: создадим команду и пользователя
-    let user_id = db
-        .tbl_users
-        .create(rand::user())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    // ok: создадим пользователя и команду
+    let user_id1 = db.tbl_users.create(rand::user()).await.unwrap();
+    let user_id2 = db.tbl_users.create(rand::user()).await.unwrap();
     let mut team = rand::team();
-    team.created_by = user_id;
-    let team_id = db
-        .tbl_teams
-        .create(team)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    team.created_by = user_id1;
+    let team_id = db.tbl_teams.create(team).await.unwrap();
 
     // err: проверим что не находит
     assert_matches!(
@@ -276,16 +237,10 @@ async fn check_team_members() {
             .is_err()
     );
 
-    // ok: проверим что создается
+    // ok: проверим что НЕ создается, т.к. запись уже должна быть при создании записи о team
     let mut team_member_expected = rand::team_member();
-    team_member_expected.team_id = team_id; // зависит от team-а
-    team_member_expected.user_id = user_id; // зависит от user-а
-    db.tbl_team_members
-        .create(team_member_expected.clone())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-
-    // err: проверим что нельзя добавить такую же запись
+    team_member_expected.team_id = team_id;
+    team_member_expected.user_id = user_id1;
     assert!(
         db.tbl_team_members
             .create(team_member_expected.clone())
@@ -293,25 +248,29 @@ async fn check_team_members() {
             .is_err()
     );
 
+    // ok: явно добавим запись для user2
+    team_member_expected.user_id = user_id2;
+    assert!(
+        db.tbl_team_members
+            .create(team_member_expected.clone())
+            .await
+            .is_success()
+    );
+
     // ok: проверим что можно получить и их данные равны
     let team_member_actual = db
         .tbl_team_members
         .one(team_member_expected.team_id, team_member_expected.user_id)
         .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+        .unwrap();
+    assert!(team_member_actual.created_at.gt(&time_now));
     team_member_expected.created_at = team_member_actual.created_at; // подменим на валидное явно
     assert_eq!(team_member_expected, team_member_actual);
-    assert!(team_member_expected.created_at.gt(&time_now));
 
     // ok: проверим что список не пустой
-    let result = db
-        .tbl_team_members
-        .all()
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    assert!(!result.is_empty());
+    assert!(!db.tbl_team_members.all().await.unwrap().is_empty());
 
-    // err: попытаемся удалить
+    // err: попытаемся удалить не известное
     assert!(
         db.tbl_team_members
             .delete(Uuid::new_v4(), Uuid::new_v4())
@@ -319,13 +278,10 @@ async fn check_team_members() {
             .is_err()
     );
 
-    // ok: удалим
-    db.tbl_team_members
-        .delete(team_member_actual.team_id, team_member_actual.user_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    // ok: удалим пользователя, запись о члене должно удалится каскадно
+    db.tbl_users.delete(user_id2).await.unwrap();
 
-    // ok: не нашли, как и задумано
+    // ok: записи не должно быть
     assert_matches!(
         db.tbl_team_members
             .one(team_member_actual.team_id, team_member_actual.user_id)
@@ -333,58 +289,30 @@ async fn check_team_members() {
         Err(RepositoryError::NotFoundRow)
     );
 
-    // ok: почистим за собой
-    db.tbl_teams
-        .delete(team_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    db.tbl_users
-        .delete(user_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-
-    // проверим каскадное удаление, относительно team_id
-    let user_id = db
-        .tbl_users
-        .create(rand::user())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut team = rand::team();
-    team.created_by = user_id;
-
-    let team_id: Uuid = db
-        .tbl_teams
-        .create(team)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut team_member_expected = rand::team_member();
-    team_member_expected.team_id = team_id;
-    team_member_expected.user_id = user_id;
-
-    db.tbl_team_members
-        .create(team_member_expected.clone())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    db.tbl_teams
-        .delete(team_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    assert_matches!(
+    // ok: первая запись должна еще быть
+    assert!(
         db.tbl_team_members
-            .one(team_member_expected.team_id, team_member_expected.user_id)
-            .await,
+            .one(team_id, user_id1)
+            .await
+            .is_success()
+    );
+
+    // ok: удалим team, запись о member тоже должна исчезнуть
+    db.tbl_teams.delete(team_id).await.unwrap();
+
+    // ok: записи не должно быть
+    assert_matches!(
+        db.tbl_team_members.one(team_id, user_id1).await,
         Err(RepositoryError::NotFoundRow)
     );
-    db.tbl_users
-        .delete(user_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+
+    // почистим
+    db.tbl_users.delete(user_id1).await.unwrap();
 }
 
 #[tokio::test]
 async fn check_tasks() {
-    let db = get_postgres().await;
-    let time_now = Local::now();
+    let (db, time_now) = get_postgres().await;
 
     // ok: создадим пользователя и команду
     let user_id: Uuid = db
@@ -512,8 +440,7 @@ async fn check_tasks() {
 
 #[tokio::test]
 async fn check_task_histories() {
-    let db = get_postgres().await;
-    let time_now = Local::now();
+    let (db, time_now) = get_postgres().await;
 
     // ok: создадим зависимости
     let user_id = db
@@ -759,8 +686,7 @@ async fn check_task_histories() {
 
 #[tokio::test]
 async fn check_task_comments() {
-    let db = get_postgres().await;
-    let time_now = Local::now();
+    let (db, time_now) = get_postgres().await;
 
     // ok: создадим зависимости
     let user_id: Uuid = db

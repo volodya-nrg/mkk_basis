@@ -19,9 +19,10 @@ use thiserror::Error as ThisError;
 #[derive(Clone)] // из-за axum-state
 pub struct UseCase<ES: EmailSender> {
     pub auth: auth::Auth<ES>,
+    pub teams: teams::Teams,
     pub tasks: tasks::Tasks,
     pub task_comments: task_comments::TaskComments,
-    pub teams: teams::Teams,
+
     pub users: users::Users,
 }
 
@@ -34,9 +35,13 @@ impl<ES: EmailSender> UseCase<ES> {
     ) -> Self {
         Self {
             auth: auth::Auth::new(addr, postgres.tbl_users.clone(), jwt_service, email_sender),
-            tasks: tasks::Tasks::new(postgres.tbl_tasks, postgres.tbl_task_histories),
+            teams: teams::Teams::new(postgres.tbl_teams, postgres.tbl_team_members.clone()),
+            tasks: tasks::Tasks::new(
+                postgres.tbl_tasks,
+                postgres.tbl_task_histories,
+                postgres.tbl_team_members.clone(),
+            ),
             task_comments: task_comments::TaskComments::new(postgres.tbl_task_comments),
-            teams: teams::Teams::new(postgres.tbl_teams, postgres.tbl_team_members),
             users: users::Users::new(postgres.tbl_users),
         }
     }

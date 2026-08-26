@@ -49,7 +49,7 @@ impl Handlers {
         }
     }
     pub async fn create<ES>(
-        _user: AuthenticatedUser<ES>,
+        user: AuthenticatedUser<ES>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestTask>,
     ) -> impl IntoResponse
@@ -58,7 +58,7 @@ impl Handlers {
     {
         let result = use_case
             .tasks
-            .create(mapper::task_tr_to_task_uc(payload))
+            .create(mapper::task_tr_to_task_uc(payload), user.user_id)
             .await;
         let new_uuid = match result {
             Ok(v) => v,
@@ -73,7 +73,7 @@ impl Handlers {
         (StatusCode::OK, Json(json!(resp))).into_response()
     }
     pub async fn update<ES>(
-        _user: AuthenticatedUser<ES>,
+        user: AuthenticatedUser<ES>,
         State(use_case): State<UseCase<ES>>,
         Path(task_id): Path<Uuid>,
         Json(payload): Json<RequestTask>,
@@ -84,7 +84,7 @@ impl Handlers {
         let mut uc_task = mapper::task_tr_to_task_uc(payload);
         uc_task.task_id = task_id;
 
-        if let Err(e) = use_case.tasks.update(uc_task).await {
+        if let Err(e) = use_case.tasks.update(uc_task, user.user_id).await {
             return e.into_response();
         };
 
@@ -97,14 +97,14 @@ impl Handlers {
         (StatusCode::OK, Json(json!(resp))).into_response()
     }
     pub async fn delete<ES>(
-        _user: AuthenticatedUser<ES>,
+        user: AuthenticatedUser<ES>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
     ) -> impl IntoResponse
     where
         ES: EmailSender,
     {
-        if let Err(e) = use_case.tasks.delete(item_id).await {
+        if let Err(e) = use_case.tasks.delete(item_id, user.user_id).await {
             e.into_response()
         } else {
             StatusCode::OK.into_response()
