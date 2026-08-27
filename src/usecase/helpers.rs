@@ -1,7 +1,9 @@
-use argon2::Argon2;
-use argon2::password_hash::rand_core::OsRng;
-use argon2::password_hash::{
-    Error as Argon2Error, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
+use argon2::{
+    Argon2,
+    password_hash::rand_core::OsRng,
+    password_hash::{
+        Error as Argon2Error, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
+    },
 };
 
 pub fn password_hash(str: &str) -> Result<String, Argon2Error> {

@@ -4,12 +4,13 @@ mod err_msg;
 mod transport;
 mod usecase;
 
-use adapter::{config::Config, db::postgres::Postgres, email::Email, jwt::Jwt, logger};
 use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use sqlx::postgres::PgPoolOptions;
 use std::fs;
 use std::time::Duration;
+
+use adapter::{config::Config, db::postgres::Postgres, email::Email, jwt::Jwt, logger};
 use transport::http_server::HTTPServer;
 use usecase::UseCase;
 

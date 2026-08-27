@@ -1,18 +1,21 @@
+use http::StatusCode;
+use uuid::Uuid;
+
+use crate::{
+    adapter::{
+        db::RepositoryError,
+        db::postgres::tables::{
+            team_members::TeamMembers as TeamMembersRepo, teams::Teams as TeamsRepo,
+            users::Role as UserRole,
+        },
+    },
+    err_msg::ErrMsg,
+};
+
 use super::{
     UseCaseError, mapper,
     models::{Team, TeamMember},
 };
-use crate::adapter::{
-    db::RepositoryError,
-    db::postgres::tables::{
-        team_members::TeamMembers as TeamMembersRepo, teams::Teams as TeamsRepo,
-        users::Role as UserRole,
-    },
-};
-use crate::err_msg::ErrMsg;
-
-use http::StatusCode;
-use uuid::Uuid;
 
 #[derive(Clone)] // из-за axum-state
 pub struct Teams {

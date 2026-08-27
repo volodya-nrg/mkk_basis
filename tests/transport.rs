@@ -7,11 +7,6 @@ use tokio::sync::OnceCell;
 use tokio::time::{Duration, sleep};
 use uuid::Uuid;
 
-use helpers::client::{Client, StatusCodeBodyError};
-use helpers::mocks::EmailServiceMock;
-use helpers::rand;
-
-use mkk_basis::transport::models::{ResponseRefreshToken, ResponseTaskCommentsList};
 use mkk_basis::{
     adapter::db::postgres::Postgres as PostgresService,
     adapter::db::postgres::tables::users::Role as UsersRole,
@@ -20,12 +15,16 @@ use mkk_basis::{
     consts, transport,
     transport::http_server::HTTPServer,
     transport::models::{
-        RequestLogin, RequestTeamInvite, ResponseLogin, ResponseTask, ResponseTaskComment,
-        ResponseTaskHistories, ResponseTasksList, ResponseTeam, ResponseTeamsList, ResponseUUID,
-        ResponseUser, ResponseUsersList,
+        RequestLogin, RequestTeamInvite, ResponseLogin, ResponseRefreshToken, ResponseTask,
+        ResponseTaskComment, ResponseTaskCommentsList, ResponseTaskHistories, ResponseTasksList,
+        ResponseTeam, ResponseTeamsList, ResponseUUID, ResponseUser, ResponseUsersList,
     },
     usecase::UseCase,
 };
+
+use helpers::client::{Client, StatusCodeBodyError};
+use helpers::mocks::EmailServiceMock;
+use helpers::rand;
 
 struct ClientData {
     http_addr: String,

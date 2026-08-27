@@ -1,8 +1,9 @@
+use lettre::{
+    message::{Mailbox, header::ContentType},
+    transport::smtp::authentication::Credentials,
+    {Address, Message, SmtpTransport, Transport},
+};
 use std::time::Duration;
-
-use lettre::message::{Mailbox, header::ContentType};
-use lettre::transport::smtp::authentication::Credentials;
-use lettre::{Address, Message, SmtpTransport, Transport};
 
 // EmailSender. Трейт для подмены (прод, тест). Сразу добавим ограничения
 // (Clone + Send + Sync + 'static), чтоб их не добавлять потом везде. "'static" - для Router.

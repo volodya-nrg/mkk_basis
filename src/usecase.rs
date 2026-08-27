@@ -7,14 +7,15 @@ pub mod tasks;
 pub mod teams;
 pub mod users;
 
-use crate::adapter::{
-    db::postgres::Postgres as PostgresService, email::EmailSender, jwt::Jwt as JWTService,
-};
 use axum::Json;
 use axum::response::{IntoResponse, Response};
 use http::StatusCode;
 use serde_json::json;
 use thiserror::Error as ThisError;
+
+use crate::adapter::{
+    db::postgres::Postgres as PostgresService, email::EmailSender, jwt::Jwt as JWTService,
+};
 
 #[derive(Clone)] // из-за axum-state
 pub struct UseCase<ES: EmailSender> {

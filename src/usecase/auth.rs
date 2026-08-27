@@ -1,15 +1,17 @@
 use http::StatusCode;
 use uuid::Uuid;
 
-use crate::adapter::{
-    db::RepositoryError,
-    db::postgres::tables::users::Users as UsersRepo,
-    email::EmailSender,
-    helpers as HelpersService,
-    jwt::{JWTError, Jwt as JWTService, TYPE_REFRESH},
+use crate::{
+    adapter::{
+        db::RepositoryError,
+        db::postgres::tables::users::Users as UsersRepo,
+        email::EmailSender,
+        helpers as HelpersService,
+        jwt::{JWTError, Jwt as JWTService, TYPE_REFRESH},
+    },
+    consts,
+    err_msg::ErrMsg,
 };
-use crate::consts;
-use crate::err_msg::ErrMsg;
 
 use super::{UseCaseError, helpers, mapper, models::User};
 

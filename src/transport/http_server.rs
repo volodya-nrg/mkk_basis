@@ -1,13 +1,9 @@
 pub mod handlers;
 pub mod middleware;
 
-use crate::adapter::email::EmailSender;
-use crate::usecase::UseCase;
-
 use axum::routing::{delete, get, post, put};
 use axum::{Router, middleware as AxumMiddleware};
 use axum_server::tls_rustls::RustlsConfig;
-use handlers::{auth, etc, task_comments, tasks, teams, users};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::server::WebPkiClientVerifier;
 use rustls::{RootCertStore, ServerConfig};
@@ -16,6 +12,11 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::services::{ServeDir, ServeFile};
+
+use crate::adapter::email::EmailSender;
+use crate::usecase::UseCase;
+
+use handlers::{auth, etc, task_comments, tasks, teams, users};
 
 pub struct HTTPServer<ES: EmailSender> {
     addr: String,

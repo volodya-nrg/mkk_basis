@@ -1,11 +1,12 @@
-use super::{UseCaseError, helpers, mapper, models::User};
-use crate::adapter::{
-    db::RepositoryError, db::models::User as DBUser,
-    db::postgres::tables::users::Users as UsersRepo,
-};
 use http::StatusCode;
 use uuid::Uuid;
-use crate::err_msg::ErrMsg;
+
+use crate::{
+    adapter::{db::RepositoryError, db::postgres::tables::users::Users as UsersRepo},
+    err_msg::ErrMsg,
+};
+
+use super::{UseCaseError, helpers, mapper, models::User};
 
 #[derive(Clone)] // из-за axum-state
 pub struct Users {

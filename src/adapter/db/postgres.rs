@@ -1,7 +1,8 @@
 mod table_basic;
 pub mod tables;
 
-use sqlx::{FromRow, Pool, Postgres as SQLXPostgres};
+use sqlx::{Pool, Postgres as SQLXPostgres};
+
 use tables::{
     task_comments::TaskComments, task_histories::TaskHistories, tasks::Tasks,
     team_members::TeamMembers, teams::Teams, users::Users,

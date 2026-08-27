@@ -6,7 +6,11 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use mkk_basis::adapter::db::postgres::Postgres as PostgresService;
-use mkk_basis::transport::models::{RequestLimitOffset, RequestLogin, RequestRefreshToken, RequestRegister, RequestTask, RequestTaskComment, RequestTeam, RequestTeamInvite, RequestUser, ResponseLogin, ResponseRefreshToken};
+use mkk_basis::transport::models::{
+    RequestLimitOffset, RequestLogin, RequestRefreshToken, RequestRegister, RequestTask,
+    RequestTaskComment, RequestTeam, RequestTeamInvite, RequestUser, ResponseLogin,
+    ResponseRefreshToken,
+};
 
 use super::rand;
 
@@ -757,9 +761,15 @@ impl<'pg> Client<'pg> {
         cb(result);
         self
     }
-    
+
     // task comments
-    pub async fn task_comments_list<T>(&self, task_id: Uuid, limit: i32, offset: i32, mut cb: T) -> &Self
+    pub async fn task_comments_list<T>(
+        &self,
+        task_id: Uuid,
+        limit: i32,
+        offset: i32,
+        mut cb: T,
+    ) -> &Self
     where
         T: FnMut(StatusCodeBodyError),
     {
@@ -782,7 +792,12 @@ impl<'pg> Client<'pg> {
         cb(result);
         self
     }
-    pub async fn task_comments_create<T>(&self, task_id: Uuid, req: RequestTaskComment, mut cb: T) -> &Self
+    pub async fn task_comments_create<T>(
+        &self,
+        task_id: Uuid,
+        req: RequestTaskComment,
+        mut cb: T,
+    ) -> &Self
     where
         T: FnMut(StatusCodeBodyError),
     {

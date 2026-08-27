@@ -2,19 +2,18 @@ mod helpers;
 
 use chrono::{DateTime, Local};
 use ctor::ctor;
-use helpers::rand;
-
-use mkk_basis::adapter::{
-    db::RepositoryError, db::models::*, db::postgres::Postgres,
-    db::postgres::tables::tasks::Status as TaskStatus, logger,
-};
-
-use sqlx::__rt::sleep;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::testing::TestTermination;
 use std::assert_matches;
 use std::time::Duration;
 use uuid::Uuid;
+
+use mkk_basis::adapter::{
+    db::RepositoryError, db::postgres::Postgres, db::postgres::tables::tasks::Status as TaskStatus,
+    logger,
+};
+
+use helpers::rand;
 
 const DSN: &str =
     "postgres://postgres:postgres@127.0.0.1:5432/postgres?options=-c%20search_path%3Dmkk_basis";
@@ -315,18 +314,11 @@ async fn check_tasks() {
     let (db, time_now) = get_postgres().await;
 
     // ok: создадим пользователя и команду
-    let user_id: Uuid = db
-        .tbl_users
-        .create(rand::user())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    let user_id1 = db.tbl_users.create(rand::user()).await.unwrap();
+    let user_id2 = db.tbl_users.create(rand::user()).await.unwrap();
     let mut team = rand::team();
-    team.created_by = user_id;
-    let team_id: Uuid = db
-        .tbl_teams
-        .create(team)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    team.created_by = user_id1;
+    let team_id: Uuid = db.tbl_teams.create(team).await.unwrap();
 
     // err: проверим что задачу не находит
     assert_matches!(
@@ -334,92 +326,84 @@ async fn check_tasks() {
         Err(RepositoryError::NotFoundRow)
     );
 
-    // err: попытаемся создать задачу, но такой нет
+    // err: попытаемся создать задачу, но связанных данных нет
     assert!(db.tbl_tasks.create(rand::task()).await.is_err());
 
     // ok: проверим что создается
     let mut task_expected = rand::task();
     task_expected.team_id = team_id; // зависит от team
-    task_expected.created_by = user_id; // зависит от user-а
-    task_expected.assignee_id = Some(user_id); // зависит от user-а
-    task_expected.status = TaskStatus::Start.to_string();
-    task_expected.task_id = db
-        .tbl_tasks
-        .create(task_expected.clone())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    task_expected.created_by = user_id1; // зависит от user-а
+    task_expected.assignee_id = Some(user_id2); // зависит от user-а
+    task_expected.status = TaskStatus::Start.to_string(); // все таки надо явно
+    task_expected.task_id = db.tbl_tasks.create(task_expected.clone()).await.unwrap();
+    assert!(!task_expected.task_id.is_nil());
 
-    // err: проверим что нельзя добавить такую же запись
+    // err: проверим что нельзя добавить такую же запись, т.к. created_by, team_id уникальны
     assert!(db.tbl_tasks.create(task_expected.clone()).await.is_err());
 
     // ok: проверим что можно получить и их данные равны
-    let task_actual = db
-        .tbl_tasks
-        .one(task_expected.task_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    let mut task_actual = db.tbl_tasks.one(task_expected.task_id).await.unwrap();
+    assert!(task_actual.created_at.gt(&time_now));
+    assert_eq!(task_actual.created_at, task_actual.updated_at);
     task_expected.created_at = task_actual.created_at; // подменим на валидное явно
     task_expected.updated_at = task_actual.updated_at; // подменим на валидное явно
     assert_eq!(task_expected, task_actual);
-    assert!(task_expected.created_at.gt(&time_now));
 
     // ok: проверим что список не пустой
-    let (items, total) = db
-        .tbl_tasks
-        .list(-1, -1)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    let (items, total) = db.tbl_tasks.list(-1, -1).await.unwrap();
     assert!(!items.is_empty());
     assert!(total > 0);
 
     // ok: проверим пустой результат
-    let (items, total) = db
-        .tbl_tasks
-        .list(0, 0)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    let (items, total) = db.tbl_tasks.list(0, 0).await.unwrap();
     assert!(items.is_empty());
     assert!(total > 0); // список пустой, но общее кол-во есть
 
     // err: изменим неизвестного
     assert!(db.tbl_tasks.update(rand::task()).await.is_err());
 
+    // удалим user2 и посмотрим что assignee_id=None;
+    db.tbl_users.delete(user_id2).await.unwrap();
+    assert!(
+        db.tbl_tasks
+            .one(task_actual.task_id)
+            .await
+            .unwrap()
+            .assignee_id
+            .is_none()
+    );
+
     // ok: изменим и проверим
-    let mut task_expected = rand::task();
+    task_expected = rand::task();
     task_expected.task_id = task_actual.task_id;
     task_expected.team_id = team_id; // зависит от team
-    task_expected.created_by = user_id; // зависит от user-а
+    task_expected.created_by = user_id1; // зависит от user-а
     task_expected.assignee_id = None; // зависит от user-а
     task_expected.status = TaskStatus::Cancelled.to_string();
-    db.tbl_tasks
-        .update(task_expected.clone())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    assert!(
+        db.tbl_tasks
+            .update(task_expected.clone())
+            .await
+            .is_success()
+    );
 
-    let task_actual = db
-        .tbl_tasks
-        .one(task_expected.task_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    task_actual = db.tbl_tasks.one(task_expected.task_id).await.unwrap();
+    assert!(task_actual.updated_at.gt(&task_actual.created_at));
     task_expected.created_at = task_actual.created_at; // подменим на валидное явно
     task_expected.updated_at = task_actual.updated_at; // подменим на валидное явно
     assert_eq!(task_expected, task_actual);
-    assert!(task_actual.updated_at.gt(&task_actual.created_at));
 
-    // err: попытаемся удалить
+    // err: попытаемся удалить не известное
     assert!(db.tbl_tasks.delete(Uuid::new_v4()).await.is_err());
 
     // err: нельзя удалить пока есть привязанная сущность
-    assert!(db.tbl_users.delete(user_id).await.is_err());
+    assert!(db.tbl_users.delete(user_id1).await.is_err());
 
     // err: нельзя удалить пока есть привязанная сущность
     assert!(db.tbl_teams.delete(team_id).await.is_err());
 
     // ok: удалим
-    db.tbl_tasks
-        .delete(task_actual.task_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    assert!(db.tbl_tasks.delete(task_actual.task_id).await.is_success());
 
     // ok: не нашли, как и задумано
     assert_matches!(
@@ -428,14 +412,8 @@ async fn check_tasks() {
     );
 
     // ok: почистим за собой
-    db.tbl_teams
-        .delete(task_actual.team_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    db.tbl_users
-        .delete(user_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    db.tbl_teams.delete(task_actual.team_id).await.unwrap();
+    db.tbl_users.delete(user_id1).await.unwrap();
 }
 
 #[tokio::test]
@@ -443,33 +421,17 @@ async fn check_task_histories() {
     let (db, time_now) = get_postgres().await;
 
     // ok: создадим зависимости
-    let user_id = db
-        .tbl_users
-        .create(rand::user())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    let user_id2 = db
-        .tbl_users
-        .create(rand::user())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut team: Team = rand::team();
-    team.created_by = user_id;
-    let team_id = db
-        .tbl_teams
-        .create(team)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut task: Task = rand::task();
+    let user_id1 = db.tbl_users.create(rand::user()).await.unwrap();
+    let user_id2 = db.tbl_users.create(rand::user()).await.unwrap();
+    let mut team = rand::team();
+    team.created_by = user_id1;
+    let team_id = db.tbl_teams.create(team).await.unwrap();
+    let mut task = rand::task();
     task.team_id = team_id;
-    task.created_by = user_id;
+    task.created_by = user_id1;
     task.assignee_id = None;
     task.status = TaskStatus::Todo.to_string();
-    let task_id = db
-        .tbl_tasks
-        .create(task)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    let task_id = db.tbl_tasks.create(task).await.unwrap();
 
     // err: проверим что не находит
     assert_matches!(
@@ -477,7 +439,7 @@ async fn check_task_histories() {
         Err(RepositoryError::NotFoundRow)
     );
 
-    // err: попытаемся создать
+    // err: попытаемся создать, но связей нет
     assert!(
         db.tbl_task_histories
             .create(rand::task_history())
@@ -488,30 +450,23 @@ async fn check_task_histories() {
     // ok: проверим что создается
     let mut task_history_expected = rand::task_history();
     task_history_expected.task_id = task_id;
-    task_history_expected.user_id = user_id;
+    task_history_expected.user_id = user_id1;
     task_history_expected.task_history_id = db
         .tbl_task_histories
         .create(task_history_expected.clone())
         .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-
-    // err: проверим что нельзя добавить такую же запись
-    assert!(
-        db.tbl_task_histories
-            .create(task_history_expected.clone())
-            .await
-            .is_err()
-    );
+        .unwrap();
+    assert!(!task_history_expected.task_history_id.is_nil());
 
     // ok: проверим что можно получить и их данные равны
     let task_history_actual = db
         .tbl_task_histories
         .one(task_history_expected.task_history_id)
         .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+        .unwrap();
+    assert!(task_history_actual.created_at.gt(&time_now));
     task_history_expected.created_at = task_history_actual.created_at; // подменим на валидное явно
     assert_eq!(task_history_expected, task_history_actual);
-    assert!(task_history_expected.created_at.gt(&time_now));
 
     // ok: проверим что список не пустой
     let (items, total) = db
@@ -532,11 +487,7 @@ async fn check_task_histories() {
     assert!(total > 0); // список пустой, но общее кол-во есть
 
     // получим список относительно task_id
-    let items = db
-        .tbl_task_histories
-        .by_task_id(task_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    let items = db.tbl_task_histories.by_task_id(task_id).await.unwrap();
     assert_eq!(1, items.len());
 
     // err: изменим неизвестного
@@ -553,26 +504,35 @@ async fn check_task_histories() {
     task_history_expected.task_id = task_id;
     task_history_expected.user_id = user_id2;
 
-    db.tbl_task_histories
-        .update(task_history_expected.clone())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    assert!(
+        db.tbl_task_histories
+            .update(task_history_expected.clone())
+            .await
+            .is_success()
+    );
+
     let task_history_actual = db
         .tbl_task_histories
         .one(task_history_expected.task_history_id)
         .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+        .unwrap();
     task_history_expected.created_at = task_history_actual.created_at; // подменим на валидное явно
     assert_eq!(task_history_expected, task_history_actual);
 
-    // err: попытаемся удалить
+    // err: попытаемся удалить не известное
     assert!(db.tbl_task_histories.delete(Uuid::new_v4()).await.is_err());
+    // err: попытаемся удалить задачу
+    assert!(db.tbl_tasks.delete(task_id).await.is_err());
+    // err: попытаемся удалить пользователя
+    assert!(db.tbl_users.delete(user_id2).await.is_err());
 
     // ok: удалим
-    db.tbl_task_histories
-        .delete(task_history_actual.task_history_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    assert!(
+        db.tbl_task_histories
+            .delete(task_history_actual.task_history_id)
+            .await
+            .is_success()
+    );
 
     // ok: не нашли, как и задумано
     assert_matches!(
@@ -583,105 +543,10 @@ async fn check_task_histories() {
     );
 
     // ok: почистим за собой
-    db.tbl_tasks
-        .delete(task_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    db.tbl_teams
-        .delete(team_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    db.tbl_users
-        .delete(user_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    db.tbl_users
-        .delete(user_id2)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-
-    // проверим каскадное удаление относительно task_id
-    let user_id = db
-        .tbl_users
-        .create(rand::user())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut team: Team = rand::team();
-    team.created_by = user_id;
-    let team_id = db
-        .tbl_teams
-        .create(team)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut task: Task = rand::task();
-    task.team_id = team_id;
-    task.created_by = user_id;
-    task.assignee_id = None;
-    task.status = TaskStatus::Todo.to_string();
-    let task_id = db
-        .tbl_tasks
-        .create(task.clone())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-
-    let mut task_history_expected = rand::task_history();
-    task_history_expected.task_id = task_id;
-    task_history_expected.user_id = user_id;
-    let task_history_id = db
-        .tbl_task_histories
-        .create(task_history_expected)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    db.tbl_tasks
-        .delete(task_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    assert_matches!(
-        db.tbl_task_histories.one(task_history_id).await,
-        Err(RepositoryError::NotFoundRow)
-    );
-
-    // проверим каскадное удаление относительно user_id2
-    let task_id = db
-        .tbl_tasks
-        .create(task)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    let user_id2: Uuid = db
-        .tbl_users
-        .create(rand::user())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut task_history_expected = rand::task_history();
-    task_history_expected.task_id = task_id;
-    task_history_expected.user_id = user_id2;
-    let task_history_id = db
-        .tbl_task_histories
-        .create(task_history_expected)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    db.tbl_users
-        .delete(user_id2)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    assert_matches!(
-        db.tbl_task_histories.one(task_history_id).await,
-        Err(RepositoryError::NotFoundRow)
-    );
-
-    // ok: почистим за собой
-    db.tbl_tasks
-        .delete(task_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    db.tbl_teams
-        .delete(team_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    db.tbl_users
-        .delete(user_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    db.tbl_tasks.delete(task_id).await.unwrap();
+    db.tbl_teams.delete(team_id).await.unwrap();
+    db.tbl_users.delete(user_id1).await.unwrap();
+    db.tbl_users.delete(user_id2).await.unwrap();
 }
 
 #[tokio::test]
@@ -689,33 +554,17 @@ async fn check_task_comments() {
     let (db, time_now) = get_postgres().await;
 
     // ok: создадим зависимости
-    let user_id: Uuid = db
-        .tbl_users
-        .create(rand::user())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    let user_id2: Uuid = db
-        .tbl_users
-        .create(rand::user())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    let mut user_id1 = db.tbl_users.create(rand::user()).await.unwrap();
+    let mut user_id2 = db.tbl_users.create(rand::user()).await.unwrap();
     let mut team = rand::team();
-    team.created_by = user_id;
-    let team_id: Uuid = db
-        .tbl_teams
-        .create(team)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    team.created_by = user_id1;
+    let mut team_id = db.tbl_teams.create(team).await.unwrap();
     let mut task = rand::task();
     task.team_id = team_id;
-    task.created_by = user_id;
+    task.created_by = user_id1;
     task.assignee_id = None;
     task.status = TaskStatus::Todo.to_string();
-    let task_id = db
-        .tbl_tasks
-        .create(task)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    let mut task_id1 = db.tbl_tasks.create(task).await.unwrap();
 
     // err: проверим что не находит
     assert_matches!(
@@ -733,51 +582,37 @@ async fn check_task_comments() {
 
     // ok: проверим что создается
     let mut task_comment_expected = rand::task_comment();
-    task_comment_expected.task_id = task_id;
-    task_comment_expected.user_id = user_id;
+    task_comment_expected.task_id = task_id1;
+    task_comment_expected.user_id = user_id1;
     task_comment_expected.task_comment_id = db
         .tbl_task_comments
         .create(task_comment_expected.clone())
         .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-
-    // ok: проверим что можно добавить такую же запись
-    db.tbl_task_comments
-        .create(task_comment_expected.clone())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+        .unwrap();
+    assert!(!task_comment_expected.task_comment_id.is_nil());
 
     // ok: проверим что можно получить и их данные равны
     let task_comment_actual = db
         .tbl_task_comments
         .one(task_comment_expected.task_comment_id)
         .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+        .unwrap();
+    assert!(task_comment_actual.created_at.gt(&time_now));
+    assert_eq!(
+        task_comment_actual.created_at,
+        task_comment_actual.updated_at
+    );
     task_comment_expected.created_at = task_comment_actual.created_at; // подменим на валидное явно
     task_comment_expected.updated_at = task_comment_actual.updated_at; // подменим на валидное явно
     assert_eq!(task_comment_expected, task_comment_actual);
-    assert!(task_comment_expected.created_at.gt(&time_now));
-    assert!(
-        task_comment_expected
-            .created_at
-            .eq(&task_comment_expected.updated_at)
-    );
 
     // ok: проверим что список не пустой
-    let (items, total) = db
-        .tbl_task_comments
-        .list(task_id, -1, -1)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    let (items, total) = db.tbl_task_comments.list(task_id1, -1, -1).await.unwrap();
     assert!(!items.is_empty());
     assert!(total > 0);
 
     // ok: проверим пустой результат
-    let (items, total) = db
-        .tbl_task_comments
-        .list(task_id, 0, 0)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    let (items, total) = db.tbl_task_comments.list(task_id1, 0, 0).await.unwrap();
     assert!(items.is_empty());
     assert!(total > 0); // список пустой, но общее кол-во есть
 
@@ -792,35 +627,39 @@ async fn check_task_comments() {
     // ok: изменим и проверим
     let mut task_comment_expected = rand::task_comment();
     task_comment_expected.task_comment_id = task_comment_actual.task_comment_id;
-    task_comment_expected.task_id = task_id;
+    task_comment_expected.task_id = task_id1;
     task_comment_expected.user_id = user_id2;
 
-    db.tbl_task_comments
-        .update(task_comment_expected.clone())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    assert!(
+        db.tbl_task_comments
+            .update(task_comment_expected.clone())
+            .await
+            .is_success()
+    );
     let task_comment_actual = db
         .tbl_task_comments
         .one(task_comment_expected.task_comment_id)
         .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+        .unwrap();
+    assert!(
+        task_comment_actual
+            .updated_at
+            .gt(&task_comment_actual.created_at)
+    );
     task_comment_expected.created_at = task_comment_actual.created_at; // подменим на валидное явно
     task_comment_expected.updated_at = task_comment_actual.updated_at; // подменим на валидное явно
     assert_eq!(task_comment_expected, task_comment_actual);
-    assert!(
-        task_comment_expected
-            .updated_at
-            .gt(&task_comment_expected.created_at)
-    );
 
     // err: попытаемся удалить
     assert!(db.tbl_task_comments.delete(Uuid::new_v4()).await.is_err());
 
     // ok: удалим
-    db.tbl_task_comments
-        .delete(task_comment_actual.task_comment_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    assert!(
+        db.tbl_task_comments
+            .delete(task_comment_actual.task_comment_id)
+            .await
+            .is_success()
+    );
 
     // ok: не нашли, как и задумано
     assert_matches!(
@@ -831,102 +670,53 @@ async fn check_task_comments() {
     );
 
     // ok: почистим за собой
-    db.tbl_tasks
-        .delete(task_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    db.tbl_teams
-        .delete(team_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    db.tbl_users
-        .delete(user_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    db.tbl_users
-        .delete(user_id2)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    db.tbl_tasks.delete(task_id1).await.unwrap();
+    db.tbl_teams.delete(team_id).await.unwrap();
+    db.tbl_users.delete(user_id1).await.unwrap();
+    db.tbl_users.delete(user_id2).await.unwrap();
 
-    // проверим каскадное удаление относительно task_id
-    let user_id: Uuid = db
-        .tbl_users
-        .create(rand::user())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut team: Team = rand::team();
-    team.created_by = user_id;
-    let team_id: Uuid = db
-        .tbl_teams
-        .create(team)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut task: Task = rand::task();
+    // проверим каскадное удаление
+    user_id1 = db.tbl_users.create(rand::user()).await.unwrap();
+    user_id2 = db.tbl_users.create(rand::user()).await.unwrap();
+    team = rand::team();
+    team.created_by = user_id1;
+    team_id = db.tbl_teams.create(team).await.unwrap();
+    task = rand::task();
     task.team_id = team_id;
-    task.created_by = user_id;
+    task.created_by = user_id1;
     task.assignee_id = None;
     task.status = TaskStatus::Done.to_string();
-    let task_id = db
-        .tbl_tasks
-        .create(task.clone())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut task_comment_expected = rand::task_comment();
-    task_comment_expected.task_id = task_id;
-    task_comment_expected.user_id = user_id;
-    let task_comment_id = db
+    task_id1 = db.tbl_tasks.create(task.clone()).await.unwrap();
+    task_comment_expected = rand::task_comment();
+    task_comment_expected.task_id = task_id1;
+    task_comment_expected.user_id = user_id1;
+    let task_comment_id1 = db
         .tbl_task_comments
         .create(task_comment_expected)
         .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    db.tbl_tasks
-        .delete(task_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    assert_matches!(
-        db.tbl_task_comments.one(task_comment_id).await,
-        Err(RepositoryError::NotFoundRow)
-    );
-
-    // проверим каскадное удаление относительно user_id2
-    let task_id = db
-        .tbl_tasks
-        .create(task)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    let user_id2: Uuid = db
-        .tbl_users
-        .create(rand::user())
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    let mut task_comment_expected = rand::task_comment();
-    task_comment_expected.task_id = task_id;
+        .unwrap();
+    task_comment_expected = rand::task_comment();
+    task_comment_expected.task_id = task_id1;
     task_comment_expected.user_id = user_id2;
-    let task_comment_id = db
+    let task_comment_id2 = db
         .tbl_task_comments
         .create(task_comment_expected)
         .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    db.tbl_users
-        .delete(user_id2)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+        .unwrap();
+
+    db.tbl_users.delete(user_id2).await.unwrap();
     assert_matches!(
-        db.tbl_task_comments.one(task_comment_id).await,
+        db.tbl_task_comments.one(task_comment_id2).await,
         Err(RepositoryError::NotFoundRow)
     );
 
-    // ok: почистим за собой
-    db.tbl_tasks
-        .delete(task_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    db.tbl_teams
-        .delete(team_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    db.tbl_users
-        .delete(user_id)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+    db.tbl_tasks.delete(task_id1).await.unwrap();
+    assert_matches!(
+        db.tbl_task_comments.one(task_comment_id1).await,
+        Err(RepositoryError::NotFoundRow)
+    );
+
+    // почистим за собой
+    db.tbl_teams.delete(team_id).await.unwrap();
+    db.tbl_users.delete(user_id1).await.unwrap();
 }

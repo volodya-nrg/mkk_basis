@@ -1,17 +1,21 @@
+use http::StatusCode;
+use uuid::Uuid;
+
+use crate::{
+    adapter::{
+        db::RepositoryError,
+        db::postgres::tables::{
+            task_histories::TaskHistories as TaskHistoriesRepo, tasks::Tasks as TasksRepo,
+            team_members::TeamMembers as TeamMembersRepo,
+        },
+    },
+    err_msg::ErrMsg,
+};
+
 use super::{
     UseCaseError, mapper,
     models::{Task, TaskHistory},
 };
-use crate::adapter::{
-    db::RepositoryError,
-    db::postgres::tables::{
-        task_histories::TaskHistories as TaskHistoriesRepo, tasks::Tasks as TasksRepo,
-        team_members::TeamMembers as TeamMembersRepo,
-    },
-};
-use crate::err_msg::ErrMsg;
-use http::StatusCode;
-use uuid::Uuid;
 
 #[derive(Clone)] // из-за axum-state
 pub struct Tasks {
