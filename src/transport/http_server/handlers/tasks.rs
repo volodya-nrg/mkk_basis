@@ -21,16 +21,20 @@ impl Handlers {
     where
         ES: EmailSender,
     {
-        match use_case.tasks.list(payload.limit, payload.offset).await {
-            Ok((items, total)) => {
-                let resp = ResponseTasksList {
-                    items: items.into_iter().map(mapper::task_uc_to_task_tr).collect(),
-                    total: total as u32,
-                };
-                (StatusCode::OK, Json(json!(resp))).into_response()
-            }
-            Err(e) => e.into_response(),
-        }
+        use_case
+            .tasks
+            .list(payload.limit, payload.offset)
+            .await
+            .map_or_else(
+                |e| e.into_response(),
+                |(items, total)| {
+                    let resp = ResponseTasksList {
+                        items: items.into_iter().map(mapper::task_uc_to_task_tr).collect(),
+                        total: total as u32,
+                    };
+                    (StatusCode::OK, Json(json!(resp))).into_response()
+                },
+            )
     }
     pub async fn one<ES>(
         _user: AuthenticatedUser<ES>,
@@ -40,13 +44,10 @@ impl Handlers {
     where
         ES: EmailSender,
     {
-        match use_case.tasks.one(item_id).await {
-            Ok(v) => {
-                let resp = mapper::task_uc_to_task_tr(v);
-                (StatusCode::OK, Json(json!(resp))).into_response()
-            }
-            Err(e) => e.into_response(),
-        }
+        use_case.tasks.one(item_id).await.map_or_else(
+            |e| e.into_response(),
+            |v| (StatusCode::OK, Json(json!(mapper::task_uc_to_task_tr(v)))).into_response(),
+        )
     }
     pub async fn create<ES>(
         user: AuthenticatedUser<ES>,
@@ -64,13 +65,11 @@ impl Handlers {
             Ok(v) => v,
             Err(e) => return e.into_response(),
         };
-        let task_db = match use_case.tasks.one(new_uuid).await {
-            Ok(v) => v,
-            Err(e) => return e.into_response(),
-        };
-        let resp = mapper::task_uc_to_task_tr(task_db);
 
-        (StatusCode::OK, Json(json!(resp))).into_response()
+        use_case.tasks.one(new_uuid).await.map_or_else(
+            |e| e.into_response(),
+            |v| (StatusCode::OK, Json(json!(mapper::task_uc_to_task_tr(v)))).into_response(),
+        )
     }
     pub async fn update<ES>(
         user: AuthenticatedUser<ES>,
@@ -88,13 +87,10 @@ impl Handlers {
             return e.into_response();
         };
 
-        let task_db = match use_case.tasks.one(task_id).await {
-            Ok(v) => v,
-            Err(e) => return e.into_response(),
-        };
-        let resp = mapper::task_uc_to_task_tr(task_db);
-
-        (StatusCode::OK, Json(json!(resp))).into_response()
+        use_case.tasks.one(task_id).await.map_or_else(
+            |e| e.into_response(),
+            |v| (StatusCode::OK, Json(json!(mapper::task_uc_to_task_tr(v)))).into_response(),
+        )
     }
     pub async fn delete<ES>(
         user: AuthenticatedUser<ES>,
@@ -104,11 +100,11 @@ impl Handlers {
     where
         ES: EmailSender,
     {
-        if let Err(e) = use_case.tasks.delete(item_id, user.user_id).await {
-            e.into_response()
-        } else {
-            StatusCode::OK.into_response()
-        }
+        use_case
+            .tasks
+            .delete(item_id, user.user_id)
+            .await
+            .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())
     }
     pub async fn history<ES>(
         _user: AuthenticatedUser<ES>,
@@ -118,8 +114,9 @@ impl Handlers {
     where
         ES: EmailSender,
     {
-        match use_case.tasks.get_history(task_id).await {
-            Ok(v) => {
+        use_case.tasks.get_history(task_id).await.map_or_else(
+            |e| e.into_response(),
+            |v| {
                 let resp = ResponseTaskHistories {
                     items: v
                         .into_iter()
@@ -127,8 +124,7 @@ impl Handlers {
                         .collect(),
                 };
                 (StatusCode::OK, Json(json!(resp))).into_response()
-            }
-            Err(e) => e.into_response(),
-        }
+            },
+        )
     }
 }

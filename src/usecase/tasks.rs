@@ -58,12 +58,11 @@ impl Tasks {
         })?;
         Ok(mapper::task_db_to_task_uc(task_db))
     }
+    // создать задачу может только член команды
     pub async fn create(&self, task: Task, user_id: Uuid) -> Result<Uuid, UseCaseError> {
-        // создать задачу может только член команды
         self.check_access_for_team_member_only(task.team_id, user_id)
             .await
             .map_err(|e| e)?;
-
         let new_uuid = self
             .tasks_repo
             .create(mapper::task_uc_to_task_db(task))
@@ -77,7 +76,6 @@ impl Tasks {
         self.check_access_for_team_member_only(task.team_id, user_id)
             .await
             .map_err(|e| e)?;
-
         self.tasks_repo
             .update(mapper::task_uc_to_task_db(task))
             .await
@@ -86,7 +84,6 @@ impl Tasks {
     }
     // удалить задачу может только член команды
     pub async fn delete(&self, task_id: Uuid, user_id: Uuid) -> Result<(), UseCaseError> {
-        // удалить задачу может только член команды
         let task = self.tasks_repo.one(task_id).await.map_err(|e| match e {
             RepositoryError::NotFoundRow => UseCaseError::ForTransport {
                 status_code: StatusCode::NOT_FOUND,
@@ -95,12 +92,9 @@ impl Tasks {
             },
             other => UseCaseError::Common(other.to_string()),
         })?;
-
-        // доступ только для члена команды
         self.check_access_for_team_member_only(task.team_id, user_id)
             .await
             .map_err(|e| e)?;
-
         self.tasks_repo
             .delete(task_id)
             .await
@@ -134,7 +128,6 @@ impl Tasks {
                 },
                 other => UseCaseError::Common(other.to_string()),
             })?;
-
         Ok(())
     }
 }

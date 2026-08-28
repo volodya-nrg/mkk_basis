@@ -29,16 +29,20 @@ impl Handlers {
     where
         ES: EmailSender,
     {
-        match use_case.users.list(payload.limit, payload.offset).await {
-            Ok((items, total)) => {
-                let resp = ResponseUsersList {
-                    items: items.into_iter().map(mapper::user_uc_to_user_tr).collect(),
-                    total: total as u32,
-                };
-                (StatusCode::OK, Json(json!(resp))).into_response()
-            }
-            Err(e) => e.into_response(),
-        }
+        use_case
+            .users
+            .list(payload.limit, payload.offset)
+            .await
+            .map_or_else(
+                |e| e.into_response(),
+                |(items, total)| {
+                    let resp = ResponseUsersList {
+                        items: items.into_iter().map(mapper::user_uc_to_user_tr).collect(),
+                        total: total as u32,
+                    };
+                    (StatusCode::OK, Json(json!(resp))).into_response()
+                },
+            )
     }
     pub async fn one<ES>(
         _user: AuthenticatedUser<ES>,
@@ -48,13 +52,13 @@ impl Handlers {
     where
         ES: EmailSender,
     {
-        match use_case.users.one(item_id).await {
-            Ok(v) => {
+        use_case.users.one(item_id).await.map_or_else(
+            |e| e.into_response(),
+            |v| {
                 let resp = mapper::user_uc_to_user_tr(v);
                 (StatusCode::OK, Json(json!(resp))).into_response()
-            }
-            Err(e) => e.into_response(),
-        }
+            },
+        )
     }
     pub async fn create<ES>(
         _user: AuthenticatedUser<ES>,
@@ -77,13 +81,11 @@ impl Handlers {
             Ok(v) => v,
             Err(e) => return e.into_response(),
         };
-        let user_uc = match use_case.users.one(new_uuid).await {
-            Ok(v) => v,
-            Err(e) => return e.into_response(),
-        };
-        let resp = mapper::user_uc_to_user_tr(user_uc);
 
-        (StatusCode::OK, Json(json!(resp))).into_response()
+        use_case.users.one(new_uuid).await.map_or_else(
+            |e| e.into_response(),
+            |v| (StatusCode::OK, Json(json!(mapper::user_uc_to_user_tr(v)))).into_response(),
+        )
     }
     pub async fn update<ES>(
         _user: AuthenticatedUser<ES>,
@@ -107,13 +109,10 @@ impl Handlers {
             return e.into_response();
         }
 
-        let user_uc = match use_case.users.one(item_id).await {
-            Ok(v) => v,
-            Err(e) => return e.into_response(),
-        };
-        let resp = mapper::user_uc_to_user_tr(user_uc);
-
-        (StatusCode::OK, Json(json!(resp))).into_response()
+        use_case.users.one(item_id).await.map_or_else(
+            |e| e.into_response(),
+            |v| (StatusCode::OK, Json(json!(mapper::user_uc_to_user_tr(v)))).into_response(),
+        )
     }
     pub async fn delete<ES>(
         _user: AuthenticatedUser<ES>,
@@ -123,11 +122,11 @@ impl Handlers {
     where
         ES: EmailSender,
     {
-        if let Err(e) = use_case.users.delete(item_id).await {
-            e.into_response()
-        } else {
-            StatusCode::OK.into_response()
-        }
+        use_case
+            .users
+            .delete(item_id)
+            .await
+            .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())
     }
 }
 

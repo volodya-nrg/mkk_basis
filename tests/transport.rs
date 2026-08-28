@@ -22,9 +22,11 @@ use mkk_basis::{
     usecase::UseCase,
 };
 
-use helpers::client::{Client, StatusCodeBodyError};
-use helpers::mocks::EmailServiceMock;
-use helpers::rand;
+use helpers::{
+    client::{Client, StatusCodeBodyError},
+    mocks::EmailServiceMock,
+    rand,
+};
 
 struct ClientData {
     http_addr: String,
@@ -229,7 +231,7 @@ async fn check_auth() {
         req_register2.clone(),
         false,
         |result: StatusCodeBodyError| {
-            let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            let (status_code, _body_str) = result.unwrap();
             assert!(status_code.is_success());
         },
     )
@@ -237,12 +239,12 @@ async fn check_auth() {
 
     // err: - не хватает е-мэйла
     cl.register_confirm(None, None, |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_client_error());
     })
     .await // err - не хватает code
     .register_confirm(Some(rand::email()), None, |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_client_error());
     })
     .await // err - не валидный е-мэйл
@@ -250,7 +252,7 @@ async fn check_auth() {
         Some(rand::str()),
         Some(rand::str()),
         |result: StatusCodeBodyError| {
-            let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            let (status_code, _body_str) = result.unwrap();
             assert!(status_code.is_client_error());
         },
     )
@@ -259,7 +261,7 @@ async fn check_auth() {
         Some(rand::email()),
         Some(rand::str()),
         |result: StatusCodeBodyError| {
-            let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            let (status_code, _body_str) = result.unwrap();
             assert!(status_code.is_client_error());
         },
     )
@@ -268,7 +270,7 @@ async fn check_auth() {
         Some(req_register1.email),
         Some(rand::str()),
         |result: StatusCodeBodyError| {
-            let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            let (status_code, _body_str) = result.unwrap();
             assert!(status_code.is_client_error());
         },
     )
@@ -277,7 +279,7 @@ async fn check_auth() {
         Some(req_register2.email.clone()),
         Some(rand::str()),
         |result: StatusCodeBodyError| {
-            let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            let (status_code, _body_str) = result.unwrap();
             assert!(status_code.is_client_error());
         },
     )
@@ -311,7 +313,7 @@ async fn check_auth() {
         Some(req_register2.email.clone()),
         Some(email_code),
         |result: StatusCodeBodyError| {
-            let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            let (status_code, _body_str) = result.unwrap();
             assert!(status_code.is_success());
         },
     )
@@ -408,7 +410,7 @@ async fn check_auth() {
 
     // залогинимся и подождем пока токен обновления не протухнет
     cl.login(req_login.clone(), |result: StatusCodeBodyError| {
-        let (status_code, body_str) = result.unwrap();
+        let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_success());
     })
     .await;
@@ -500,9 +502,9 @@ async fn check_teams() {
     })
     .await;
 
-    // ok
+    // ok. Создатель user_id, т.к. он создал, он является участником группы.
     cl.teams_create(req_team.clone(), |result: StatusCodeBodyError| {
-        let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
         let resp_team_actual: ResponseTeam =
@@ -512,7 +514,7 @@ async fn check_teams() {
     })
     .await // err - нельзя создать дубликат
     .teams_create(req_team.clone(), |result: StatusCodeBodyError| {
-        let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_server_error());
     })
     .await // ok
@@ -616,7 +618,7 @@ async fn check_teams() {
     )
     .await;
 
-    // TODO не удобно чуть назначать права, обновлять пользователя
+    // TODO надо для юзера сделать patch а не put
     // дадим права админу
     let mut admin = rand::request_user();
     cl.users_one(admin_id, |result: StatusCodeBodyError| {
@@ -632,13 +634,13 @@ async fn check_teams() {
     })
     .await
     .users_update(admin_id, admin, None, |result: StatusCodeBodyError| {
-        let (status_code, body_str) = result.unwrap();
+        let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_success());
     })
     .await;
 
     // зайдем под owner и создадим команду
-    let mut team_id = Uuid::nil();
+    team_id = Uuid::nil();
     cl.login(
         RequestLogin {
             email: req_register_owner.email.clone(),
@@ -649,9 +651,9 @@ async fn check_teams() {
             assert!(status_code.is_success());
         },
     )
-    .await
+    .await // owner стал частью команды
     .teams_create(rand::request_team(), |result: StatusCodeBodyError| {
-        let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
         let resp: ResponseTeam = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
@@ -664,6 +666,7 @@ async fn check_teams() {
     })
     .await;
 
+    // сейчас owner является членом команды team_id
     // зайдем под other и пригласим кого-то, но у него нет доступа
     cl.login(
         RequestLogin {
@@ -718,7 +721,7 @@ async fn check_teams() {
     })
     .await;
 
-    // зайдем под admin и пригласим owner
+    // зайдем под admin и пригласим other, но не owner-а
     cl.login(
         RequestLogin {
             email: req_register_admin.email,
@@ -732,7 +735,7 @@ async fn check_teams() {
     .await
     .teams_invite(
         team_id,
-        RequestTeamInvite { user_id: owner_id },
+        RequestTeamInvite { user_id: other_id },
         |result: StatusCodeBodyError| {
             let (status_code, _body_str) = result.unwrap();
             assert!(status_code.is_success());
@@ -745,7 +748,7 @@ async fn check_teams() {
     })
     .await;
 
-    // зайдем под owner и пригласим себя же, будет ошибка, т.к. он уже есть среди приглашенных
+    // зайдем под owner и пригласим себя же, будет ошибка, т.к. он уже есть среди приглашенных (автоматически)
     cl.login(
         RequestLogin {
             email: req_register_owner.email,
@@ -784,31 +787,37 @@ async fn check_tasks() {
         &client_data.pool,
     );
 
-    let mut user_id = Uuid::nil();
+    let mut user_id1 = Uuid::nil();
+    let mut user_id2 = Uuid::nil();
     let mut team_id = Uuid::nil();
-    let mut task1_id = Uuid::nil();
-    let req_register = rand::request_register();
+    let mut task_id1 = Uuid::nil();
+    let req_register1 = rand::request_register();
+    let req_register2 = rand::request_register();
     let req_team = rand::request_team();
     let mut req_task1 = rand::request_task();
     let mut req_task2 = rand::request_task();
-    let req_login = RequestLogin {
-        email: req_register.email.clone(),
-        password: req_register.password.clone(),
+    let req_login1 = RequestLogin {
+        email: req_register1.email.clone(),
+        password: req_register1.password.clone(),
+    };
+    let req_login2 = RequestLogin {
+        email: req_register2.email.clone(),
+        password: req_register2.password.clone(),
     };
 
     // проверим на 401
     cl.tasks_list(-1, -1, |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await
     .tasks_create(rand::request_task(), |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await
     .tasks_one(Uuid::new_v4(), |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await
@@ -816,36 +825,46 @@ async fn check_tasks() {
         Uuid::new_v4(),
         rand::request_task(),
         |result: StatusCodeBodyError| {
-            let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            let (status_code, _body_str) = result.unwrap();
             assert_eq!(StatusCode::UNAUTHORIZED, status_code);
         },
     )
     .await
     .tasks_delete(Uuid::new_v4(), |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await
     .tasks_history(Uuid::new_v4(), |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await;
 
-    // создадим пользователя, залогинимся и создадим команду
-    cl.register(req_register, true, |result: StatusCodeBodyError| {
-        let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+    // создадим пользователей
+    cl.register(req_register1, true, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
         let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
-        user_id = resp.uuid;
+        user_id1 = resp.uuid;
     })
     .await
-    .login(req_login, |result: StatusCodeBodyError| {
+    .register(req_register2, true, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        user_id2 = resp.uuid;
+    })
+    .await;
+
+    // залогинимся, создадим команду из под user_id1, создадим задачу
+    cl.login(req_login1.clone(), |result: StatusCodeBodyError| {
         let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_success());
     })
-    .await
+    .await // ok: user_id1 стал членом команды
     .teams_create(req_team, |result: StatusCodeBodyError| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
@@ -854,31 +873,78 @@ async fn check_tasks() {
             serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         team_id = resp_ream_actual.team_id;
 
-        req_task1.created_by = user_id;
+        req_task1.created_by = user_id1;
         req_task1.team_id = team_id;
         req_task1.assignee_id = None;
 
-        req_task2.created_by = user_id;
+        req_task2.created_by = user_id1;
         req_task2.team_id = team_id;
-        req_task2.assignee_id = Some(user_id);
+        req_task2.assignee_id = Some(user_id1);
     })
-    .await;
-
-    // ok
-    cl.tasks_create(req_task1.clone(), |result: StatusCodeBodyError| {
-        let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+    .await
+    .tasks_create(req_task1.clone(), |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
         let resp_task: ResponseTask =
             serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
-        task1_id = resp_task.task_id;
+        task_id1 = resp_task.task_id;
     })
     .await // err: с теми же данными
     .tasks_create(req_task1.clone(), |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status_code);
     })
-    .await // ok
+    .await;
+
+    // ---------- выйдем под user_id1 и сделаем операции под user_id2, у него доступа не должно быть
+    let mut req_task3 = rand::request_task();
+    req_task3.created_by = user_id2;
+    req_task3.team_id = team_id;
+    req_task3.assignee_id = None;
+
+    cl.logout(|result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await
+    .login(req_login2, |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await // err - нету прав
+    .tasks_create(req_task3.clone(), |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::FORBIDDEN, status_code);
+    })
+    .await // err - нету прав
+    .tasks_update(
+        task_id1,
+        req_task3.clone(),
+        |result: StatusCodeBodyError| {
+            let (status_code, _body_str) = result.unwrap();
+            assert_eq!(StatusCode::FORBIDDEN, status_code);
+        },
+    )
+    .await
+    .tasks_delete(task_id1, |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::FORBIDDEN, status_code);
+    })
+    .await
+    .logout(|result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await;
+    // \ ----------
+
+    // продолжим выполнять под user_id1
+    cl.login(req_login1, |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await
     .tasks_list(100, 0, |result: StatusCodeBodyError| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
@@ -904,16 +970,16 @@ async fn check_tasks() {
         assert_eq!(StatusCode::NOT_FOUND, status_code);
     })
     .await // ok
-    .tasks_one(task1_id, |result: StatusCodeBodyError| {
+    .tasks_one(task_id1, |result: StatusCodeBodyError| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
         let resp: ResponseTask = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
-        assert_eq!(task1_id, resp.task_id)
+        assert_eq!(task_id1, resp.task_id)
     })
-    .await
+    .await // ok: обновление происходит корректно, т.к. user_id явл. членом команды
     .tasks_update(
-        task1_id,
+        task_id1,
         req_task2.clone(),
         |result: StatusCodeBodyError| {
             let (status_code, body_str) = result.unwrap();
@@ -921,11 +987,11 @@ async fn check_tasks() {
 
             let resp: ResponseTask = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
             assert_eq!(req_task2.status, resp.status);
-            assert_eq!(task1_id, resp.task_id);
+            assert_eq!(task_id1, resp.task_id);
         },
     )
-    .await
-    .tasks_history(task1_id, |result: StatusCodeBodyError| {
+    .await // ok - считаем историю
+    .tasks_history(task_id1, |result: StatusCodeBodyError| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
@@ -934,182 +1000,15 @@ async fn check_tasks() {
         assert!(resp.items.is_empty());
         // TODO тут надо понять как добавлять историю
     })
-    .await // err
+    .await // err - удалим не известное
     .tasks_delete(Uuid::new_v4(), |result: StatusCodeBodyError| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_server_error());
-    })
-    .await // ok
-    .tasks_delete(task1_id, |result: StatusCodeBodyError| {
-        let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
-    })
-    .await;
-}
-
-#[tokio::test]
-async fn check_users() {
-    let client_data = run_test_server().await;
-    let cl = Client::new(
-        client_data.http_addr.to_string(),
-        client_data.ca.to_string(),
-        client_data.crt.to_string(),
-        client_data.key.to_string(),
-        &client_data.pool,
-    );
-
-    let mut owner_id = Uuid::nil();
-    let mut user_id = Uuid::nil();
-    let req_register = rand::request_register();
-    let req_user1 = rand::request_user();
-    let req_user2 = rand::request_user();
-    let req_login = RequestLogin {
-        email: req_register.email.clone(),
-        password: req_register.password.clone(),
-    };
-    let mut saved_resp_user = ResponseUser {
-        user_id,
-        name: None,
-        email: "".to_string(),
-        email_code: None,
-        avatar: None,
-        role: None,
-        created_at: Default::default(),
-        updated_at: Default::default(),
-    };
-
-    // проверим на 401
-    cl.users_list(-1, -1, |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
-        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
-    })
-    .await
-    .users_create(rand::request_user(), None, |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
-        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
-    })
-    .await
-    .users_update(
-        Uuid::new_v4(),
-        rand::request_user(),
-        None,
-        |result: StatusCodeBodyError| {
-            let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
-            assert_eq!(StatusCode::UNAUTHORIZED, status_code);
-        },
-    )
-    .await
-    .users_delete(Uuid::new_v4(), |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
-        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
-    })
-    .await;
-
-    // создадим пользователя, залогинимся и создадим др. пользователя
-    cl.register(req_register, true, |result: StatusCodeBodyError| {
-        let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
-        assert!(status_code.is_success());
-
-        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
-        owner_id = resp.uuid;
-    })
-    .await
-    .login(req_login, |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
-    })
-    .await;
-
-    // err: пользователя нет
-    cl.users_one(Uuid::new_v4(), |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::NOT_FOUND, status_code);
     })
-    .await // err: такого пользователя нет
-    .users_delete(Uuid::new_v4(), |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_server_error()); // TODO тут под вопросом 404 надо присылать или 500
-    })
-    .await // err: такого пользователя нет
-    .users_update(
-        Uuid::new_v4(),
-        rand::request_user(),
-        None,
-        |result: StatusCodeBodyError| {
-            let (status_code, _body_str) = result.unwrap();
-            assert!(status_code.is_server_error()); // TODO тут под вопросом 404 надо присылать или 500
-        },
-    )
-    .await // ok: создадим успешно
-    .users_create(req_user1.clone(), None, |result: StatusCodeBodyError| {
-        let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
-
-        let resp_user_actual: ResponseUser =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
-        assert_eq!(req_user1.email, resp_user_actual.email);
-        assert_eq!(req_user1.name, resp_user_actual.name);
-        assert_eq!(req_user1.email_code, resp_user_actual.email_code);
-
-        user_id = resp_user_actual.user_id;
-        saved_resp_user = resp_user_actual;
-    })
-    .await // ok: получим запись
-    .users_one(user_id, |result: StatusCodeBodyError| {
+    .await // ok - член группы может удалить задачу
+    .tasks_delete(task_id1, |result: StatusCodeBodyError| {
         let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_success());
-    })
-    .await // ok: обновим успешно
-    .users_update(
-        user_id,
-        req_user2.clone(),
-        None,
-        |result: StatusCodeBodyError| {
-            let (status_code, body_str) = result.unwrap();
-            assert!(status_code.is_success());
-
-            let resp_user_actual: ResponseUser =
-                serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
-            assert_ne!(saved_resp_user, resp_user_actual);
-        },
-    )
-    .await // ok: посмотрим что люди есть
-    .users_list(0, 0, |result: StatusCodeBodyError| {
-        let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
-
-        let list: ResponseUsersList =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
-        assert_eq!(list.items.len(), 0);
-        assert!(list.total > 0);
-    })
-    .await // ok: найдем нужное и сравним
-    .users_list(-1, -1, |result: StatusCodeBodyError| {
-        let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
-
-        let resp: ResponseUsersList =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
-        assert!(resp.items.len() > 0);
-        assert!(resp.total > 0);
-
-        let opt = resp.items.iter().find(|item| item.user_id == user_id);
-        assert!(opt.is_some());
-
-        let founded_user = opt.unwrap();
-        assert_eq!(req_user2.email, founded_user.email);
-        assert_eq!(req_user2.name, founded_user.name);
-        assert_eq!(req_user2.email_code, founded_user.email_code);
-    })
-    .await // ок: удалим успешно
-    .users_delete(user_id, |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
-    })
-    .await // ok: пользователя не должно быть
-    .users_one(user_id, |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap();
-        assert_eq!(StatusCode::NOT_FOUND, status_code);
     })
     .await;
 }
@@ -1136,10 +1035,12 @@ async fn check_task_comments() {
         email: req_register.email.clone(),
         password: req_register.password.clone(),
     };
+    let mut task_comment_id1 = Uuid::nil();
+    let mut task_comment_id2 = Uuid::nil();
 
     // проверим на 401
     cl.task_comments_list(Uuid::new_v4(), -1, -1, |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await
@@ -1147,20 +1048,20 @@ async fn check_task_comments() {
         Uuid::new_v4(),
         rand::request_task_comment(),
         |result: StatusCodeBodyError| {
-            let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            let (status_code, _body_str) = result.unwrap();
             assert_eq!(StatusCode::UNAUTHORIZED, status_code);
         },
     )
     .await
     .task_comments_delete(Uuid::new_v4(), |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await;
 
     // создадим пользователя, залогинимся и создадим команду
     cl.register(req_register, true, |result: StatusCodeBodyError| {
-        let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
         let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
@@ -1186,7 +1087,7 @@ async fn check_task_comments() {
     })
     .await
     .tasks_create(req_task, |result: StatusCodeBodyError| {
-        let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+        let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
         let resp_task: ResponseTask =
@@ -1195,15 +1096,12 @@ async fn check_task_comments() {
     })
     .await;
 
-    let mut task_comment_id1 = Uuid::nil();
-    let mut task_comment_id2 = Uuid::nil();
-
     // ok
     cl.task_comments_create(
         task_id,
         req_task_comment.clone(),
         |result: StatusCodeBodyError| {
-            let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            let (status_code, body_str) = result.unwrap();
             assert!(status_code.is_success());
 
             let resp: ResponseTaskComment =
@@ -1217,12 +1115,12 @@ async fn check_task_comments() {
             task_comment_id1 = resp.task_comment_id;
         },
     )
-    .await // ok - с теми же данными ожидаем ошибку
+    .await // ok - с теми же данными
     .task_comments_create(
         task_id,
         req_task_comment.clone(),
         |result: StatusCodeBodyError| {
-            let (status_code, body_str) = result.unwrap_or_else(|e| panic!("{:?}", e));
+            let (status_code, body_str) = result.unwrap();
             assert!(status_code.is_success());
 
             let resp: ResponseTaskComment =
@@ -1310,6 +1208,173 @@ async fn check_task_comments() {
             serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         assert_eq!(0, resp.items.len());
         assert_eq!(0, resp.total);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn check_users() {
+    let client_data = run_test_server().await;
+    let cl = Client::new(
+        client_data.http_addr.to_string(),
+        client_data.ca.to_string(),
+        client_data.crt.to_string(),
+        client_data.key.to_string(),
+        &client_data.pool,
+    );
+
+    let mut owner_id = Uuid::nil();
+    let mut user_id = Uuid::nil();
+    let req_register = rand::request_register();
+    let req_user1 = rand::request_user();
+    let req_user2 = rand::request_user();
+    let req_login = RequestLogin {
+        email: req_register.email.clone(),
+        password: req_register.password.clone(),
+    };
+    let mut saved_resp_user = ResponseUser {
+        user_id,
+        name: None,
+        email: "".to_string(),
+        email_code: None,
+        avatar: None,
+        role: None,
+        created_at: Default::default(),
+        updated_at: Default::default(),
+    };
+
+    // проверим на 401
+    cl.users_list(-1, -1, |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+    })
+    .await
+    .users_create(rand::request_user(), None, |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+    })
+    .await
+    .users_update(
+        Uuid::new_v4(),
+        rand::request_user(),
+        None,
+        |result: StatusCodeBodyError| {
+            let (status_code, _body_str) = result.unwrap();
+            assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+        },
+    )
+    .await
+    .users_delete(Uuid::new_v4(), |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+    })
+    .await;
+
+    // создадим пользователя, залогинимся
+    cl.register(req_register, true, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        owner_id = resp.uuid;
+    })
+    .await
+    .login(req_login, |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await;
+
+    // err: пользователя нет
+    cl.users_one(Uuid::new_v4(), |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::NOT_FOUND, status_code);
+    })
+    .await // err: такого пользователя нет
+    .users_delete(Uuid::new_v4(), |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_server_error());
+    })
+    .await // err: такого пользователя нет
+    .users_update(
+        Uuid::new_v4(),
+        rand::request_user(),
+        None,
+        |result: StatusCodeBodyError| {
+            let (status_code, _body_str) = result.unwrap();
+            assert!(status_code.is_server_error());
+        },
+    )
+    .await // ok
+    .users_create(req_user1.clone(), None, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let resp_user_actual: ResponseUser =
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        assert_eq!(req_user1.email, resp_user_actual.email);
+        assert_eq!(req_user1.name, resp_user_actual.name);
+        assert_eq!(req_user1.email_code, resp_user_actual.email_code);
+
+        user_id = resp_user_actual.user_id;
+        saved_resp_user = resp_user_actual;
+    })
+    .await // ok
+    .users_one(user_id, |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await // ok: обновим успешно
+    .users_update(
+        user_id,
+        req_user2.clone(),
+        None,
+        |result: StatusCodeBodyError| {
+            let (status_code, body_str) = result.unwrap();
+            assert!(status_code.is_success());
+
+            let resp_user_actual: ResponseUser =
+                serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            assert_ne!(saved_resp_user, resp_user_actual);
+        },
+    )
+    .await // ok: посмотрим что люди есть
+    .users_list(0, 0, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let list: ResponseUsersList =
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        assert_eq!(list.items.len(), 0);
+        assert!(list.total > 0);
+    })
+    .await // ok: найдем нужное и сравним
+    .users_list(-1, -1, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let resp: ResponseUsersList =
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        assert!(resp.items.len() > 0);
+        assert!(resp.total > 0);
+
+        let opt = resp.items.iter().find(|item| item.user_id == user_id);
+        assert!(opt.is_some());
+
+        let founded_user = opt.unwrap();
+        assert_eq!(req_user2.email, founded_user.email);
+        assert_eq!(req_user2.name, founded_user.name);
+        assert_eq!(req_user2.email_code, founded_user.email_code);
+    })
+    .await // ок: удалим успешно
+    .users_delete(user_id, |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert!(status_code.is_success());
+    })
+    .await // ok: пользователя не должно быть
+    .users_one(user_id, |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::NOT_FOUND, status_code);
     })
     .await;
 }

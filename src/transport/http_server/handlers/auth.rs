@@ -8,8 +8,8 @@ use crate::adapter::email::EmailSender;
 use crate::transport::{
     extractor::AuthenticatedUser,
     models::{
-        RequestLogin, RequestRegister, RequestRegisterConfirm, ResponseLogin,
-        ResponseRefreshToken, RequestRefreshToken, ResponseUUID,
+        RequestLogin, RequestRefreshToken, RequestRegister, RequestRegisterConfirm, ResponseLogin,
+        ResponseRefreshToken, ResponseUUID,
     },
 };
 use crate::usecase::UseCase;
@@ -24,7 +24,7 @@ impl Handlers {
     where
         ES: EmailSender,
     {
-        let result = use_case
+        use_case
             .auth
             .register(
                 payload.email,
@@ -33,14 +33,13 @@ impl Handlers {
                 payload.agreement,
                 payload.privacy_policy,
             )
-            .await;
-        match result {
-            Ok(new_uuid) => {
-                let resp = ResponseUUID { uuid: new_uuid };
-                (StatusCode::OK, Json(json!(resp))).into_response()
-            }
-            Err(e) => e.into_response(),
-        }
+            .await
+            .map_or_else(
+                |e| e.into_response(),
+                |new_uuid| {
+                    (StatusCode::OK, Json(json!(ResponseUUID { uuid: new_uuid }))).into_response()
+                },
+            )
     }
     pub async fn register_confirm<ES>(
         State(use_case): State<UseCase<ES>>,
@@ -49,12 +48,14 @@ impl Handlers {
     where
         ES: EmailSender,
     {
-        let email = query.email.unwrap_or("".to_string());
-        let code = query.code.unwrap_or("".to_string());
-        match use_case.auth.register_confirm(email, code).await {
-            Ok(_) => StatusCode::OK.into_response(),
-            Err(e) => e.into_response(),
-        }
+        use_case
+            .auth
+            .register_confirm(
+                query.email.unwrap_or("".to_string()),
+                query.code.unwrap_or("".to_string()),
+            )
+            .await
+            .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())
     }
     pub async fn login<ES>(
         State(use_case): State<UseCase<ES>>,
@@ -63,16 +64,20 @@ impl Handlers {
     where
         ES: EmailSender,
     {
-        match use_case.auth.login(payload.email, payload.password).await {
-            Ok((access_token, refresh_token)) => {
-                let resp = ResponseLogin {
-                    access_token: access_token.to_string(),
-                    refresh_token: refresh_token.to_string(),
-                };
-                (StatusCode::OK, Json(resp)).into_response()
-            }
-            Err(e) => e.into_response(),
-        }
+        use_case
+            .auth
+            .login(payload.email, payload.password)
+            .await
+            .map_or_else(
+                |e| e.into_response(),
+                |(access_token, refresh_token)| {
+                    let resp = ResponseLogin {
+                        access_token: access_token.to_string(),
+                        refresh_token: refresh_token.to_string(),
+                    };
+                    (StatusCode::OK, Json(resp)).into_response()
+                },
+            )
     }
     pub async fn logout<ES>(
         _user: AuthenticatedUser<ES>,
@@ -81,11 +86,11 @@ impl Handlers {
     where
         ES: EmailSender,
     {
-        if let Err(e) = use_case.auth.logout().await {
-            e.into_response()
-        } else {
-            StatusCode::OK.into_response()
-        }
+        use_case
+            .auth
+            .logout()
+            .await
+            .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())
     }
     pub async fn refresh_tokens<ES>(
         State(use_case): State<UseCase<ES>>,
@@ -94,15 +99,19 @@ impl Handlers {
     where
         ES: EmailSender,
     {
-        match use_case.auth.refresh_tokens(payload.token.to_string()).await {
-            Ok((access_token, refresh_token)) => {
-                let resp = ResponseRefreshToken {
-                    access_token: access_token.to_string(),
-                    refresh_token: refresh_token.to_string(),
-                };
-                (StatusCode::OK, Json(resp)).into_response()
-            }
-            Err(e) => e.into_response(),
-        }
+        use_case
+            .auth
+            .refresh_tokens(payload.token.to_string())
+            .await
+            .map_or_else(
+                |e| e.into_response(),
+                |(access_token, refresh_token)| {
+                    let resp = ResponseRefreshToken {
+                        access_token: access_token.to_string(),
+                        refresh_token: refresh_token.to_string(),
+                    };
+                    (StatusCode::OK, Json(resp)).into_response()
+                },
+            )
     }
 }

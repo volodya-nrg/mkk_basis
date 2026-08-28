@@ -74,7 +74,7 @@ impl Teams {
             .map_err(|e| UseCaseError::Common(format!("failed to delete: {e}")))?;
         Ok(())
     }
-    // invite. Пригласить может только owner или admin.
+    // пригласить может только owner или admin
     pub async fn invite(
         &self,
         profile_id: Uuid,
@@ -82,12 +82,12 @@ impl Teams {
         team_id: Uuid,
         user_id: Uuid,
     ) -> Result<(), UseCaseError> {
-        let mut is_access = false;
+        let mut is_has_access = false;
 
         if let Some(role) = profile_role
             && role == UserRole::Admin.as_str()
         {
-            is_access = true;
+            is_has_access = true;
         } else {
             let team = self
                 .teams_repo
@@ -95,11 +95,11 @@ impl Teams {
                 .await
                 .map_err(|e| UseCaseError::Common(format!("failed to get: {e}")))?;
             if team.created_by == profile_id {
-                is_access = true;
+                is_has_access = true;
             }
         }
 
-        if !is_access {
+        if !is_has_access {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::FORBIDDEN,
                 public_err: ErrMsg::NoRules.as_str(),

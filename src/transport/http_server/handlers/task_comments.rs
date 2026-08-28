@@ -26,23 +26,23 @@ impl Handlers {
     where
         ES: EmailSender,
     {
-        match use_case
+        use_case
             .task_comments
             .list(task_id, payload.limit, payload.offset)
             .await
-        {
-            Ok((items, total)) => {
-                let resp = ResponseTaskCommentsList {
-                    items: items
-                        .into_iter()
-                        .map(mapper::task_comment_uc_to_task_comment_tr)
-                        .collect(),
-                    total: total as u32,
-                };
-                (StatusCode::OK, Json(json!(resp))).into_response()
-            }
-            Err(e) => e.into_response(),
-        }
+            .map_or_else(
+                |e| e.into_response(),
+                |(items, total)| {
+                    let resp = ResponseTaskCommentsList {
+                        items: items
+                            .into_iter()
+                            .map(mapper::task_comment_uc_to_task_comment_tr)
+                            .collect(),
+                        total: total as u32,
+                    };
+                    (StatusCode::OK, Json(json!(resp))).into_response()
+                },
+            )
     }
     pub async fn create<ES>(
         user: AuthenticatedUser<ES>,
@@ -65,13 +65,17 @@ impl Handlers {
             Ok(v) => v,
             Err(e) => return e.into_response(),
         };
-        let task_db = match use_case.task_comments.one(new_uuid).await {
-            Ok(v) => v,
-            Err(e) => return e.into_response(),
-        };
-        let resp = mapper::task_comment_uc_to_task_comment_tr(task_db);
 
-        (StatusCode::OK, Json(json!(resp))).into_response()
+        use_case.task_comments.one(new_uuid).await.map_or_else(
+            |e| e.into_response(),
+            |v| {
+                (
+                    StatusCode::OK,
+                    Json(json!(mapper::task_comment_uc_to_task_comment_tr(v))),
+                )
+                    .into_response()
+            },
+        )
     }
     pub async fn delete<ES>(
         _user: AuthenticatedUser<ES>,
@@ -81,10 +85,10 @@ impl Handlers {
     where
         ES: EmailSender,
     {
-        if let Err(e) = use_case.task_comments.delete(item_id).await {
-            e.into_response()
-        } else {
-            StatusCode::OK.into_response()
-        }
+        use_case
+            .task_comments
+            .delete(item_id)
+            .await
+            .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())
     }
 }
