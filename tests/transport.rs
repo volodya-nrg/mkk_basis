@@ -38,10 +38,10 @@ struct ClientData {
 
 const ACCESS_TOKEN_TTL_SEC: i64 = 3;
 const REFRESH_TOKEN_TTL_SEC: i64 = ACCESS_TOKEN_TTL_SEC * 2;
-
 const DSN: &str =
     "postgres://postgres:postgres@127.0.0.1:5432/postgres?options=-c%20search_path%3Dmkk_basis";
 const ERR_PARSE_JSON: &str = "failed to parse str to json";
+
 static MARKER: OnceCell<ClientData> = OnceCell::const_new();
 
 async fn run_test_server() -> &'static ClientData {
