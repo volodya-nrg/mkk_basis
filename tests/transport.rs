@@ -790,7 +790,7 @@ async fn check_tasks() {
     let mut user_id1 = Uuid::nil();
     let mut user_id2 = Uuid::nil();
     let mut team_id = Uuid::nil();
-    let mut task_id1 = Uuid::nil();
+    let mut task_id = Uuid::nil();
     let req_register1 = rand::request_register();
     let req_register2 = rand::request_register();
     let req_team = rand::request_team();
@@ -888,7 +888,7 @@ async fn check_tasks() {
 
         let resp_task: ResponseTask =
             serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
-        task_id1 = resp_task.task_id;
+        task_id = resp_task.task_id;
     })
     .await // err: с теми же данными
     .tasks_create(req_task1.clone(), |result: StatusCodeBodyError| {
@@ -918,16 +918,12 @@ async fn check_tasks() {
         assert_eq!(StatusCode::FORBIDDEN, status_code);
     })
     .await // err - нету прав
-    .tasks_update(
-        task_id1,
-        req_task3.clone(),
-        |result: StatusCodeBodyError| {
-            let (status_code, _body_str) = result.unwrap();
-            assert_eq!(StatusCode::FORBIDDEN, status_code);
-        },
-    )
+    .tasks_update(task_id, req_task3.clone(), |result: StatusCodeBodyError| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::FORBIDDEN, status_code);
+    })
     .await
-    .tasks_delete(task_id1, |result: StatusCodeBodyError| {
+    .tasks_delete(task_id, |result: StatusCodeBodyError| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::FORBIDDEN, status_code);
     })
@@ -970,45 +966,40 @@ async fn check_tasks() {
         assert_eq!(StatusCode::NOT_FOUND, status_code);
     })
     .await // ok
-    .tasks_one(task_id1, |result: StatusCodeBodyError| {
+    .tasks_one(task_id, |result: StatusCodeBodyError| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
         let resp: ResponseTask = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
-        assert_eq!(task_id1, resp.task_id)
+        assert_eq!(task_id, resp.task_id)
     })
     .await // ok: обновление происходит корректно, т.к. user_id явл. членом команды
-    .tasks_update(
-        task_id1,
-        req_task2.clone(),
-        |result: StatusCodeBodyError| {
-            let (status_code, body_str) = result.unwrap();
-            assert!(status_code.is_success());
-
-            let resp: ResponseTask = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
-            assert_eq!(req_task2.status, resp.status);
-            assert_eq!(task_id1, resp.task_id);
-        },
-    )
-    .await // ok - считаем историю
-    .tasks_history(task_id1, |result: StatusCodeBodyError| {
+    .tasks_update(task_id, req_task2.clone(), |result: StatusCodeBodyError| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTaskHistories =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
-        assert!(resp.items.is_empty());
-        // TODO тут надо понять как добавлять историю
+        let resp: ResponseTask = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        assert_eq!(req_task2.status, resp.status);
+        assert_eq!(task_id, resp.task_id);
     })
     .await // err - удалим не известное
     .tasks_delete(Uuid::new_v4(), |result: StatusCodeBodyError| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::NOT_FOUND, status_code);
     })
-    .await // ok - член группы может удалить задачу
-    .tasks_delete(task_id1, |result: StatusCodeBodyError| {
+    .await // ok - член группы может удалить задачу (статус canceled)
+    .tasks_delete(task_id, |result: StatusCodeBodyError| {
         let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_success());
+    })
+    .await // ok - считаем историю, должно быть три записи (create, update, delete)
+    .tasks_history(task_id, |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let resp: ResponseTaskHistories =
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        assert_eq!(3, resp.items.len());
     })
     .await;
 }

@@ -40,6 +40,15 @@ pub fn task_history_db_to_task_history_uc(item: DBTaskHistory) -> TaskHistory {
         created_at: item.created_at,
     }
 }
+pub fn task_history_uc_to_task_history_db(item: TaskHistory) -> DBTaskHistory {
+    DBTaskHistory {
+        task_history_id: item.task_history_id,
+        task_id: item.task_id,
+        user_id: item.user_id,
+        msg: item.msg,
+        created_at: item.created_at,
+    }
+}
 pub fn team_db_to_team_uc(item: DBTeam) -> Team {
     Team {
         team_id: item.team_id,

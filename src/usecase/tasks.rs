@@ -5,8 +5,8 @@ use crate::{
     adapter::{
         db::RepositoryError,
         db::postgres::tables::{
-            task_histories::TaskHistories as TaskHistoriesRepo, tasks::Tasks as TasksRepo,
-            team_members::TeamMembers as TeamMembersRepo,
+            task_histories::TaskHistories as TaskHistoriesRepo, tasks::Status as TaskStatus,
+            tasks::Tasks as TasksRepo, team_members::TeamMembers as TeamMembersRepo,
         },
     },
     err_msg::ErrMsg,
@@ -63,12 +63,25 @@ impl Tasks {
         self.check_access_for_team_member_only(task.team_id, user_id)
             .await
             .map_err(|e| e)?;
-        let new_uuid = self
+        // TODO тут нужна транзакция
+        let new_task_uuid = self
             .tasks_repo
             .create(mapper::task_uc_to_task_db(task))
             .await
-            .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))?;
-        Ok(new_uuid)
+            .map_err(|e| UseCaseError::Common(format!("failed to create task: {e}")))?;
+        let _ = self
+            .task_histories_repo
+            .create(mapper::task_history_uc_to_task_history_db(TaskHistory {
+                task_history_id: Default::default(),
+                task_id: new_task_uuid,
+                user_id,
+                msg: "create".to_string(),
+                created_at: Default::default(),
+            }))
+            .await
+            .map_err(|e| UseCaseError::Common(format!("failed to create task_history: {e}")))?;
+
+        Ok(new_task_uuid)
     }
     // изменить задачу может только член команды
     pub async fn update(&self, task: Task, user_id: Uuid) -> Result<(), UseCaseError> {
@@ -76,15 +89,32 @@ impl Tasks {
         self.check_access_for_team_member_only(task.team_id, user_id)
             .await
             .map_err(|e| e)?;
+
+        let task_id = task.task_id;
+
+        // TODO тут нужна транзакция
         self.tasks_repo
             .update(mapper::task_uc_to_task_db(task))
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to update: {e}")))?;
+
+        let _ = self
+            .task_histories_repo
+            .create(mapper::task_history_uc_to_task_history_db(TaskHistory {
+                task_history_id: Default::default(),
+                task_id,
+                user_id,
+                msg: "update".to_string(),
+                created_at: Default::default(),
+            }))
+            .await
+            .map_err(|e| UseCaseError::Common(format!("failed to create task_history: {e}")))?;
+
         Ok(())
     }
     // удалить задачу может только член команды
     pub async fn delete(&self, task_id: Uuid, user_id: Uuid) -> Result<(), UseCaseError> {
-        let task = self.tasks_repo.one(task_id).await.map_err(|e| match e {
+        let task_db = self.tasks_repo.one(task_id).await.map_err(|e| match e {
             RepositoryError::NotFoundRow => UseCaseError::ForTransport {
                 status_code: StatusCode::NOT_FOUND,
                 public_err: ErrMsg::NotFoundItem.as_str(),
@@ -92,13 +122,35 @@ impl Tasks {
             },
             other => UseCaseError::Common(other.to_string()),
         })?;
+        let mut task = mapper::task_db_to_task_uc(task_db);
         self.check_access_for_team_member_only(task.team_id, user_id)
             .await
             .map_err(|e| e)?;
+
+        // TODO тут нужна транзакция
+        // Вместо удаления нужно менять статус
+        // self.tasks_repo
+        //     .delete(task_id)
+        //     .await
+        //     .map_err(|e| UseCaseError::Common(format!("failed to delete: {e}")))?;
+        task.status = TaskStatus::Cancelled.to_string();
         self.tasks_repo
-            .delete(task_id)
+            .update(mapper::task_uc_to_task_db(task))
             .await
-            .map_err(|e| UseCaseError::Common(format!("failed to delete: {e}")))?;
+            .map_err(|e| UseCaseError::Common(format!("failed to delete-update: {e}")))?;
+
+        let _ = self
+            .task_histories_repo
+            .create(mapper::task_history_uc_to_task_history_db(TaskHistory {
+                task_history_id: Default::default(),
+                task_id,
+                user_id,
+                msg: "delete".to_string(),
+                created_at: Default::default(),
+            }))
+            .await
+            .map_err(|e| UseCaseError::Common(format!("failed to create task_history: {e}")))?;
+
         Ok(())
     }
     pub async fn get_history(&self, item_id: Uuid) -> Result<Vec<TaskHistory>, UseCaseError> {
