@@ -85,7 +85,7 @@ impl Teams {
         let mut is_has_access = false;
 
         if let Some(role) = profile_role
-            && role == UserRole::Admin.as_str()
+            && role == UserRole::Admin.to_string()
         {
             is_has_access = true;
         } else {

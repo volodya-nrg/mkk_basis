@@ -1,7 +1,7 @@
 pub mod handlers;
 pub mod middleware;
 
-use axum::routing::{delete, get, post, put};
+use axum::routing::{delete, get, post};
 use axum::{Router, middleware as AxumMiddleware};
 use axum_server::tls_rustls::RustlsConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
@@ -112,7 +112,7 @@ impl<ES: EmailSender> HTTPServer<ES> {
             .route(
                 "/api/v1/users/{id}",
                 get(users::Handlers::one)
-                    .put(users::Handlers::update)
+                    .patch(users::Handlers::update)
                     .delete(users::Handlers::delete),
             );
         let static_loc = Router::new()
@@ -126,6 +126,7 @@ impl<ES: EmailSender> HTTPServer<ES> {
             .merge(api)
             .merge(static_loc)
             .route_layer(AxumMiddleware::from_fn(middleware::err::err))
+            // .layer(tower_http::limit::RequestBodyLimitLayer::new(20 * 1024 * 1024)) // 20MB лимит. Если будет больше, то обработка multipart сервером выдаст ошибку.
             .fallback(etc::Handlers::page404)
             .with_state(self.use_case.clone())
     }

@@ -19,6 +19,7 @@ pub enum ErrMsg {
     TokenIsNotRefresh,
     NoRules,
     NoAccessTeamMemberOnly,
+    NotCorrectMultipartForm,
 }
 impl ErrMsg {
     pub fn as_str(&self) -> String {
@@ -50,6 +51,7 @@ impl ErrMsg {
             ErrMsg::NoAccessTeamMemberOnly => {
                 "у вас нет доступа к данному действию, только для участника команды".to_string()
             }
+            ErrMsg::NotCorrectMultipartForm => "ошибка в обработки формы".to_string(),
         }
     }
 }

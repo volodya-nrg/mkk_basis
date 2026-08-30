@@ -1,5 +1,8 @@
 use http::StatusCode;
-use reqwest::{Certificate, Client as ReqwestClient, Identity, Response, header}; // multipart::Form
+use reqwest::{
+    Certificate, Client as ReqwestClient, Error as ReqwestError, Identity, Response, header,
+    multipart::Form,
+};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
@@ -8,29 +11,29 @@ use uuid::Uuid;
 use mkk_basis::adapter::db::postgres::Postgres as PostgresService;
 use mkk_basis::transport::models::{
     RequestLimitOffset, RequestLogin, RequestRefreshToken, RequestRegister, RequestTask,
-    RequestTaskComment, RequestTeam, RequestTeamInvite, RequestUser, ResponseLogin,
-    ResponseRefreshToken,
+    RequestTaskComment, RequestTeam, RequestTeamInvite, RequestUserCreate, RequestUserUpdate,
+    ResponseLogin, ResponseRefreshToken,
 };
 
 use super::rand;
 
-pub type StatusCodeBodyError = Result<(StatusCode, String), String>;
+pub type StatusCodeBodyError = Result<(StatusCode, String), ReqwestError>;
 
-pub struct Client<'pg> {
+pub struct Client<'a> {
     addr: String,
     client: ReqwestClient,
     pub access_token: Arc<Mutex<String>>,
     pub refresh_token: Arc<Mutex<String>>,
-    pg_service: &'pg PostgresService,
+    pg_service: &'a PostgresService,
 }
 
-impl<'pg> Client<'pg> {
+impl<'a> Client<'a> {
     pub fn new(
         addr: String,
         ca: String,
         crt: String,
         key: String,
-        pg_service: &'pg PostgresService,
+        pg_service: &'a PostgresService,
     ) -> Self {
         // ca-сертификат - чтоб проверить сервер
         // crt - чтоб сервер мог проверить клиента
@@ -72,11 +75,9 @@ impl<'pg> Client<'pg> {
     }
     async fn parse_response(&self, resp: Response) -> StatusCodeBodyError {
         let status_code = resp.status();
-        let result = resp
-            .text()
-            .await
-            .map_err(|e| format!("failed to read body: {:?}", e))?;
+        let result = resp.text().await?;
         Ok((status_code, result))
+        // Ok(resp.await?)
     }
 
     // etc
@@ -84,20 +85,11 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .get(&self.addr)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self.client.get(&self.addr).send().await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -105,20 +97,15 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .get(format!("{}/health", self.addr))
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .get(format!("{}/health", self.addr))
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -126,20 +113,15 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .get(format!("{}/{}", self.addr, rand::str()))
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .get(format!("{}/{}", self.addr, rand::str()))
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -150,20 +132,15 @@ impl<'pg> Client<'pg> {
         let url_filepath = url_filepath
             .strip_prefix('/')
             .unwrap_or(url_filepath.as_str());
-        let result = self
-            .client
-            .get(format!("{}/{}", self.addr, url_filepath))
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .get(format!("{}/{}", self.addr, url_filepath))
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -173,21 +150,16 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .post(format!("{}/api/v1/register", self.addr))
-            // .headers(self.headers().await)
-            .json(&req)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
+        let result = (|| async {
+            let response = self
+                .client
+                .post(format!("{}/api/v1/register", self.addr))
+                .json(&req)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
 
         if is_full {
             let email_code = self
@@ -232,20 +204,11 @@ impl<'pg> Client<'pg> {
             address = address + "?" + &query_items.join("&").to_string();
         }
 
-        let result = self
-            .client
-            .get(address)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self.client.get(address).send().await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -253,20 +216,16 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .post(format!("{}/api/v1/login", self.addr))
-            .json(&req)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
+        let result = (|| async {
+            let response = self
+                .client
+                .post(format!("{}/api/v1/login", self.addr))
+                .json(&req)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
 
         if let Ok((status_code, body_str)) = &result
             && status_code.is_success()
@@ -286,28 +245,25 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .post(format!("{}/api/v1/logout", self.addr))
-            .headers(self.headers().await)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
+        let result = (|| async {
+            let response = self
+                .client
+                .post(format!("{}/api/v1/logout", self.addr))
+                .headers(self.headers().await)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
 
-        if result.is_ok() {
+        if let Ok((status_code, _body_str)) = &result
+            && status_code.is_success()
+        {
             let mut at = self.access_token.lock().await;
             let mut rt = self.refresh_token.lock().await;
             *at = "".to_string();
             *rt = "".to_string();
         }
-
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
 
         cb(result);
         self
@@ -317,20 +273,16 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .post(format!("{}/api/v1/refresh_tokens", self.addr))
-            .json(&req)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
+        let result = (|| async {
+            let response = self
+                .client
+                .post(format!("{}/api/v1/refresh_tokens", self.addr))
+                .json(&req)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
 
         if let Ok((status_code, body_str)) = &result
             && status_code.is_success()
@@ -352,22 +304,17 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .get(format!("{}/api/v1/teams", self.addr))
-            .headers(self.headers().await)
-            .json(&RequestLimitOffset { limit, offset })
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .get(format!("{}/api/v1/teams", self.addr))
+                .headers(self.headers().await)
+                .json(&RequestLimitOffset { limit, offset })
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -375,21 +322,16 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .get(format!("{}/api/v1/teams/{}", self.addr, uuid))
-            .headers(self.headers().await)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .get(format!("{}/api/v1/teams/{}", self.addr, uuid))
+                .headers(self.headers().await)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -397,22 +339,17 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .post(format!("{}/api/v1/teams", self.addr))
-            .headers(self.headers().await)
-            .json(&req)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .post(format!("{}/api/v1/teams", self.addr))
+                .headers(self.headers().await)
+                .json(&req)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -420,22 +357,17 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .put(format!("{}/api/v1/teams/{}", self.addr, item_id))
-            .headers(self.headers().await)
-            .json(&req)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .put(format!("{}/api/v1/teams/{}", self.addr, item_id))
+                .headers(self.headers().await)
+                .json(&req)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -443,21 +375,16 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .delete(format!("{}/api/v1/teams/{}", self.addr, item_id))
-            .headers(self.headers().await)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .delete(format!("{}/api/v1/teams/{}", self.addr, item_id))
+                .headers(self.headers().await)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -465,22 +392,17 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .post(format!("{}/api/v1/teams/{}/invite", self.addr, item_id))
-            .headers(self.headers().await)
-            .json(&req)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .post(format!("{}/api/v1/teams/{}/invite", self.addr, item_id))
+                .headers(self.headers().await)
+                .json(&req)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -490,22 +412,17 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .get(format!("{}/api/v1/tasks", self.addr))
-            .headers(self.headers().await)
-            .json(&RequestLimitOffset { limit, offset })
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .get(format!("{}/api/v1/tasks", self.addr))
+                .headers(self.headers().await)
+                .json(&RequestLimitOffset { limit, offset })
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -513,21 +430,16 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .get(format!("{}/api/v1/tasks/{}", self.addr, item_id))
-            .headers(self.headers().await)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .get(format!("{}/api/v1/tasks/{}", self.addr, item_id))
+                .headers(self.headers().await)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -535,22 +447,17 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .post(format!("{}/api/v1/tasks", self.addr))
-            .headers(self.headers().await)
-            .json(&req)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .post(format!("{}/api/v1/tasks", self.addr))
+                .headers(self.headers().await)
+                .json(&req)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -558,22 +465,17 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .put(format!("{}/api/v1/tasks/{}", self.addr, item_id))
-            .headers(self.headers().await)
-            .json(&req)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .put(format!("{}/api/v1/tasks/{}", self.addr, item_id))
+                .headers(self.headers().await)
+                .json(&req)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -581,21 +483,16 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .delete(format!("{}/api/v1/tasks/{}", self.addr, item_id))
-            .headers(self.headers().await)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .delete(format!("{}/api/v1/tasks/{}", self.addr, item_id))
+                .headers(self.headers().await)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -603,21 +500,16 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .get(format!("{}/api/v1/tasks/{}/history", self.addr, item_id))
-            .headers(self.headers().await)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .get(format!("{}/api/v1/tasks/{}/history", self.addr, item_id))
+                .headers(self.headers().await)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -627,22 +519,17 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .get(format!("{}/api/v1/users", self.addr))
-            .headers(self.headers().await)
-            .json(&RequestLimitOffset { limit, offset })
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .get(format!("{}/api/v1/users", self.addr))
+                .headers(self.headers().await)
+                .json(&RequestLimitOffset { limit, offset })
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -650,92 +537,96 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .get(format!("{}/api/v1/users/{}", self.addr, item_id))
-            .headers(self.headers().await)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .get(format!("{}/api/v1/users/{}", self.addr, item_id))
+                .headers(self.headers().await)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
     pub async fn users_create<T>(
         &self,
-        req: RequestUser,
-        filepath: Option<String>,
+        req: RequestUserCreate,
         mut cb: T,
     ) -> &Self
     where
         T: FnMut(StatusCodeBodyError),
     {
-        // let mut form = Form::new().text("user_data", serde_json::to_string(&req).unwrap());
-        //
-        // if let Some(v) = filepath {
-        //     form = form.file("avatar", v).await.unwrap();
-        // }
+        let mut form = Form::new()
+            .text("email", req.email)
+            .text("password", req.password);
 
-        let result = self
-            .client
-            .post(format!("{}/api/v1/users", self.addr))
-            .headers(self.headers().await)
-            // .multipart(form)
-            .json(&req)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
+        if let Some(v) = req.name {
+            form = form.text("name", v);
+        }
+        if let Some(v) = req.role {
+            form = form.text("role", v);
+        }
+        if let Some(v) = req.avatar {
+            form = form.file("avatar", v).await.unwrap();
+        }
 
+        let result = (|| async {
+            let response = self
+                .client
+                .post(format!("{}/api/v1/users", self.addr))
+                .headers(self.headers().await)
+                .multipart(form)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
     pub async fn users_update<T>(
         &self,
         item_id: Uuid,
-        req: RequestUser,
-        filepath: Option<String>,
+        req: RequestUserUpdate,
         mut cb: T,
     ) -> &Self
     where
         T: FnMut(StatusCodeBodyError),
     {
-        // let mut form = Form::new().text("user_data", serde_json::to_string(&req).unwrap());
-        //
-        // if let Some(v) = filepath {
-        //     form = form.file("avatar", v).await.unwrap();
-        // }
+        let mut form = Form::new();
 
-        let result = self
-            .client
-            .put(format!("{}/api/v1/users/{}", self.addr, item_id))
-            .headers(self.headers().await)
-            // .multipart(form)
-            .json(&req)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
+        if let Some(v) = req.email {
+            form = form.text("email", v);
+        }
+        if let Some(v) = req.password {
+            form = form.text("password", v);
+        }
+        if let Some(v) = req.name {
+            form = form.text("name", v);
+        }
+        if let Some(v) = req.role {
+            form = form.text("role", v);
+        }
+        if let Some(v) = req.avatar {
+            form = form.file("avatar", v).await.unwrap();
+        }
+        if req.is_remove_avatar {
+            form = form.text("is_remove_avatar", "true");
+        }
 
+        let result = (|| async {
+            let response = self
+                .client
+                .patch(format!("{}/api/v1/users/{}", self.addr, item_id))
+                .headers(self.headers().await)
+                .multipart(form)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -743,21 +634,16 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .delete(format!("{}/api/v1/users/{}", self.addr, item_id))
-            .headers(self.headers().await)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .delete(format!("{}/api/v1/users/{}", self.addr, item_id))
+                .headers(self.headers().await)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -773,22 +659,17 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .get(format!("{}/api/v1/tasks/{}/comments", self.addr, task_id))
-            .headers(self.headers().await)
-            .json(&RequestLimitOffset { limit, offset })
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .get(format!("{}/api/v1/tasks/{}/comments", self.addr, task_id))
+                .headers(self.headers().await)
+                .json(&RequestLimitOffset { limit, offset })
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -801,22 +682,17 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .post(format!("{}/api/v1/tasks/{}/comments", self.addr, task_id))
-            .headers(self.headers().await)
-            .json(&req)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .post(format!("{}/api/v1/tasks/{}/comments", self.addr, task_id))
+                .headers(self.headers().await)
+                .json(&req)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }
@@ -824,21 +700,16 @@ impl<'pg> Client<'pg> {
     where
         T: FnMut(StatusCodeBodyError),
     {
-        let result = self
-            .client
-            .delete(format!("{}/api/v1/tasks/comment/{}", self.addr, item_id))
-            .headers(self.headers().await)
-            .send()
-            .await
-            .map_err(|e| format!("failed to request: {:?}", e));
-        let result = match result {
-            Ok(v) => match self.parse_response(v).await {
-                Ok(v) => Ok(v),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        };
-
+        let result = (|| async {
+            let response = self
+                .client
+                .delete(format!("{}/api/v1/tasks/comment/{}", self.addr, item_id))
+                .headers(self.headers().await)
+                .send()
+                .await?;
+            self.parse_response(response).await
+        })()
+        .await;
         cb(result);
         self
     }

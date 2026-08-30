@@ -1,6 +1,6 @@
 pub mod config;
 pub mod db;
-pub mod logger;
+pub mod email;
 pub mod helpers;
 pub mod jwt;
-pub mod email;
+pub mod logger;

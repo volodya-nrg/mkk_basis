@@ -5,6 +5,7 @@ use crate::{
     adapter::{
         db::RepositoryError,
         db::postgres::tables::users::Users as UsersRepo,
+        db::models::User as UserDB,
         email::EmailSender,
         helpers as HelpersService,
         jwt::{JWTError, Jwt as JWTService, TYPE_REFRESH},
@@ -13,7 +14,7 @@ use crate::{
     err_msg::ErrMsg,
 };
 
-use super::{UseCaseError, helpers, mapper, models::User};
+use super::{UseCaseError, helpers};
 
 #[derive(Clone)] // из-за axum-state
 pub struct Auth<ES: EmailSender> {
@@ -90,20 +91,19 @@ impl<ES: EmailSender> Auth<ES> {
         );
         let email_subject = format!("Confirm email from {}", self.addr);
         let email_message = format!("Confirm email: <a href=\"{}\">{}</a>", link, link);
-
         let result = self
             .users_repo
-            .create(mapper::user_uc_to_user_db(User {
+            .create(UserDB{
                 user_id: Default::default(),
-                name: None,
                 email: email.clone(),
                 password: password_hash.to_string(),
+                name: None,
                 email_code: Some(code.clone()),
                 avatar: None,
                 role: None,
                 created_at: Default::default(),
                 updated_at: Default::default(),
-            }))
+            })
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))?;
 

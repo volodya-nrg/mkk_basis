@@ -1,12 +1,13 @@
 use http::StatusCode;
+use std::fs;
 use uuid::Uuid;
 
-use crate::{
-    adapter::{db::RepositoryError, db::postgres::tables::users::Users as UsersRepo},
-    err_msg::ErrMsg,
-};
+use crate::adapter::db::{models::User as UserDB, postgres::tables::users::Users as UsersRepo};
 
-use super::{UseCaseError, helpers, mapper, models::User};
+use super::{
+    UseCaseError, helpers, mapper,
+    models::{User, UserCreate, UserUpdate},
+};
 
 #[derive(Clone)] // из-за axum-state
 pub struct Users {
@@ -18,57 +19,106 @@ impl Users {
         Self { users_repo }
     }
     pub async fn list(&self, limit: i32, offset: i32) -> Result<(Vec<User>, i64), UseCaseError> {
-        let (items, total) = self
-            .users_repo
+        self.users_repo
             .list(limit, offset)
             .await
-            .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))?;
-        Ok((
-            items.into_iter().map(mapper::user_db_to_user_uc).collect(),
-            total,
-        ))
+            .map_err(|e| e.into())
+            .map(|(items, total)| {
+                (
+                    items.into_iter().map(mapper::user_db_to_user_uc).collect(),
+                    total,
+                )
+            })
     }
     pub async fn one(&self, item_id: Uuid) -> Result<User, UseCaseError> {
-        let user_db = self.users_repo.one(item_id).await.map_err(|e| match e {
-            RepositoryError::NotFoundRow => UseCaseError::ForTransport {
-                status_code: StatusCode::NOT_FOUND,
-                public_err: ErrMsg::NotFoundItem.as_str(),
+        Ok(mapper::user_db_to_user_uc(
+            self.users_repo.one(item_id).await?, // тут срабатывает авто конвертация
+        ))
+    }
+    pub async fn create(&self, mut user: UserCreate) -> Result<Uuid, UseCaseError> {
+        if user.email.is_empty() {
+            return Err(UseCaseError::ForTransport {
+                status_code: StatusCode::BAD_REQUEST,
+                public_err: "email is require".to_string(),
                 internal_err: None,
-            },
-            other => UseCaseError::Common(other.to_string()),
-        })?;
-        Ok(mapper::user_db_to_user_uc(user_db))
-    }
-    pub async fn create(&self, mut user: User, file_data: Vec<u8>) -> Result<Uuid, UseCaseError> {
-        let password_hash = helpers::password_hash(&user.password)
-            .map_err(|e| UseCaseError::Common(format!("failed to create password hash: {e}")))?;
-        user.password = password_hash;
+            });
+        }
+        if user.password.is_empty() {
+            return Err(UseCaseError::ForTransport {
+                status_code: StatusCode::BAD_REQUEST,
+                public_err: "password is require".to_string(),
+                internal_err: None,
+            });
+        }
 
-        let new_uuid = self
-            .users_repo
-            .create(mapper::user_uc_to_user_db(user))
-            .await
-            .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))?;
-
-        Ok(new_uuid)
-    }
-    pub async fn update(&self, mut user: User, file_data: Vec<u8>) -> Result<(), UseCaseError> {
-        let password_hash = helpers::password_hash(&user.password)
-            .map_err(|e| UseCaseError::Common(format!("failed to create password hash: {e}")))?;
-        user.password = password_hash;
+        user.password = self.create_password_hash(user.password)?;
 
         self.users_repo
-            .update(mapper::user_uc_to_user_db(user))
+            .create(UserDB {
+                user_id: Default::default(),
+                email: user.email,
+                password: user.password,
+                name: user.name,
+                email_code: user.email_code,
+                avatar: user.avatar,
+                role: user.role,
+                created_at: Default::default(),
+                updated_at: Default::default(),
+            })
             .await
-            .map_err(|e| UseCaseError::Common(format!("failed to update: {e}")))?;
+            .map_err(|e| e.into())
+    }
+    pub async fn update(&self, user: UserUpdate) -> Result<(), UseCaseError> {
+        let user_db = self.users_repo.one(user.user_id).await?;
+        let mut user_db_copy = user_db.clone();
+
+        if let Some(v) = user.email {
+            user_db_copy.email = v;
+        }
+        if let Some(v) = user.password {
+            user_db_copy.password = self.create_password_hash(v)?;
+        }
+        if let Some(v) = user.name {
+            user_db_copy.name = Some(v);
+        }
+        if let Some(v) = user.email_code {
+            user_db_copy.email_code = Some(v);
+        }
+        if let Some(v) = user.role {
+            user_db_copy.role = Some(v);
+        }
+        if user.is_remove_avatar
+            && let Some(v) = user_db.avatar.clone()
+        {
+            if let Err(e) = fs::remove_file(v.clone()) {
+                log::error!("failed to remove file ({}): {}", v, e)
+            }
+            user_db_copy.avatar = None;
+        }
+        if let Some(v) = user.avatar {
+            user_db_copy.avatar = Some(v);
+        }
+        if user_db != user_db_copy {
+            self.users_repo.update(user_db_copy).await?;
+        }
 
         Ok(())
     }
     pub async fn delete(&self, item_id: Uuid) -> Result<(), UseCaseError> {
-        self.users_repo
-            .delete(item_id)
-            .await
-            .map_err(|e| UseCaseError::Common(format!("failed to delete: {e}")))?;
+        let user = self.users_repo.one(item_id).await?;
+
+        self.users_repo.delete(item_id).await?;
+
+        if let Some(v) = user.avatar
+            && let Err(e) = fs::remove_file(v.clone())
+        {
+            log::error!("failed to remove file ({}): {}", v, e);
+        }
+
         Ok(())
+    }
+    fn create_password_hash(&self, pass: String) -> Result<String, UseCaseError> {
+        helpers::password_hash(&pass)
+            .map_err(|e| UseCaseError::Common(format!("failed to create password-hash: {e}")))
     }
 }

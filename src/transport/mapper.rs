@@ -1,10 +1,10 @@
 use uuid::Uuid;
 
-use crate::usecase::models::{Task, TaskComment, TaskHistory, Team, User};
+use crate::usecase::models::{Task, TaskComment, TaskHistory, Team, User, UserCreate, UserUpdate};
 
 use super::models::{
-    RequestTask, RequestTeam, RequestUser, ResponseTask, ResponseTaskComment, ResponseTaskHistory,
-    ResponseTeam, ResponseUser,
+    RequestTask, RequestTeam, RequestUserCreate, RequestUserUpdate, ResponseTask,
+    ResponseTaskComment, ResponseTaskHistory, ResponseTeam, ResponseUser,
 };
 
 pub fn team_uc_to_team_tr(item: Team) -> ResponseTeam {
@@ -16,6 +16,7 @@ pub fn team_uc_to_team_tr(item: Team) -> ResponseTeam {
         updated_at: item.updated_at,
     }
 }
+
 pub fn task_uc_to_task_tr(item: Task) -> ResponseTask {
     ResponseTask {
         task_id: item.task_id,
@@ -29,6 +30,7 @@ pub fn task_uc_to_task_tr(item: Task) -> ResponseTask {
         updated_at: item.updated_at,
     }
 }
+
 pub fn team_tr_to_team_uc(req: RequestTeam) -> Team {
     Team {
         team_id: Uuid::nil(),
@@ -38,6 +40,7 @@ pub fn team_tr_to_team_uc(req: RequestTeam) -> Team {
         updated_at: Default::default(),
     }
 }
+
 pub fn task_tr_to_task_uc(req: RequestTask) -> Task {
     Task {
         task_id: Uuid::nil(),
@@ -51,6 +54,7 @@ pub fn task_tr_to_task_uc(req: RequestTask) -> Task {
         updated_at: Default::default(),
     }
 }
+
 pub fn task_history_uc_to_task_history_tr(item: TaskHistory) -> ResponseTaskHistory {
     ResponseTaskHistory {
         task_history_id: item.task_history_id,
@@ -66,7 +70,6 @@ pub fn user_uc_to_user_tr(item: User) -> ResponseUser {
         user_id: item.user_id,
         name: item.name,
         email: item.email,
-        email_code: item.email_code,
         avatar: item.avatar,
         role: item.role,
         created_at: item.created_at,
@@ -74,17 +77,27 @@ pub fn user_uc_to_user_tr(item: User) -> ResponseUser {
     }
 }
 
-pub fn user_tr_to_user_uc(item: RequestUser) -> User {
-    User {
-        user_id: Uuid::nil(),
-        name: item.name,
+pub fn user_create_tr_to_user_create_uc(item: RequestUserCreate) -> UserCreate {
+    UserCreate {
         email: item.email,
         password: item.password,
-        email_code: item.email_code,
-        avatar: None,
+        name: item.name,
+        email_code: None,
         role: item.role,
-        created_at: Default::default(),
-        updated_at: Default::default(),
+        avatar: item.avatar,
+    }
+}
+
+pub fn user_tr_update_to_user_uc_update(item: RequestUserUpdate) -> UserUpdate {
+    UserUpdate {
+        user_id: Default::default(),
+        email: item.email,
+        password: item.password,
+        name: item.name,
+        email_code: None,
+        role: item.role,
+        avatar: item.avatar,
+        is_remove_avatar: item.is_remove_avatar,
     }
 }
 

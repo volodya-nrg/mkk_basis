@@ -1,11 +1,20 @@
+use chrono::Utc;
+use image::{ImageError, ImageFormat, Rgb, RgbImage};
+use rand::{Rng, RngExt};
+use std::env;
+use std::fs::File;
+use std::io::{Cursor, Write};
+use std::path::PathBuf;
+use uuid::Uuid;
+
 use mkk_basis::adapter::db::models::{Task, TaskComment, TaskHistory, Team, TeamMember, User};
 use mkk_basis::adapter::db::postgres::tables::tasks::Status as TaskStatuses;
+use mkk_basis::adapter::db::postgres::tables::users::Role as UserRoles;
+use mkk_basis::adapter::helpers;
 use mkk_basis::transport::models::{
     RequestLogin, RequestRefreshToken, RequestRegister, RequestTask, RequestTaskComment,
-    RequestTeam, RequestTeamInvite, RequestUser,
+    RequestTeam, RequestTeamInvite, RequestUserCreate, RequestUserUpdate,
 };
-use rand::{Rng, RngExt, distr::Alphanumeric};
-use uuid::Uuid;
 
 pub fn private_key(len: usize) -> Vec<u8> {
     let mut key = vec![0u8; len];
@@ -13,19 +22,16 @@ pub fn private_key(len: usize) -> Vec<u8> {
     key
 }
 pub fn str() -> String {
-    str_limit(20)
+    helpers::rand_str_limit(20)
 }
-pub fn str_limit(len: usize) -> String {
-    // rand::rng() - вызовется в своем потоке. У него локальный итератор.
-    // Нельзя его создать в одном потоке "let x = rand::rng()", а потом этот x (генератор) вызывать в другом потоке.
-    rand::rng()
-        .sample_iter(Alphanumeric)
-        .take(len)
-        .map(char::from)
-        .collect()
-}
+
 pub fn email() -> String {
-    format!("{}@{}.{}", str_limit(10), str_limit(10), str_limit(3))
+    format!(
+        "{}@{}.{}",
+        helpers::rand_str_limit(10),
+        helpers::rand_str_limit(10),
+        helpers::rand_str_limit(3)
+    )
 }
 pub fn bool() -> bool {
     rand::random()
@@ -74,13 +80,24 @@ pub fn request_task() -> RequestTask {
     }
 }
 
-pub fn request_user() -> RequestUser {
-    RequestUser {
-        name: if bool() { Some(str()) } else { None },
+pub fn request_user_create() -> RequestUserCreate {
+    RequestUserCreate {
         email: email(),
         password: str(),
-        email_code: if bool() { Some(str()) } else { None },
-        role: if bool() { Some(str()) } else { None },
+        name: if bool() { Some(str()) } else { None },
+        role: if bool() { Some(get_random_user_role()) } else { None },
+        avatar: None,
+    }
+}
+
+pub fn request_user_update() -> RequestUserUpdate {
+    RequestUserUpdate {
+        email: if bool() { Some(email()) } else { None },
+        password: if bool() { Some(str()) } else { None },
+        name: if bool() { Some(str()) } else { None },
+        role: if bool() { Some(get_random_user_role()) } else { None },
+        avatar: None,
+        is_remove_avatar: bool(),
     }
 }
 
@@ -100,7 +117,11 @@ pub fn user() -> User {
         password: str(),
         email_code: if bool() { Some(str()) } else { None },
         avatar: if bool() { Some(str()) } else { None },
-        role: if bool() { Some(str()) } else { None },
+        role: if bool() {
+            Some(get_random_user_role())
+        } else {
+            None
+        },
         created_at: Default::default(),
         updated_at: Default::default(),
     }
@@ -154,6 +175,44 @@ pub fn task_comment() -> TaskComment {
     }
 }
 
+pub fn create_image(ext: &str) -> Result<PathBuf, ImageError> {
+    const SIDE: u32 = 1024;
+    let format = match ext {
+        "png" => ImageFormat::Png,
+        "jpg" | "jpeg" => ImageFormat::Jpeg,
+        "gif" => ImageFormat::Gif,
+        "bmp" => ImageFormat::Bmp,
+        "webp" => ImageFormat::WebP,
+        "tiff" | "tif" => ImageFormat::Tiff,
+        _ => panic!("unsupported extension: {}", ext),
+    };
+    let mut img = RgbImage::new(SIDE, SIDE);
+
+    for (x, y, pixel) in img.enumerate_pixels_mut() {
+        let r = (x * 255 / SIDE) as u8;
+        let g = (y * 255 / SIDE) as u8;
+        let b = ((x + y) * 255 / (SIDE + SIDE)) as u8;
+        *pixel = Rgb([r, g, b]);
+    }
+
+    let mut bytes: Vec<u8> = Vec::new();
+    img.write_to(&mut Cursor::new(&mut bytes), format)?;
+
+    let temp_dir = env::temp_dir(); // PathBuf::new(); - направим лучше в корень проекта, чтоб видеть
+    let filename = format!(
+        "{}_{}.{}",
+        Utc::now().timestamp(),
+        helpers::rand_str_limit(5),
+        ext
+    );
+    let filepath = temp_dir.join(filename);
+    let mut file = File::create(filepath.clone())?;
+
+    file.write_all(bytes.as_slice())?;
+
+    Ok(filepath)
+}
+
 fn get_random_task_status() -> String {
     let statuses = [
         TaskStatuses::Start,
@@ -161,6 +220,11 @@ fn get_random_task_status() -> String {
         TaskStatuses::Done,
         TaskStatuses::Cancelled,
     ];
+    statuses[int_range(0, statuses.len() - 1)].to_string()
+}
+
+fn get_random_user_role() -> String {
+    let statuses = [UserRoles::Admin, UserRoles::Moder, UserRoles::Null];
     statuses[int_range(0, statuses.len() - 1)].to_string()
 }
 

@@ -1,4 +1,5 @@
 CREATE TYPE task_status_enum AS ENUM ('start', 'todo', 'done', 'cancelled');
+CREATE TYPE user_role_enum AS ENUM ('admin', 'moder');
 
 CREATE OR REPLACE FUNCTION update_updated_at_column()
     RETURNS TRIGGER AS
@@ -20,15 +21,15 @@ $$ LANGUAGE plpgsql;
 
 CREATE TABLE users
 (
-    user_id    UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id    UUID           DEFAULT gen_random_uuid() PRIMARY KEY,
+    email      varchar(255)                 NOT NULL UNIQUE,
+    password   varchar(255)                 NOT NULL,
     name       varchar(255),
-    email      varchar(255)              NOT NULL UNIQUE,
-    password   varchar(255)              NOT NULL,
     email_code varchar(255),
     avatar     varchar(255),
-    role       varchar(255),
-    created_at timestamptz DEFAULT now() NOT NULL,
-    updated_at timestamptz DEFAULT now() NOT NULL
+    role       user_role_enum DEFAULT NULL,
+    created_at timestamptz    DEFAULT now() NOT NULL,
+    updated_at timestamptz    DEFAULT now() NOT NULL
 );
 CREATE TABLE teams
 (

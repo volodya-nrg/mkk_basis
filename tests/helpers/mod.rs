@@ -1,4 +1,4 @@
-pub mod client;
 pub mod certs;
-pub mod rand;
+pub mod client;
 pub mod mocks;
+pub mod rand;

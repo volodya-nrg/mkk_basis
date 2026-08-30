@@ -5,9 +5,9 @@ use uuid::Uuid;
 #[derive(Debug, FromRow, Clone, PartialEq)]
 pub struct User {
     pub user_id: Uuid,
-    pub name: Option<String>,
     pub email: String,
     pub password: String,
+    pub name: Option<String>,
     pub email_code: Option<String>,
     pub avatar: Option<String>,
     pub role: Option<String>,
@@ -53,7 +53,6 @@ pub struct TaskHistory {
     pub created_at: DateTime<Utc>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, FromRow, Clone, PartialEq)]
 pub struct TaskComment {
     pub task_comment_id: Uuid,

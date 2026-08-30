@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use mkk_basis::adapter::{
     db::RepositoryError, db::postgres::Postgres, db::postgres::tables::tasks::Status as TaskStatus,
-    logger,
+    db::postgres::tables::users::Role as UserRoles, logger,
 };
 
 use helpers::rand;
@@ -87,6 +87,7 @@ async fn check_users() {
     // ok: изменим и проверим пользователя
     user_expected = rand::user();
     user_expected.user_id = user_actual.user_id; // подменим на валидное явно
+    user_expected.role = Some(UserRoles::Admin.to_string());
     assert!(
         db.tbl_users
             .update(user_expected.clone())
@@ -98,6 +99,47 @@ async fn check_users() {
     user_expected.created_at = user_actual.created_at; // подменим на валидное явно
     user_expected.updated_at = user_actual.updated_at; // подменим на валидное явно
     assert_eq!(user_expected, user_actual);
+
+    // проверим роли
+    user_expected.role = Some("".to_string());
+    assert!(db.tbl_users.update(user_expected.clone()).await.is_err());
+    user_expected.role = Some(UserRoles::Null.to_string());
+    assert!(
+        db.tbl_users
+            .update(user_expected.clone())
+            .await
+            .is_success()
+    );
+    assert!(
+        db.tbl_users
+            .one(user_expected.user_id)
+            .await
+            .unwrap()
+            .role
+            .is_none()
+    );
+    user_expected.role = Some(UserRoles::Moder.to_string());
+    assert!(
+        db.tbl_users
+            .update(user_expected.clone())
+            .await
+            .is_success()
+    );
+    user_expected.role = None;
+    assert!(
+        db.tbl_users
+            .update(user_expected.clone())
+            .await
+            .is_success()
+    );
+    assert!(
+        db.tbl_users
+            .one(user_expected.user_id)
+            .await
+            .unwrap()
+            .role
+            .is_none()
+    );
 
     // err: удалим не известного пользователя
     assert!(db.tbl_users.delete(Uuid::new_v4()).await.is_err());

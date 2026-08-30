@@ -2,6 +2,7 @@ mod helpers;
 
 use axum::http::StatusCode;
 use sqlx::postgres::PgPoolOptions;
+use std::env;
 use std::net::TcpListener;
 use tokio::sync::OnceCell;
 use tokio::time::{Duration, sleep};
@@ -10,6 +11,7 @@ use uuid::Uuid;
 use mkk_basis::{
     adapter::db::postgres::Postgres as PostgresService,
     adapter::db::postgres::tables::users::Role as UsersRole,
+    adapter::helpers as HelpersService,
     adapter::jwt::Jwt as JWTService,
     adapter::logger as LoggerService,
     consts, transport,
@@ -27,6 +29,8 @@ use helpers::{
     mocks::EmailServiceMock,
     rand,
 };
+
+use mkk_basis::transport::models::{RequestUserCreate, RequestUserUpdate};
 
 struct ClientData {
     http_addr: String,
@@ -177,7 +181,7 @@ async fn check_auth() {
             assert_eq!(StatusCode::BAD_REQUEST, status_code);
 
             req_register2.email = rand::email();
-            req_register2.password = rand::str_limit(consts::MIN_PASSWORD_LEN - 1);
+            req_register2.password = HelpersService::rand_str_limit(consts::MIN_PASSWORD_LEN - 1);
         },
     )
     .await // err: проверка пароля на длину
@@ -334,7 +338,7 @@ async fn check_auth() {
         assert_eq!(StatusCode::BAD_REQUEST, status_code);
 
         req_login.email = req_register2.email.clone();
-        req_login.password = rand::str_limit(consts::MIN_PASSWORD_LEN - 1);
+        req_login.password = HelpersService::rand_str_limit(consts::MIN_PASSWORD_LEN - 1);
     })
     .await // err: проверим что пароль короткий
     .login(req_login.clone(), |result: StatusCodeBodyError| {
@@ -618,22 +622,16 @@ async fn check_teams() {
     )
     .await;
 
-    // TODO надо для юзера сделать patch а не put
     // дадим права админу
-    let mut admin = rand::request_user();
-    cl.users_one(admin_id, |result: StatusCodeBodyError| {
-        let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
-
-        let resp: ResponseUser = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
-        admin.name = resp.name;
-        admin.password = req_register_admin.password.clone();
-        admin.email = resp.email;
-        admin.email_code = resp.email_code;
-        admin.role = Some(UsersRole::Admin.as_str());
-    })
-    .await
-    .users_update(admin_id, admin, None, |result: StatusCodeBodyError| {
+    let admin = RequestUserUpdate {
+        email: None,
+        password: None,
+        name: None,
+        role: Some(UsersRole::Admin.to_string()),
+        avatar: None,
+        is_remove_avatar: false,
+    };
+    cl.users_update(admin_id, admin, |result: StatusCodeBodyError| {
         let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_success());
     })
@@ -1217,22 +1215,16 @@ async fn check_users() {
     let mut owner_id = Uuid::nil();
     let mut user_id = Uuid::nil();
     let req_register = rand::request_register();
-    let req_user1 = rand::request_user();
-    let req_user2 = rand::request_user();
+    let mut req_user_create = rand::request_user_create();
+    let image_path = rand::create_image("jpg").unwrap();
     let req_login = RequestLogin {
         email: req_register.email.clone(),
         password: req_register.password.clone(),
     };
-    let mut saved_resp_user = ResponseUser {
-        user_id,
-        name: None,
-        email: "".to_string(),
-        email_code: None,
-        avatar: None,
-        role: None,
-        created_at: Default::default(),
-        updated_at: Default::default(),
-    };
+
+    req_user_create.name = Some(rand::str());
+    req_user_create.role = Some(UsersRole::Admin.to_string());
+    req_user_create.avatar = Some(image_path.display().to_string());
 
     // проверим на 401
     cl.users_list(-1, -1, |result: StatusCodeBodyError| {
@@ -1240,15 +1232,17 @@ async fn check_users() {
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await
-    .users_create(rand::request_user(), None, |result: StatusCodeBodyError| {
-        let (status_code, _body_str) = result.unwrap();
-        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
-    })
+    .users_create(
+        rand::request_user_create(),
+        |result: StatusCodeBodyError| {
+            let (status_code, _body_str) = result.unwrap();
+            assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+        },
+    )
     .await
     .users_update(
         Uuid::new_v4(),
-        rand::request_user(),
-        None,
+        rand::request_user_update(),
         |result: StatusCodeBodyError| {
             let (status_code, _body_str) = result.unwrap();
             assert_eq!(StatusCode::UNAUTHORIZED, status_code);
@@ -1284,49 +1278,64 @@ async fn check_users() {
     .await // err: такого пользователя нет
     .users_delete(Uuid::new_v4(), |result: StatusCodeBodyError| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_server_error());
+        assert_eq!(StatusCode::NOT_FOUND, status_code);
     })
     .await // err: такого пользователя нет
     .users_update(
         Uuid::new_v4(),
-        rand::request_user(),
-        None,
+        rand::request_user_update(),
         |result: StatusCodeBodyError| {
             let (status_code, _body_str) = result.unwrap();
-            assert!(status_code.is_server_error());
+            assert_eq!(StatusCode::NOT_FOUND, status_code);
         },
     )
     .await // ok
-    .users_create(req_user1.clone(), None, |result: StatusCodeBodyError| {
+    .users_create(req_user_create.clone(), |result: StatusCodeBodyError| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
         let resp_user_actual: ResponseUser =
             serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
-        assert_eq!(req_user1.email, resp_user_actual.email);
-        assert_eq!(req_user1.name, resp_user_actual.name);
-        assert_eq!(req_user1.email_code, resp_user_actual.email_code);
+        // cравниваем частями, т.к. типы разные и где-то данных может не быть, а где-то быть
+        assert_eq!(req_user_create.email, resp_user_actual.email);
+        assert_eq!(req_user_create.name, resp_user_actual.name);
+        assert_eq!(req_user_create.role, resp_user_actual.role);
+        assert_eq!(
+            req_user_create.avatar.is_some(),
+            resp_user_actual.avatar.is_some()
+        );
 
         user_id = resp_user_actual.user_id;
-        saved_resp_user = resp_user_actual;
     })
     .await // ok
     .users_one(user_id, |result: StatusCodeBodyError| {
         let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_success());
     })
-    .await // ok: обновим успешно
-    .users_update(
+    .await;
+
+    // ok: обновим успешно
+    let req_user_update = RequestUserUpdate {
+        email: None,
+        password: None,
+        name: Some(rand::str()),
+        role: Some(UsersRole::Null.to_string()),
+        avatar: None,
+        is_remove_avatar: true,
+    };
+    cl.users_update(
         user_id,
-        req_user2.clone(),
-        None,
+        req_user_update.clone(),
         |result: StatusCodeBodyError| {
             let (status_code, body_str) = result.unwrap();
             assert!(status_code.is_success());
 
             let resp_user_actual: ResponseUser =
                 serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
-            assert_ne!(saved_resp_user, resp_user_actual);
+            assert_eq!(req_user_create.email, resp_user_actual.email); // !
+            assert_eq!(req_user_update.name, resp_user_actual.name);
+            assert!(resp_user_actual.role.is_none());
+            assert!(resp_user_actual.avatar.is_none());
         },
     )
     .await // ok: посмотрим что люди есть
@@ -1348,14 +1357,12 @@ async fn check_users() {
             serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         assert!(resp.items.len() > 0);
         assert!(resp.total > 0);
-
-        let opt = resp.items.iter().find(|item| item.user_id == user_id);
-        assert!(opt.is_some());
-
-        let founded_user = opt.unwrap();
-        assert_eq!(req_user2.email, founded_user.email);
-        assert_eq!(req_user2.name, founded_user.name);
-        assert_eq!(req_user2.email_code, founded_user.email_code);
+        assert!(
+            resp.items
+                .iter()
+                .find(|item| item.user_id == user_id)
+                .is_some()
+        );
     })
     .await // ок: удалим успешно
     .users_delete(user_id, |result: StatusCodeBodyError| {

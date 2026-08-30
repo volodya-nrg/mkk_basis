@@ -1,16 +1,23 @@
 use sqlx::{Pool, Postgres, QueryBuilder, Row};
+use std::fmt;
+use std::fmt::Formatter;
 use uuid::Uuid;
 
 use crate::adapter::db::{RepositoryError, models::User, postgres::table_basic::TableBasic};
 
 pub enum Role {
     Admin,
+    Moder,
+    Null, // при обновлении пользователя нужно иметь возможность выставить как-то в NULL
 }
-impl Role {
-    pub fn as_str(&self) -> String {
-        match self {
-            Role::Admin => "admin".to_string(),
-        }
+impl fmt::Display for Role {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Role::Admin => "admin",
+            Role::Moder => "moder",
+            Role::Null => "null",
+        };
+        write!(f, "{}", s)
     }
 }
 
@@ -20,7 +27,6 @@ pub struct Users {
     table_basic: TableBasic,
 }
 
-#[allow(dead_code)]
 impl Users {
     pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
@@ -29,12 +35,12 @@ impl Users {
                 name: "users".to_string(),
                 fields: vec![
                     "user_id".to_string(),
-                    "name".to_string(),
                     "email".to_string(),
                     "password".to_string(),
+                    "name".to_string(),
                     "email_code".to_string(),
                     "avatar".to_string(),
-                    "role".to_string(),
+                    "role::text as role".to_string(),
                     "created_at".to_string(),
                     "updated_at".to_string(),
                 ],
@@ -110,17 +116,18 @@ impl Users {
     }
     pub async fn create(&self, item: User) -> Result<Uuid, RepositoryError> {
         let query = format!(
-            "INSERT INTO {} (name, email, password, email_code, avatar, role) VALUES ($1,$2,$3,$4,$5,$6) RETURNING user_id",
+            "INSERT INTO {} (email, password, name, email_code, avatar, role) VALUES ($1,$2,$3,$4,$5,$6::user_role_enum) RETURNING user_id",
             self.table_basic.name,
         );
+
         QueryBuilder::new(query)
             .build()
-            .bind(item.name)
             .bind(item.email)
             .bind(item.password)
+            .bind(item.name)
             .bind(item.email_code)
             .bind(item.avatar)
-            .bind(item.role)
+            .bind(self.get_valid_role(item.role))
             .fetch_one(&self.pool)
             .await
             .map_err(RepositoryError::FailedToInsert)?
@@ -129,17 +136,17 @@ impl Users {
     }
     pub async fn update(&self, item: User) -> Result<(), RepositoryError> {
         let query = format!(
-            "UPDATE {} SET name=$1, email=$2, password=$3, email_code=$4, avatar=$5, role=$6 WHERE user_id=$7",
+            "UPDATE {} SET email=$1, password=$2, name=$3, email_code=$4, avatar=$5, role=$6::user_role_enum WHERE user_id=$7",
             self.table_basic.name,
         );
         QueryBuilder::new(query)
             .build()
-            .bind(item.name)
             .bind(item.email)
             .bind(item.password)
+            .bind(item.name)
             .bind(item.email_code)
             .bind(item.avatar)
-            .bind(item.role)
+            .bind(self.get_valid_role(item.role))
             .bind(item.user_id)
             .execute(&self.pool)
             .await
@@ -169,5 +176,15 @@ impl Users {
                     Err(RepositoryError::ExpectedOneRow(rows))
                 }
             })
+    }
+    fn get_valid_role(&self, role: Option<String>) -> Option<String> {
+        let role_loc = role.clone();
+        if let Some(v) = role
+            && v == Role::Null.to_string()
+        {
+            None
+        } else {
+            role_loc
+        }
     }
 }

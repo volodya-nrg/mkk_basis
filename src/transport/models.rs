@@ -43,13 +43,23 @@ pub struct RequestTask {
     pub status: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
-pub struct RequestUser {
+#[derive(Debug, Serialize, Deserialize, Clone,  PartialEq)]
+pub struct RequestUserCreate {
     pub email: String,
     pub password: String,
     pub name: Option<String>,
-    pub email_code: Option<String>,
     pub role: Option<String>,
+    pub avatar: Option<String>, // "String" потому что в БД в итоге залетает путь к файлу
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RequestUserUpdate {
+    pub email: Option<String>,
+    pub password: Option<String>,
+    pub name: Option<String>,
+    pub role: Option<String>,
+    pub avatar: Option<String>, // "String" потому что в БД в итоге залетает путь к файлу
+    pub is_remove_avatar: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -132,9 +142,8 @@ pub struct ResponseUUID {
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct ResponseUser {
     pub user_id: Uuid,
-    pub name: Option<String>,
     pub email: String,
-    pub email_code: Option<String>,
+    pub name: Option<String>,
     pub avatar: Option<String>,
     pub role: Option<String>,
     pub created_at: DateTime<Utc>,
@@ -166,4 +175,8 @@ pub struct ResponseTaskComment {
 pub struct ResponseTaskCommentsList {
     pub items: Vec<ResponseTaskComment>,
     pub total: u32,
+}
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct ResponseMsg {
+    pub msg: String,
 }

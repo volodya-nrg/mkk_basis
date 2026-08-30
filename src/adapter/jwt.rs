@@ -61,7 +61,11 @@ impl Jwt {
             refresh_expire_secs,
         }
     }
-    pub fn generate_access_token(&self, user_id: Uuid, role: Option<String>) -> Result<String, JWTError> {
+    pub fn generate_access_token(
+        &self,
+        user_id: Uuid,
+        role: Option<String>,
+    ) -> Result<String, JWTError> {
         let now = Utc::now();
         let expire = now + Duration::seconds(self.access_expire_secs);
         encode(

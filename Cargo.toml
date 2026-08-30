@@ -16,8 +16,8 @@ axum = { version = "0.8.9", features = ["multipart"] }
 serde_json = "1.0.151"
 env_logger = "0.11.11"
 reqwest = { version = "0.13.4", features = ["form", "json", "multipart", "stream"] }
-tower-http = { version = "0.7.0", features = ["fs"] }
-argon2 = { version = "0.5.3", features = ["std"] }
+tower-http = { version = "0.7.0", features = ["fs", "limit"] }
+argon2 = "0.6.0" # { version = "0.6.0", features = ["std"] }
 email_address = "0.2.9"
 http = "1.5.0"
 ctor = "1.0.12"
@@ -29,4 +29,4 @@ axum-server = { version = "0.8.0", features = ["tls-rustls-no-provider"] }
 rustls = "0.23.43"
 rustls-pemfile = "2.2.0"
 lettre = "0.11.23"
-# fake = { version = "5.1.0", features = ["derive", "chrono", "uuid"] }
+image = "0.25.10"

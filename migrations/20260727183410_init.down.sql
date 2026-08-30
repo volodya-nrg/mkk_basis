@@ -11,4 +11,5 @@ DROP TABLE teams;
 DROP TABLE users;
 DROP FUNCTION insert_record_to_team_members;
 DROP FUNCTION update_updated_at_column;
+DROP TYPE user_role_enum;
 DROP TYPE task_status_enum;

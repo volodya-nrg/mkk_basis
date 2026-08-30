@@ -60,7 +60,7 @@ impl Teams {
         tx.commit()
             .await
             .map_err(RepositoryError::TransactionError)?;
-        
+
         Ok((items, total.0))
     }
     pub async fn one(&self, item_id: Uuid) -> Result<Team, RepositoryError> {

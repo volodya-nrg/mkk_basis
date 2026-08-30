@@ -14,8 +14,10 @@ use serde_json::json;
 use thiserror::Error as ThisError;
 
 use crate::adapter::{
-    db::postgres::Postgres as PostgresService, email::EmailSender, jwt::Jwt as JWTService,
+    db::RepositoryError, db::postgres::Postgres as PostgresService, email::EmailSender,
+    jwt::Jwt as JWTService,
 };
+use crate::err_msg::ErrMsg;
 
 #[derive(Clone)] // из-за axum-state
 pub struct UseCase<ES: EmailSender> {
@@ -97,5 +99,17 @@ impl IntoResponse for UseCaseError {
             Json(json!({"message": public_error_result})),
         )
             .into_response()
+    }
+}
+impl From<RepositoryError> for UseCaseError {
+    fn from(e: RepositoryError) -> Self {
+        match e {
+            RepositoryError::NotFoundRow => UseCaseError::ForTransport {
+                status_code: StatusCode::NOT_FOUND,
+                public_err: ErrMsg::NotFoundItem.as_str(),
+                internal_err: None,
+            },
+            other => UseCaseError::Common(other.to_string()),
+        }
     }
 }
