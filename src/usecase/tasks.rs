@@ -14,7 +14,7 @@ use crate::{
 
 use super::{
     UseCaseError, mapper,
-    models::{Task, TaskHistory},
+    models::{Task, TaskHistory, TaskLimitOffsetFilter},
 };
 
 #[derive(Clone)] // из-за axum-state
@@ -36,10 +36,13 @@ impl Tasks {
             team_members_repo,
         }
     }
-    pub async fn list(&self, limit: i32, offset: i32) -> Result<(Vec<Task>, i64), UseCaseError> {
+    pub async fn list(
+        &self,
+        data: TaskLimitOffsetFilter,
+    ) -> Result<(Vec<Task>, i64), UseCaseError> {
         let (items, total) = self
             .tasks_repo
-            .list(limit, offset)
+            .list(mapper::task_limit_offset_filter_uc_to_task_limit_offset_filter_db(data))
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))?;
         Ok((
@@ -127,12 +130,6 @@ impl Tasks {
             .await
             .map_err(|e| e)?;
 
-        // TODO тут нужна транзакция
-        // Вместо удаления нужно менять статус
-        // self.tasks_repo
-        //     .delete(task_id)
-        //     .await
-        //     .map_err(|e| UseCaseError::Common(format!("failed to delete: {e}")))?;
         task.status = TaskStatus::Cancelled.to_string();
         self.tasks_repo
             .update(mapper::task_uc_to_task_db(task))

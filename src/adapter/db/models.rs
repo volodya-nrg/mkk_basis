@@ -62,3 +62,12 @@ pub struct TaskComment {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
+
+#[derive(Debug, FromRow, Clone, Default)]
+pub struct TaskLimitOffsetFilter {
+    pub limit: i32,
+    pub offset: i32,
+    pub team_id: Option<Uuid>,
+    pub assignee_id: Option<Uuid>,
+    pub status: Option<String>,
+}

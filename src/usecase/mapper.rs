@@ -1,9 +1,12 @@
 use crate::adapter::db::models::{
-    Task as DBTask, TaskComment as DBTaskComment, TaskHistory as DBTaskHistory, Team as DBTeam,
-    TeamMember as DBTeamMember, User as DBUser,
+    Task as DBTask, TaskComment as DBTaskComment, TaskHistory as DBTaskHistory,
+    TaskLimitOffsetFilter as DBTaskLimitOffsetFilter, Team as DBTeam, TeamMember as DBTeamMember,
+    User as DBUser,
 };
 
-use super::models::{Task, TaskComment, TaskHistory, Team, TeamMember, User};
+use super::models::{
+    Task, TaskComment, TaskHistory, TaskLimitOffsetFilter, Team, TeamMember, User,
+};
 
 pub fn task_db_to_task_uc(item: DBTask) -> Task {
     Task {
@@ -114,5 +117,17 @@ pub fn task_comment_uc_to_task_comment_db(item: TaskComment) -> DBTaskComment {
         msg: item.msg,
         created_at: item.created_at,
         updated_at: item.updated_at,
+    }
+}
+
+pub fn task_limit_offset_filter_uc_to_task_limit_offset_filter_db(
+    item: TaskLimitOffsetFilter,
+) -> DBTaskLimitOffsetFilter {
+    DBTaskLimitOffsetFilter {
+        limit: item.limit,
+        offset: item.offset,
+        team_id: item.team_id,
+        assignee_id: item.assignee_id,
+        status: item.status,
     }
 }

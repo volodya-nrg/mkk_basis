@@ -1,18 +1,28 @@
-use sqlx::{Pool, Postgres, QueryBuilder, Row};
+use sqlx::{AssertSqlSafe, Pool, Postgres, QueryBuilder, Row};
 use std::fmt::{self, Formatter};
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 use uuid::Uuid;
 
-use crate::adapter::db::{RepositoryError, models::Task, postgres::table_basic::TableBasic};
+use crate::adapter::db::{
+    RepositoryError,
+    models::{Task, TaskLimitOffsetFilter},
+    postgres::table_basic::TableBasic,
+};
 
-#[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, EnumIter, PartialEq)]
 pub enum Status {
     Start,
     Todo,
     Done,
     Cancelled,
 }
-
+impl Status {
+    fn contains_value(v: String) -> bool {
+        Status::iter().any(|s| s.to_string() == v)
+    }
+}
+// можно поставить заклинание Display, но тогда будет начинаться с большой буквы, поэтому пишем сами как надо
 impl fmt::Display for Status {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let s = match self {
@@ -50,45 +60,78 @@ impl Tasks {
             },
         }
     }
-    pub async fn list(&self, limit: i32, offset: i32) -> Result<(Vec<Task>, i64), RepositoryError> {
-        let query = format!(
-            "SELECT {} FROM {} ORDER BY created_at DESC",
+    pub async fn list(
+        &self,
+        data: TaskLimitOffsetFilter,
+    ) -> Result<(Vec<Task>, i64), RepositoryError> {
+        let mut query_common = format!(
+            "SELECT {} FROM {}",
             self.table_basic.fields.join(","),
             self.table_basic.name,
         );
-        let mut query_builder = QueryBuilder::new(query);
+        let mut query_count = format!("SELECT COUNT(*) as count FROM {}", self.table_basic.name);
+        let mut params: Vec<(String, String)> = vec![];
 
-        if limit > -1 {
-            query_builder.push(" LIMIT ");
-            query_builder.push_bind(limit);
+        if let Some(team_id) = data.team_id {
+            params.push((
+                format!("team_id=${}::uuid", params.len() + 1),
+                team_id.to_string(),
+            ));
         }
-        if offset > -1 {
-            query_builder.push(" OFFSET ");
-            query_builder.push_bind(offset);
+        if let Some(assignee_id) = data.assignee_id {
+            params.push((
+                format!("assignee_id=${}::uuid", params.len() + 1),
+                assignee_id.to_string(),
+            ));
+        }
+        if let Some(status) = data.status
+            && Status::contains_value(status.clone())
+        {
+            params.push((
+                format!("status=${}::task_status_enum", params.len() + 1),
+                status,
+            ));
+        }
+        if !params.is_empty() {
+            let fields = params
+                .iter()
+                .map(|(k, _)| k.to_string())
+                .collect::<Vec<String>>()
+                .join(" AND ");
+
+            let where_str = format!(" WHERE {}", fields);
+            query_common += where_str.as_str();
+            query_count += where_str.as_str();
         }
 
-        let mut tx = self
-            .pool
-            .begin()
+        let mut prepare_count = sqlx::query_scalar(AssertSqlSafe(query_count));
+        for (_, v) in params.iter() {
+            prepare_count = prepare_count.bind(v);
+        }
+        let count = prepare_count
+            .fetch_one(&self.pool)
             .await
-            .map_err(RepositoryError::TransactionError)?;
-        let items: Vec<Task> = query_builder
-            .build_query_as()
-            .fetch_all(&mut *tx)
+            .map_err(RepositoryError::FailedToCount)?;
+
+        if data.limit > -1 {
+            query_common += format!(" LIMIT ${}::bigint", params.len() + 1).as_str();
+            params.push(("".to_string(), data.limit.to_string()));
+        }
+        if data.offset > -1 {
+            query_common += format!(" OFFSET ${}::bigint", params.len() + 1).as_str();
+            params.push(("".to_string(), data.offset.to_string()));
+        }
+
+        let mut prepare_common = sqlx::query_as::<_, Task>(AssertSqlSafe(query_common));
+        for (_, v) in params.iter() {
+            prepare_common = prepare_common.bind(v);
+        }
+        let items = prepare_common
+            .fetch_all(&self.pool)
             .await
             .map_err(RepositoryError::FailedToQuery)?;
-        let total: (i64,) =
-            QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.table_basic.name)) // возвращает такой же диапазон как и i64
-                .build_query_as()
-                .fetch_one(&mut *tx)
-                .await
-                .map_err(RepositoryError::FailedToCount)?;
 
-        tx.commit()
-            .await
-            .map_err(RepositoryError::TransactionError)?;
-
-        Ok((items, total.0))
+        Ok((items, count))
     }
     pub async fn one(&self, item_id: Uuid) -> Result<Task, RepositoryError> {
         let query = format!(

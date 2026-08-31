@@ -24,6 +24,15 @@ pub struct RequestLimitOffset {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RequestTaskLimitOffsetFilter {
+    pub limit: i32,
+    pub offset: i32,
+    pub team_id: Option<Uuid>,
+    pub assignee_id: Option<Uuid>,
+    pub status: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RequestTeam {
     pub name: String,
 }
@@ -43,7 +52,7 @@ pub struct RequestTask {
     pub status: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone,  PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct RequestUserCreate {
     pub email: String,
     pub password: String,

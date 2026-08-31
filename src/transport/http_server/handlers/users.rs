@@ -21,8 +21,6 @@ use crate::transport::{
 };
 use crate::usecase::UseCase;
 
-const MAX_FILE_SIZE: usize = 10 * 1024 * 1024; // 10 MB
-
 pub struct Handlers {}
 
 impl Handlers {
