@@ -9,11 +9,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use mkk_basis::adapter::db::postgres::Postgres as PostgresService;
-use mkk_basis::transport::models::{
-    RequestLimitOffset, RequestLogin, RequestRefreshToken, RequestRegister, RequestTask,
-    RequestTaskComment, RequestTeam, RequestTeamInvite, RequestUserCreate, RequestUserUpdate,
-    ResponseLogin, ResponseRefreshToken,
-};
+use mkk_basis::transport::models::{RequestLimitOffset, RequestLogin, RequestRefreshToken, RequestRegister, RequestTask, RequestTaskComment, RequestTaskLimitOffsetFilter, RequestTeam, RequestTeamInvite, RequestUserCreate, RequestUserUpdate, ResponseLogin, ResponseRefreshToken};
 
 use super::rand;
 
@@ -408,7 +404,7 @@ impl<'a> Client<'a> {
     }
 
     // tasks
-    pub async fn tasks_list<T>(&self, limit: i32, offset: i32, mut cb: T) -> &Self
+    pub async fn tasks_list<T>(&self, req: RequestTaskLimitOffsetFilter, mut cb: T) -> &Self
     where
         T: FnMut(StatusCodeBodyError),
     {
@@ -417,7 +413,7 @@ impl<'a> Client<'a> {
                 .client
                 .get(format!("{}/api/v1/tasks", self.addr))
                 .headers(self.headers().await)
-                .json(&RequestLimitOffset { limit, offset })
+                .json(&req)
                 .send()
                 .await?;
             self.parse_response(response).await

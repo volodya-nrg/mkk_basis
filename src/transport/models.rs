@@ -23,7 +23,7 @@ pub struct RequestLimitOffset {
     pub offset: i32,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct RequestTaskLimitOffsetFilter {
     pub limit: i32,
     pub offset: i32,

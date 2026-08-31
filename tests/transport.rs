@@ -30,7 +30,9 @@ use helpers::{
     rand,
 };
 
-use mkk_basis::transport::models::{RequestUserCreate, RequestUserUpdate};
+use mkk_basis::transport::models::{
+    RequestTaskLimitOffsetFilter, RequestUserCreate, RequestUserUpdate,
+};
 
 struct ClientData {
     http_addr: String,
@@ -802,9 +804,12 @@ async fn check_tasks() {
         email: req_register2.email.clone(),
         password: req_register2.password.clone(),
     };
+    let mut reg_list = RequestTaskLimitOffsetFilter::default();
+    reg_list.limit = -1;
+    reg_list.offset = -1;
 
     // проверим на 401
-    cl.tasks_list(-1, -1, |result: StatusCodeBodyError| {
+    cl.tasks_list(reg_list.clone(), |result: StatusCodeBodyError| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
@@ -937,9 +942,12 @@ async fn check_tasks() {
     cl.login(req_login1, |result: StatusCodeBodyError| {
         let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_success());
+
+        reg_list.limit = 100;
+        reg_list.offset = 0;
     })
-    .await
-    .tasks_list(100, 0, |result: StatusCodeBodyError| {
+    .await // ok
+    .tasks_list(reg_list.clone(), |result: StatusCodeBodyError| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
@@ -947,9 +955,12 @@ async fn check_tasks() {
             serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         assert!(!resp.items.is_empty());
         assert!(resp.total > 0);
+
+        reg_list.limit = 0;
+        reg_list.offset = 0;
     })
     .await // ok
-    .tasks_list(0, 0, |result: StatusCodeBodyError| {
+    .tasks_list(reg_list.clone(), |result: StatusCodeBodyError| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
@@ -957,6 +968,20 @@ async fn check_tasks() {
             serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
         assert!(resp.items.is_empty());
         assert!(resp.total > 0);
+
+        reg_list.limit = -1;
+        reg_list.offset = -1;
+        reg_list.team_id = Some(Uuid::new_v4());
+    })
+    .await // ok: применим фильтрацию
+    .tasks_list(reg_list.clone(), |result: StatusCodeBodyError| {
+        let (status_code, body_str) = result.unwrap();
+        assert!(status_code.is_success());
+
+        let resp: ResponseTasksList =
+            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        assert!(resp.items.is_empty());
+        assert_eq!(0, resp.total);
     })
     .await // err
     .tasks_one(Uuid::new_v4(), |result: StatusCodeBodyError| {
