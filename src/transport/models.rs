@@ -24,7 +24,7 @@ pub struct RequestLimitOffset {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
-pub struct RequestTaskLimitOffsetFilter {
+pub struct RequestTaskData {
     pub limit: i32,
     pub offset: i32,
     pub team_id: Option<Uuid>,

@@ -64,7 +64,7 @@ pub struct TaskComment {
 }
 
 #[derive(Debug, FromRow, Clone, Default)]
-pub struct TaskLimitOffsetFilter {
+pub struct TaskData {
     pub limit: i32,
     pub offset: i32,
     pub team_id: Option<Uuid>,

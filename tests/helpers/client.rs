@@ -9,7 +9,11 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use mkk_basis::adapter::db::postgres::Postgres as PostgresService;
-use mkk_basis::transport::models::{RequestLimitOffset, RequestLogin, RequestRefreshToken, RequestRegister, RequestTask, RequestTaskComment, RequestTaskLimitOffsetFilter, RequestTeam, RequestTeamInvite, RequestUserCreate, RequestUserUpdate, ResponseLogin, ResponseRefreshToken};
+use mkk_basis::transport::models::{
+    RequestLimitOffset, RequestLogin, RequestRefreshToken, RequestRegister, RequestTask,
+    RequestTaskComment, RequestTaskData, RequestTeam, RequestTeamInvite, RequestUserCreate,
+    RequestUserUpdate, ResponseLogin, ResponseRefreshToken,
+};
 
 use super::rand;
 
@@ -404,7 +408,7 @@ impl<'a> Client<'a> {
     }
 
     // tasks
-    pub async fn tasks_list<T>(&self, req: RequestTaskLimitOffsetFilter, mut cb: T) -> &Self
+    pub async fn tasks_list<T>(&self, req: RequestTaskData, mut cb: T) -> &Self
     where
         T: FnMut(StatusCodeBodyError),
     {
@@ -546,11 +550,7 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn users_create<T>(
-        &self,
-        req: RequestUserCreate,
-        mut cb: T,
-    ) -> &Self
+    pub async fn users_create<T>(&self, req: RequestUserCreate, mut cb: T) -> &Self
     where
         T: FnMut(StatusCodeBodyError),
     {
@@ -582,12 +582,7 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn users_update<T>(
-        &self,
-        item_id: Uuid,
-        req: RequestUserUpdate,
-        mut cb: T,
-    ) -> &Self
+    pub async fn users_update<T>(&self, item_id: Uuid, req: RequestUserUpdate, mut cb: T) -> &Self
     where
         T: FnMut(StatusCodeBodyError),
     {

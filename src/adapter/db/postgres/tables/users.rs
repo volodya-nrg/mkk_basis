@@ -48,19 +48,21 @@ impl Users {
         }
     }
     pub async fn list(&self, limit: i32, offset: i32) -> Result<(Vec<User>, i64), RepositoryError> {
-        let mut query = QueryBuilder::new(format!(
+        let mut common_builder = QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
             self.table_basic.fields.join(","),
             self.table_basic.name,
         ));
+        let mut count_builder =
+            QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.table_basic.name));
 
         if limit > -1 {
-            query.push(" LIMIT ");
-            query.push_bind(limit);
+            common_builder.push(" LIMIT ");
+            common_builder.push_bind(limit);
         }
         if offset > -1 {
-            query.push(" OFFSET ");
-            query.push_bind(offset);
+            common_builder.push(" OFFSET ");
+            common_builder.push_bind(offset);
         }
 
         let mut tx = self
@@ -68,23 +70,22 @@ impl Users {
             .begin()
             .await
             .map_err(RepositoryError::TransactionError)?;
-        let items: Vec<User> = query
+        let items: Vec<User> = common_builder
             .build_query_as()
             .fetch_all(&mut *tx)
             .await
             .map_err(RepositoryError::FailedToQuery)?;
-        let total: (i64,) =
-            QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.table_basic.name)) // возвращает такой же диапазон как и i64
-                .build_query_as()
-                .fetch_one(&mut *tx)
-                .await
-                .map_err(RepositoryError::FailedToCount)?;
+        let total = count_builder
+            .build_query_scalar()
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(RepositoryError::FailedToCount)?;
 
         tx.commit()
             .await
             .map_err(RepositoryError::TransactionError)?;
 
-        Ok((items, total.0))
+        Ok((items, total))
     }
     pub async fn one(&self, item_id: Uuid) -> Result<User, RepositoryError> {
         let query = format!(

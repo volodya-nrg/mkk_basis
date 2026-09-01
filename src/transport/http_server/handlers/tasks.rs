@@ -6,7 +6,7 @@ use crate::adapter::email::EmailSender;
 use crate::transport::{
     extractor::AuthenticatedUser,
     mapper,
-    models::{RequestTask, RequestTaskLimitOffsetFilter, ResponseTaskHistories, ResponseTasksList},
+    models::{RequestTask, RequestTaskData, ResponseTaskHistories, ResponseTasksList},
 };
 use crate::usecase::UseCase;
 
@@ -16,14 +16,14 @@ impl Handlers {
     pub async fn list<ES>(
         _user: AuthenticatedUser<ES>,
         State(use_case): State<UseCase<ES>>,
-        Json(payload): Json<RequestTaskLimitOffsetFilter>,
+        Json(payload): Json<RequestTaskData>,
     ) -> impl IntoResponse
     where
         ES: EmailSender,
     {
         use_case
             .tasks
-            .list(mapper::task_limit_offset_filter_tr_to_task_limit_offset_filter_uc(payload))
+            .list(mapper::task_data_tr_to_task_data_uc(payload))
             .await
             .map_or_else(
                 |e| e.into_response(),

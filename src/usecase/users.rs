@@ -87,19 +87,22 @@ impl Users {
         if let Some(v) = user.role {
             user_db_copy.role = Some(v);
         }
-        if user.is_remove_avatar
-            && let Some(v) = user_db.avatar.clone()
-        {
-            if let Err(e) = fs::remove_file(v.clone()) {
-                log::error!("failed to remove file ({}): {}", v, e)
-            }
+        if user.is_remove_avatar && user_db.avatar.is_some() {
             user_db_copy.avatar = None;
         }
         if let Some(v) = user.avatar {
             user_db_copy.avatar = Some(v);
         }
         if user_db != user_db_copy {
+            // если файл удалился нормально, то транзакция завершена
+            // TODO tx
             self.users_repo.update(user_db_copy).await?;
+            if let Some(v) = user_db.avatar.clone()
+                && let Err(e) = fs::remove_file(v.clone())
+            {
+                log::error!("failed to remove file ({}): {}", v, e)
+            }
+            // TODO \tx
         }
 
         Ok(())
@@ -107,13 +110,14 @@ impl Users {
     pub async fn delete(&self, item_id: Uuid) -> Result<(), UseCaseError> {
         let user = self.users_repo.one(item_id).await?;
 
+        // TODO tx
         self.users_repo.delete(item_id).await?;
-
         if let Some(v) = user.avatar
             && let Err(e) = fs::remove_file(v.clone())
         {
             log::error!("failed to remove file ({}): {}", v, e);
         }
+        // TODO \tx
 
         Ok(())
     }

@@ -9,7 +9,6 @@ pub struct TeamMembers {
     table_basic: TableBasic,
 }
 
-#[allow(dead_code)]
 impl TeamMembers {
     pub fn new(pool: Pool<Postgres>) -> Self {
         Self {

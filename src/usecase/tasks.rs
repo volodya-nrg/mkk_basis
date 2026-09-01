@@ -14,7 +14,7 @@ use crate::{
 
 use super::{
     UseCaseError, mapper,
-    models::{Task, TaskHistory, TaskLimitOffsetFilter},
+    models::{Task, TaskHistory, TaskData},
 };
 
 #[derive(Clone)] // из-за axum-state
@@ -38,11 +38,11 @@ impl Tasks {
     }
     pub async fn list(
         &self,
-        data: TaskLimitOffsetFilter,
+        data: TaskData,
     ) -> Result<(Vec<Task>, i64), UseCaseError> {
         let (items, total) = self
             .tasks_repo
-            .list(mapper::task_limit_offset_filter_uc_to_task_limit_offset_filter_db(data))
+            .list(mapper::task_data_uc_to_task_data_db(data))
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))?;
         Ok((
@@ -66,7 +66,7 @@ impl Tasks {
         self.check_access_for_team_member_only(task.team_id, user_id)
             .await
             .map_err(|e| e)?;
-        // TODO тут нужна транзакция
+        // TODO tx
         let new_task_uuid = self
             .tasks_repo
             .create(mapper::task_uc_to_task_db(task))
@@ -83,7 +83,7 @@ impl Tasks {
             }))
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to create task_history: {e}")))?;
-
+        // TODO \tx
         Ok(new_task_uuid)
     }
     // изменить задачу может только член команды
@@ -95,7 +95,7 @@ impl Tasks {
 
         let task_id = task.task_id;
 
-        // TODO тут нужна транзакция
+        // TODO tx
         self.tasks_repo
             .update(mapper::task_uc_to_task_db(task))
             .await
@@ -112,7 +112,8 @@ impl Tasks {
             }))
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to create task_history: {e}")))?;
-
+        // TODO \tx
+        
         Ok(())
     }
     // удалить задачу может только член команды
@@ -131,6 +132,7 @@ impl Tasks {
             .map_err(|e| e)?;
 
         task.status = TaskStatus::Cancelled.to_string();
+        // TODO tx
         self.tasks_repo
             .update(mapper::task_uc_to_task_db(task))
             .await
@@ -147,7 +149,8 @@ impl Tasks {
             }))
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to create task_history: {e}")))?;
-
+        // TODO \tx
+        
         Ok(())
     }
     pub async fn get_history(&self, item_id: Uuid) -> Result<Vec<TaskHistory>, UseCaseError> {

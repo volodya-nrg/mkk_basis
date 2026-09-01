@@ -2,7 +2,6 @@ mod helpers;
 
 use axum::http::StatusCode;
 use sqlx::postgres::PgPoolOptions;
-use std::env;
 use std::net::TcpListener;
 use tokio::sync::OnceCell;
 use tokio::time::{Duration, sleep};
@@ -17,9 +16,10 @@ use mkk_basis::{
     consts, transport,
     transport::http_server::HTTPServer,
     transport::models::{
-        RequestLogin, RequestTeamInvite, ResponseLogin, ResponseRefreshToken, ResponseTask,
-        ResponseTaskComment, ResponseTaskCommentsList, ResponseTaskHistories, ResponseTasksList,
-        ResponseTeam, ResponseTeamsList, ResponseUUID, ResponseUser, ResponseUsersList,
+        RequestLogin, RequestTaskData, RequestTeamInvite, RequestUserUpdate, ResponseLogin,
+        ResponseRefreshToken, ResponseTask, ResponseTaskComment, ResponseTaskCommentsList,
+        ResponseTaskHistories, ResponseTasksList, ResponseTeam, ResponseTeamsList, ResponseUUID,
+        ResponseUser, ResponseUsersList,
     },
     usecase::UseCase,
 };
@@ -28,10 +28,6 @@ use helpers::{
     client::{Client, StatusCodeBodyError},
     mocks::EmailServiceMock,
     rand,
-};
-
-use mkk_basis::transport::models::{
-    RequestTaskLimitOffsetFilter, RequestUserCreate, RequestUserUpdate,
 };
 
 struct ClientData {
@@ -804,7 +800,7 @@ async fn check_tasks() {
         email: req_register2.email.clone(),
         password: req_register2.password.clone(),
     };
-    let mut reg_list = RequestTaskLimitOffsetFilter::default();
+    let mut reg_list = RequestTaskData::default();
     reg_list.limit = -1;
     reg_list.offset = -1;
 

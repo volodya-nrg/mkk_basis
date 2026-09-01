@@ -1,11 +1,11 @@
 use uuid::Uuid;
 
 use crate::usecase::models::{
-    Task, TaskComment, TaskLimitOffsetFilter, TaskHistory, Team, User, UserCreate, UserUpdate,
+    Task, TaskComment, TaskData, TaskHistory, Team, User, UserCreate, UserUpdate,
 };
 
 use super::models::{
-    RequestTask, RequestTaskLimitOffsetFilter, RequestTeam, RequestUserCreate, RequestUserUpdate,
+    RequestTask, RequestTaskData, RequestTeam, RequestUserCreate, RequestUserUpdate,
     ResponseTask, ResponseTaskComment, ResponseTaskHistory, ResponseTeam, ResponseUser,
 };
 
@@ -57,8 +57,8 @@ pub fn task_tr_to_task_uc(req: RequestTask) -> Task {
     }
 }
 
-pub fn task_limit_offset_filter_tr_to_task_limit_offset_filter_uc(req: RequestTaskLimitOffsetFilter) -> TaskLimitOffsetFilter {
-    TaskLimitOffsetFilter {
+pub fn task_data_tr_to_task_data_uc(req: RequestTaskData) -> TaskData {
+    TaskData {
         limit: req.limit,
         offset: req.offset,
         team_id: req.team_id,

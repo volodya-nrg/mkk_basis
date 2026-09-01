@@ -91,6 +91,8 @@ impl<ES: EmailSender> Auth<ES> {
         );
         let email_subject = format!("Confirm email from {}", self.addr);
         let email_message = format!("Confirm email: <a href=\"{}\">{}</a>", link, link);
+
+        // TODO tx
         let result = self
             .users_repo
             .create(UserDB{
@@ -110,7 +112,8 @@ impl<ES: EmailSender> Auth<ES> {
         self.email_sender
             .send(email, email_subject.to_string(), email_message.to_string())
             .map_err(|e| UseCaseError::Common(format!("failed to send email: {e}")))?;
-
+        // TODO \tx
+        
         Ok(result)
     }
     pub async fn register_confirm(

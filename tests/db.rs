@@ -11,7 +11,7 @@ use uuid::Uuid;
 use mkk_basis::adapter::{
     db::{
         RepositoryError,
-        models::TaskLimitOffsetFilter,
+        models::TaskData,
         postgres::{
             Postgres, tables::tasks::Status as TaskStatus, tables::users::Role as UserRoles,
         },
@@ -397,7 +397,7 @@ async fn check_tasks() {
     task_expected.updated_at = task_actual.updated_at; // подменим на валидное явно
     assert_eq!(task_expected, task_actual);
 
-    let mut task_limit_offset_filter = TaskLimitOffsetFilter {
+    let mut task_limit_offset_filter = TaskData {
         limit: -1,
         offset: -1,
         team_id: None,

@@ -9,7 +9,6 @@ pub struct TaskComments {
     table_basic: TableBasic,
 }
 
-#[allow(dead_code)]
 impl TaskComments {
     pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
@@ -33,23 +32,26 @@ impl TaskComments {
         limit: i32,
         offset: i32,
     ) -> Result<(Vec<TaskComment>, i64), RepositoryError> {
-        let mut query = QueryBuilder::new(format!(
-            "SELECT {} FROM {}",
+        let mut common_builder = QueryBuilder::new(format!(
+            "SELECT {} FROM {} WHERE task_id=",
             self.table_basic.fields.join(","),
             self.table_basic.name,
         ));
+        let mut count_builder = QueryBuilder::new(format!(
+            "SELECT COUNT(*) FROM {} WHERE task_id=$1",
+            self.table_basic.name
+        ));
 
-        query.push(" WHERE task_id=");
-        query.push_bind(task_id);
-        query.push(" ORDER BY created_at DESC");
+        common_builder.push_bind(task_id);
+        common_builder.push(" ORDER BY created_at DESC");
 
         if limit > -1 {
-            query.push(" LIMIT ");
-            query.push_bind(limit);
+            common_builder.push(" LIMIT ");
+            common_builder.push_bind(limit);
         }
         if offset > -1 {
-            query.push(" OFFSET ");
-            query.push_bind(offset);
+            common_builder.push(" OFFSET ");
+            common_builder.push_bind(offset);
         }
 
         let mut tx = self
@@ -57,27 +59,23 @@ impl TaskComments {
             .begin()
             .await
             .map_err(RepositoryError::TransactionError)?;
-        let items: Vec<TaskComment> = query
+        let items: Vec<TaskComment> = common_builder
             .build_query_as()
-            // .bind(task_id)
             .fetch_all(&mut *tx)
             .await
             .map_err(RepositoryError::FailedToQuery)?;
-        let total: (i64,) = QueryBuilder::new(format!(
-            "SELECT COUNT(*) FROM {} WHERE task_id=$1",
-            self.table_basic.name
-        )) // возвращает такой же диапазон как и i64
-        .build_query_as()
-        .bind(task_id)
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(RepositoryError::FailedToCount)?;
+        let total = count_builder
+            .build_query_scalar()
+            .bind(task_id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(RepositoryError::FailedToCount)?;
 
         tx.commit()
             .await
             .map_err(RepositoryError::TransactionError)?;
 
-        Ok((items, total.0))
+        Ok((items, total))
     }
     pub async fn one(&self, item_id: Uuid) -> Result<TaskComment, RepositoryError> {
         let query = format!(

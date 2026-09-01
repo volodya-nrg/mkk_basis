@@ -8,7 +8,6 @@ use tables::{
     team_members::TeamMembers, teams::Teams, users::Users,
 };
 
-// #[allow(dead_code), derive(Clone)]
 #[derive(Clone)] // даем возможность клонирования для тестов
 pub struct Postgres {
     pub tbl_users: Users,

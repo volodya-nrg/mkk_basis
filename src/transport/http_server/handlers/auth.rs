@@ -51,8 +51,8 @@ impl Handlers {
         use_case
             .auth
             .register_confirm(
-                query.email.unwrap_or("".to_string()),
-                query.code.unwrap_or("".to_string()),
+                query.email.unwrap_or_default(),
+                query.code.unwrap_or_default(),
             )
             .await
             .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())

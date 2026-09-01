@@ -10,9 +10,7 @@ use crate::adapter::{email::EmailSender, jwt};
 use crate::usecase::UseCase;
 
 pub struct AuthenticatedUser<ES> {
-    #[allow(dead_code)]
     pub user_id: Uuid,
-    #[allow(dead_code)]
     pub role: Option<String>,
     pub _marker: PhantomData<ES>,
 }

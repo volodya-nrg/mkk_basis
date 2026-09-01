@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::adapter::db::{
     RepositoryError,
-    models::{Task, TaskLimitOffsetFilter},
+    models::{Task, TaskData},
     postgres::table_basic::TableBasic,
 };
 
@@ -60,10 +60,7 @@ impl Tasks {
             },
         }
     }
-    pub async fn list(
-        &self,
-        data: TaskLimitOffsetFilter,
-    ) -> Result<(Vec<Task>, i64), RepositoryError> {
+    pub async fn list(&self, data: TaskData) -> Result<(Vec<Task>, i64), RepositoryError> {
         let mut query_common = format!(
             "SELECT {} FROM {}",
             self.table_basic.fields.join(","),
@@ -108,8 +105,14 @@ impl Tasks {
         for (_, v) in params.iter() {
             prepare_count = prepare_count.bind(v);
         }
+
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(RepositoryError::TransactionError)?;
         let count = prepare_count
-            .fetch_one(&self.pool)
+            .fetch_one(&mut *tx)
             .await
             .map_err(RepositoryError::FailedToCount)?;
 
@@ -126,10 +129,15 @@ impl Tasks {
         for (_, v) in params.iter() {
             prepare_common = prepare_common.bind(v);
         }
+
         let items = prepare_common
-            .fetch_all(&self.pool)
+            .fetch_all(&mut *tx)
             .await
             .map_err(RepositoryError::FailedToQuery)?;
+
+        tx.commit()
+            .await
+            .map_err(RepositoryError::TransactionError)?;
 
         Ok((items, count))
     }
@@ -192,7 +200,6 @@ impl Tasks {
                 }
             })
     }
-    #[allow(dead_code)]
     pub async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE task_id=$1", self.table_basic.name);
         QueryBuilder::new(query)

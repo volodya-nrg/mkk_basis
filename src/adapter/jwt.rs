@@ -105,7 +105,6 @@ impl Jwt {
         .map(|data| data.claims)
         .map_err(|e| e.into())
     }
-    #[allow(dead_code)]
     pub fn validate_refresh_token(&self, token: String) -> Result<RefreshClaims, JWTError> {
         decode::<RefreshClaims>(
             token,
