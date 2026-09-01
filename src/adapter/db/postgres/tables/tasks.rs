@@ -8,6 +8,7 @@ use crate::adapter::db::{
     RepositoryError,
     models::{Task, TaskData},
     postgres::table_basic::TableBasic,
+    transactor::Transactor,
 };
 
 #[derive(Debug, EnumIter, PartialEq)]
@@ -38,12 +39,14 @@ impl fmt::Display for Status {
 #[derive(Clone)]
 pub struct Tasks {
     pool: Pool<Postgres>,
+    transactor: Transactor,
     table_basic: TableBasic,
 }
 impl Tasks {
-    pub fn new(pool: Pool<Postgres>) -> Self {
+    pub fn new(pool: Pool<Postgres>, transactor: Transactor) -> Self {
         Self {
             pool,
+            transactor,
             table_basic: TableBasic {
                 name: "tasks".to_string(),
                 fields: vec![

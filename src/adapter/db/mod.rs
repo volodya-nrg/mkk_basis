@@ -1,5 +1,6 @@
 pub mod models;
 pub mod postgres;
+pub mod transactor;
 
 use std::time::Duration;
 use thiserror::Error as ThisError;

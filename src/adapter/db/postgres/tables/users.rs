@@ -3,7 +3,9 @@ use std::fmt;
 use std::fmt::Formatter;
 use uuid::Uuid;
 
-use crate::adapter::db::{RepositoryError, models::User, postgres::table_basic::TableBasic};
+use crate::adapter::db::{
+    RepositoryError, models::User, postgres::table_basic::TableBasic, transactor::Transactor,
+};
 
 pub enum Role {
     Admin,
@@ -24,13 +26,15 @@ impl fmt::Display for Role {
 #[derive(Clone)]
 pub struct Users {
     pool: Pool<Postgres>,
+    transactor: Transactor,
     table_basic: TableBasic,
 }
 
 impl Users {
-    pub fn new(pool: Pool<Postgres>) -> Self {
+    pub fn new(pool: Pool<Postgres>, transactor: Transactor) -> Self {
         Self {
             pool,
+            transactor,
             table_basic: TableBasic {
                 name: "users".to_string(),
                 fields: vec![
@@ -64,7 +68,7 @@ impl Users {
             common_builder.push(" OFFSET ");
             common_builder.push_bind(offset);
         }
-
+        
         let mut tx = self
             .pool
             .begin()
@@ -72,15 +76,16 @@ impl Users {
             .map_err(RepositoryError::TransactionError)?;
         let items: Vec<User> = common_builder
             .build_query_as()
+            // .fetch_all(&mut *tx)
             .fetch_all(&mut *tx)
             .await
             .map_err(RepositoryError::FailedToQuery)?;
         let total = count_builder
             .build_query_scalar()
+            // .fetch_one(&mut *tx)
             .fetch_one(&mut *tx)
             .await
             .map_err(RepositoryError::FailedToCount)?;
-
         tx.commit()
             .await
             .map_err(RepositoryError::TransactionError)?;

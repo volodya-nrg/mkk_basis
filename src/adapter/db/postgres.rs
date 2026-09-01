@@ -3,6 +3,7 @@ pub mod tables;
 
 use sqlx::{Pool, Postgres as SQLXPostgres};
 
+use super::transactor::Transactor;
 use tables::{
     task_comments::TaskComments, task_histories::TaskHistories, tasks::Tasks,
     team_members::TeamMembers, teams::Teams, users::Users,
@@ -22,12 +23,12 @@ impl Postgres {
     pub fn new(pool: Pool<SQLXPostgres>) -> Self {
         Self {
             // state от axum необходимо статическим, поэтому ссылку на pool тут не передаем
-            tbl_users: Users::new(pool.clone()),
-            tbl_teams: Teams::new(pool.clone()),
-            tbl_team_members: TeamMembers::new(pool.clone()),
-            tbl_tasks: Tasks::new(pool.clone()),
-            tbl_task_histories: TaskHistories::new(pool.clone()),
-            tbl_task_comments: TaskComments::new(pool.clone()),
+            tbl_users: Users::new(pool.clone(), Transactor::new()),
+            tbl_teams: Teams::new(pool.clone(), Transactor::new()),
+            tbl_team_members: TeamMembers::new(pool.clone(), Transactor::new()),
+            tbl_tasks: Tasks::new(pool.clone(), Transactor::new()),
+            tbl_task_histories: TaskHistories::new(pool.clone(), Transactor::new()),
+            tbl_task_comments: TaskComments::new(pool.clone(), Transactor::new()),
         }
     }
 }

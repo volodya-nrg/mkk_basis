@@ -1,18 +1,22 @@
 use sqlx::{Pool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
-use crate::adapter::db::{RepositoryError, models::TeamMember, postgres::table_basic::TableBasic};
+use crate::adapter::db::{
+    RepositoryError, models::TeamMember, postgres::table_basic::TableBasic, transactor::Transactor,
+};
 
 #[derive(Clone)]
 pub struct TeamMembers {
     pool: Pool<Postgres>,
+    transactor: Transactor,
     table_basic: TableBasic,
 }
 
 impl TeamMembers {
-    pub fn new(pool: Pool<Postgres>) -> Self {
+    pub fn new(pool: Pool<Postgres>, transactor: Transactor) -> Self {
         Self {
             pool,
+            transactor,
             table_basic: TableBasic {
                 name: "team_members".to_string(),
                 fields: vec![
