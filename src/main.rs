@@ -10,7 +10,10 @@ use sqlx::postgres::PgPoolOptions;
 use std::fs;
 use std::time::Duration;
 
-use adapter::{config::Config, db::postgres::Postgres, email::Email, jwt::Jwt, logger};
+use adapter::{
+    config::Config, db::postgres::Postgres as PostgresService, email::Email as EmailService,
+    jwt::Jwt as JWTService, logger,
+};
 use transport::http_server::HTTPServer;
 use usecase::UseCase;
 
@@ -36,10 +39,10 @@ async fn run(config_filepath: &str) -> Result<(), String> {
     })?;
 
     logger::init(
-        &cfg.service_name,
-        &cfg.version,
-        &cfg.log.level,
-        &cfg.log.filepath.unwrap_or("".to_string()),
+        cfg.service_name,
+        cfg.version,
+        cfg.log.level,
+        cfg.log.filepath,
         false,
     )
     .map_err(|e| format!("failed to init logger: {e}"))?;
@@ -69,9 +72,9 @@ async fn run(config_filepath: &str) -> Result<(), String> {
         cfg.http_server.address.clone(),
         UseCase::new(
             cfg.addr,
-            Postgres::new(pool),
-            Jwt::new(private_key_bytes, 60 * 20, 60 * 60 * 24),
-            Email::new(
+            PostgresService::new(pool),
+            JWTService::new(private_key_bytes, 60 * 20, 60 * 60 * 24),
+            EmailService::new(
                 cfg.email.host,
                 cfg.email.login,
                 cfg.email.pass,

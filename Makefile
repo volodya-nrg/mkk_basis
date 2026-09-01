@@ -84,4 +84,4 @@ cargo_check:
 
 .PHONY: lint
 lint:
-	cargo clippy # --tests
+	cargo clippy # "--tests" - включая тесты

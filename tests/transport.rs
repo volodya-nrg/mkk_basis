@@ -49,7 +49,7 @@ static MARKER: OnceCell<ClientData> = OnceCell::const_new();
 async fn run_test_server() -> &'static ClientData {
     MARKER
         .get_or_init(|| async move {
-            LoggerService::init("", "", "", "", true).unwrap();
+            LoggerService::init(String::new(), String::new(), String::new(), None, true).unwrap();
 
             let addr_socket = TcpListener::bind(format!("{}:0", helpers::certs::LOCALHOST))
                 .expect("failed to bind addr")

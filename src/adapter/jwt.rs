@@ -1,27 +1,32 @@
 use chrono::{Duration, Utc};
-use jsonwebtoken::{
-    Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode,
-    errors::ErrorKind as JWTErrorKind,
-};
+use jsonwebtoken::errors;
 use serde::{Deserialize, Serialize};
-use thiserror::Error as ThisError;
+use std::fmt;
 use uuid::Uuid;
 
 pub const TYPE_ACCESS: &str = "access";
 pub const TYPE_REFRESH: &str = "refresh";
 
-#[derive(ThisError, Debug)]
+#[derive(Debug)]
 pub enum JWTError {
-    #[error("expired token")]
     ExpiredToken,
-    #[error("{0}")]
-    Common(String),
+    Common(errors::Error),
 }
-impl From<jsonwebtoken::errors::Error> for JWTError {
-    fn from(value: jsonwebtoken::errors::Error) -> Self {
+impl fmt::Display for JWTError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JWTError::ExpiredToken => write!(f, "token expired"),
+            JWTError::Common(s) => write!(f, "{s}"),
+        }
+    }
+}
+
+// From - для e.into() (авто-конвертация)
+impl From<errors::Error> for JWTError {
+    fn from(value: errors::Error) -> Self {
         match value.kind() {
-            JWTErrorKind::ExpiredSignature => JWTError::ExpiredToken,
-            _ => JWTError::Common(value.to_string()),
+            errors::ErrorKind::ExpiredSignature => JWTError::ExpiredToken,
+            _ => JWTError::Common(value),
         }
     }
 }
@@ -68,8 +73,8 @@ impl Jwt {
     ) -> Result<String, JWTError> {
         let now = Utc::now();
         let expire = now + Duration::seconds(self.access_expire_secs);
-        encode(
-            &Header::default(),
+        jsonwebtoken::encode(
+            &jsonwebtoken::Header::default(),
             &AccessClaims {
                 sub: user_id,
                 exp: expire.timestamp() as usize,
@@ -77,45 +82,45 @@ impl Jwt {
                 token_type: TYPE_ACCESS.to_string(),
                 role,
             },
-            &EncodingKey::from_secret(self.private_key_bytes.as_slice()),
+            &jsonwebtoken::EncodingKey::from_secret(self.private_key_bytes.as_slice()),
         )
-        .map_err(|e| JWTError::Common(e.to_string()))
+        .map_err(JWTError::Common)
     }
     pub fn generate_refresh_token(&self, user_id: Uuid) -> Result<String, JWTError> {
         let now = Utc::now();
         let expire = now + Duration::seconds(self.refresh_expire_secs);
-        encode(
-            &Header::default(),
+        jsonwebtoken::encode(
+            &jsonwebtoken::Header::default(),
             &RefreshClaims {
                 sub: user_id,
                 exp: expire.timestamp() as usize,
                 iat: now.timestamp() as usize,
                 token_type: TYPE_REFRESH.to_string(),
             },
-            &EncodingKey::from_secret(self.private_key_bytes.as_slice()),
+            &jsonwebtoken::EncodingKey::from_secret(self.private_key_bytes.as_slice()),
         )
-        .map_err(|e| JWTError::Common(e.to_string()))
+        .map_err(JWTError::Common)
     }
     pub fn validate_access_token(&self, token: String) -> Result<AccessClaims, JWTError> {
-        decode::<AccessClaims>(
+        jsonwebtoken::decode::<AccessClaims>(
             token,
-            &DecodingKey::from_secret(self.private_key_bytes.as_slice()),
+            &jsonwebtoken::DecodingKey::from_secret(self.private_key_bytes.as_slice()),
             &self.get_validation(),
         )
         .map(|data| data.claims)
         .map_err(|e| e.into())
     }
     pub fn validate_refresh_token(&self, token: String) -> Result<RefreshClaims, JWTError> {
-        decode::<RefreshClaims>(
+        jsonwebtoken::decode::<RefreshClaims>(
             token,
-            &DecodingKey::from_secret(self.private_key_bytes.as_slice()),
+            &jsonwebtoken::DecodingKey::from_secret(self.private_key_bytes.as_slice()),
             &self.get_validation(),
         )
         .map(|data| data.claims)
         .map_err(|e| e.into())
     }
-    fn get_validation(&self) -> Validation {
-        let mut validation = Validation::new(Algorithm::HS256);
+    fn get_validation(&self) -> jsonwebtoken::Validation {
+        let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::HS256);
         validation.leeway = 0; // разница во времени
         validation
     }

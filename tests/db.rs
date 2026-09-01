@@ -5,6 +5,7 @@ use ctor::ctor;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::testing::TestTermination;
 use std::assert_matches;
+use std::string::ToString;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -13,7 +14,7 @@ use mkk_basis::adapter::{
         RepositoryError,
         models::TaskData,
         postgres::{
-            Postgres, tables::tasks::Status as TaskStatus, tables::users::Role as UserRoles,
+            Postgres as PostgresService, tables::tasks::Status as TaskStatus, tables::users::Role as UserRoles,
         },
     },
     logger,
@@ -26,19 +27,19 @@ const DSN: &str =
 
 #[ctor(unsafe)]
 fn init() {
-    logger::init("", "", "", "", true).expect("failed to init logger")
+    logger::init(String::new(), String::new(), String::new(), None, true).unwrap()
 }
 
 // Почему-то лучше подключаться к пулу постоянно.
 // Через OnceCell получаю "failed to delete: pool timed out while waiting for an open connection".
-async fn get_postgres() -> (Postgres, DateTime<Local>) {
+async fn get_postgres() -> (PostgresService, DateTime<Local>) {
     let time_now = Local::now();
     let pool = PgPoolOptions::new()
         .acquire_timeout(Duration::new(3, 0))
         .connect(DSN)
         .await
         .unwrap_or_else(|e| panic!("{:?}", e));
-    (Postgres::new(pool), time_now)
+    (PostgresService::new(pool), time_now)
 }
 
 #[tokio::test]
