@@ -9,6 +9,7 @@ use crate::adapter::db::{
 
 pub enum Role {
     Admin,
+    #[allow(dead_code)]
     Moder,
     Null, // при обновлении пользователя нужно иметь возможность выставить как-то в NULL
 }
@@ -26,6 +27,7 @@ impl fmt::Display for Role {
 #[derive(Clone)]
 pub struct Users {
     pool: Pool<Postgres>,
+    #[allow(dead_code)]
     transactor: Transactor,
     table_basic: TableBasic,
 }
@@ -68,7 +70,7 @@ impl Users {
             common_builder.push(" OFFSET ");
             common_builder.push_bind(offset);
         }
-        
+
         let mut tx = self
             .pool
             .begin()
@@ -76,13 +78,11 @@ impl Users {
             .map_err(RepositoryError::TransactionError)?;
         let items: Vec<User> = common_builder
             .build_query_as()
-            // .fetch_all(&mut *tx)
             .fetch_all(&mut *tx)
             .await
             .map_err(RepositoryError::FailedToQuery)?;
         let total = count_builder
             .build_query_scalar()
-            // .fetch_one(&mut *tx)
             .fetch_one(&mut *tx)
             .await
             .map_err(RepositoryError::FailedToCount)?;
@@ -138,7 +138,7 @@ impl Users {
             .await
             .map_err(RepositoryError::FailedToInsert)?
             .try_get(0)
-            .map_err(|e| RepositoryError::Common(e))
+            .map_err(RepositoryError::Common)
     }
     pub async fn update(&self, item: User) -> Result<(), RepositoryError> {
         let query = format!(

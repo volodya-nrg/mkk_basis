@@ -2,7 +2,7 @@ use axum::Json;
 use axum::extract::multipart::MultipartError;
 use axum::extract::{Multipart, Path, State};
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
+use axum::response::IntoResponse;
 use chrono::Utc;
 use std::collections::HashMap;
 use std::fs::File;
@@ -20,6 +20,11 @@ use crate::transport::{
     },
 };
 use crate::usecase::UseCase;
+
+struct UploadErr {
+    status_code: StatusCode,
+    msg: String,
+}
 
 pub struct Handlers {}
 
@@ -92,7 +97,7 @@ impl Handlers {
         if let Some(avatar_bytes) = m.get("avatar").cloned() {
             match upload_file(avatar_bytes) {
                 Ok(v) => req_user.avatar = Some(v),
-                Err(e) => return e,
+                Err(e) => return (e.status_code, Json(ResponseMsg { msg: e.msg })).into_response(),
             }
         }
 
@@ -144,7 +149,7 @@ impl Handlers {
         if let Some(avatar_bytes) = m.get("avatar").cloned() {
             match upload_file(avatar_bytes) {
                 Ok(v) => req_user.avatar = Some(v),
-                Err(e) => return e,
+                Err(e) => return (e.status_code, Json(ResponseMsg { msg: e.msg })).into_response(),
             }
         }
 
@@ -194,7 +199,7 @@ async fn multipart_to_map(
 fn get_string_from_map(map: &HashMap<String, Vec<u8>>, key: &str) -> String {
     map.get(key)
         .and_then(|b| String::from_utf8(b.clone()).ok())
-        .unwrap_or_else(|| "".to_string())
+        .unwrap_or_default()
 }
 
 fn get_string_option_from_map(map: &HashMap<String, Vec<u8>>, key: &str) -> Option<String> {
@@ -202,58 +207,45 @@ fn get_string_option_from_map(map: &HashMap<String, Vec<u8>>, key: &str) -> Opti
         .and_then(|bytes| String::from_utf8(bytes.clone()).ok())
 }
 
-fn upload_file(file_data: Vec<u8>) -> Result<String, Response> {
-    let image_format = image::guess_format(&file_data).map_err(|e| {
-        log::error!("failed to read image format: {}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ResponseMsg {
-                msg: "server internal error".to_string(),
-            }),
-        )
-            .into_response()
-    })?;
-    let extensions = image_format.extensions_str();
-
-    if extensions.is_empty() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ResponseMsg {
-                msg: "unknown image type".to_string(),
-            }),
-        )
-            .into_response());
-    }
-
+fn upload_file(file_data: Vec<u8>) -> Result<String, UploadErr> {
+    let ext = image::guess_format(&file_data)
+        .map_err(|e| {
+            log::error!("failed to read image format: {}", e);
+            UploadErr {
+                status_code: StatusCode::INTERNAL_SERVER_ERROR,
+                msg: String::new(),
+            }
+        })?
+        .extensions_str()
+        .first()
+        .ok_or_else(|| UploadErr {
+            status_code: StatusCode::BAD_REQUEST,
+            msg: ErrMsg::UndefinedTypeImage.as_str(),
+        })?;
     let new_filename = format!(
         "{}_{}.{}",
         Utc::now().timestamp(),
         helpers::rand_str_limit(5),
-        extensions[0],
+        ext,
     );
-
     let filepath = format!("./web/uploaded/{}", new_filename);
-    let mut file = File::create(filepath.clone()).map_err(|e| {
-        log::error!("failed to create file: {}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ResponseMsg {
-                msg: "server internal error".to_string(),
-            }),
-        )
-            .into_response()
-    })?;
 
-    file.write_all(file_data.as_slice()).map_err(|e| {
-        log::error!("failed to write file-data: {}", e);
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ResponseMsg {
-                msg: "bad file-data".to_string(),
-            }),
-        )
-            .into_response()
-    })?;
+    File::create(filepath.clone())
+        .map_err(|e| {
+            log::error!("failed to create file: {}", e);
+            UploadErr {
+                status_code: StatusCode::INTERNAL_SERVER_ERROR,
+                msg: String::new(),
+            }
+        })?
+        .write_all(file_data.as_slice())
+        .map_err(|e| {
+            log::error!("failed to write file-data: {}", e);
+            UploadErr {
+                status_code: StatusCode::BAD_REQUEST,
+                msg: ErrMsg::BadFileData.as_str(),
+            }
+        })?;
 
     Ok(filepath.to_string())
 }

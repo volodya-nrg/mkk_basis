@@ -8,6 +8,7 @@ use crate::adapter::db::{
 #[derive(Clone)]
 pub struct TeamMembers {
     pool: Pool<Postgres>,
+    #[allow(dead_code)]
     transactor: Transactor,
     table_basic: TableBasic,
 }
@@ -27,8 +28,9 @@ impl TeamMembers {
             },
         }
     }
+    #[allow(dead_code)]
     pub async fn all(&self) -> Result<Vec<TeamMember>, RepositoryError> {
-        Ok(QueryBuilder::new(format!(
+        QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
             self.table_basic.fields.join(","),
             self.table_basic.name,
@@ -36,7 +38,7 @@ impl TeamMembers {
         .build_query_as()
         .fetch_all(&self.pool)
         .await
-        .map_err(RepositoryError::FailedToQuery)?)
+        .map_err(RepositoryError::FailedToQuery)
     }
     pub async fn one(&self, team_id: Uuid, user_id: Uuid) -> Result<TeamMember, RepositoryError> {
         let query = format!(
@@ -67,6 +69,7 @@ impl TeamMembers {
             .map_err(RepositoryError::FailedToInsert)
             .map(|_| ())
     }
+    #[allow(dead_code)]
     pub async fn delete(&self, team_id: Uuid, user_id: Uuid) -> Result<(), RepositoryError> {
         let query = format!(
             "DELETE FROM {} WHERE team_id=$1 AND user_id=$2",

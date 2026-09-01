@@ -2,7 +2,6 @@ pub mod models;
 pub mod postgres;
 pub mod transactor;
 
-use std::time::Duration;
 use thiserror::Error as ThisError;
 
 #[derive(ThisError, Debug)]
@@ -27,6 +26,3 @@ pub enum RepositoryError {
     #[error("{0}")]
     Common(sqlx::Error),
 }
-
-const QUERY_TIMEOUT: Duration = Duration::from_secs(3);
-const EXECUTE_TIMEOUT: Duration = Duration::from_secs(3);

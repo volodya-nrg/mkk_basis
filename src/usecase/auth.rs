@@ -113,7 +113,7 @@ impl<ES: EmailSender> Auth<ES> {
             .send(email, email_subject.to_string(), email_message.to_string())
             .map_err(|e| UseCaseError::Common(format!("failed to send email: {e}")))?;
         // TODO \tx
-        
+
         Ok(result)
     }
     pub async fn register_confirm(
@@ -121,14 +121,14 @@ impl<ES: EmailSender> Auth<ES> {
         email: String,
         actual_code: String,
     ) -> Result<(), UseCaseError> {
-        if email == "" {
+        if email.is_empty() {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: ErrMsg::EmailNotBeEmpty.as_str(),
                 internal_err: None,
             });
         }
-        if actual_code == "" {
+        if actual_code.is_empty() {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: ErrMsg::VerifyCodeNotBeEmpty.as_str(),
@@ -271,7 +271,7 @@ impl<ES: EmailSender> Auth<ES> {
             });
         }
 
-        let result = self.users_repo.one(claims.sub.clone()).await;
+        let result = self.users_repo.one(claims.sub).await;
         let user = match result {
             Ok(v) => v,
             Err(e) => {

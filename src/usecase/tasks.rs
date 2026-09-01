@@ -64,8 +64,7 @@ impl Tasks {
     // создать задачу может только член команды
     pub async fn create(&self, task: Task, user_id: Uuid) -> Result<Uuid, UseCaseError> {
         self.check_access_for_team_member_only(task.team_id, user_id)
-            .await
-            .map_err(|e| e)?;
+            .await?;
         // TODO tx
         let new_task_uuid = self
             .tasks_repo
@@ -90,8 +89,7 @@ impl Tasks {
     pub async fn update(&self, task: Task, user_id: Uuid) -> Result<(), UseCaseError> {
         // обновить задачу может только член команды
         self.check_access_for_team_member_only(task.team_id, user_id)
-            .await
-            .map_err(|e| e)?;
+            .await?;
 
         let task_id = task.task_id;
 
@@ -113,7 +111,7 @@ impl Tasks {
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to create task_history: {e}")))?;
         // TODO \tx
-        
+
         Ok(())
     }
     // удалить задачу может только член команды
@@ -128,8 +126,7 @@ impl Tasks {
         })?;
         let mut task = mapper::task_db_to_task_uc(task_db);
         self.check_access_for_team_member_only(task.team_id, user_id)
-            .await
-            .map_err(|e| e)?;
+            .await?;
 
         task.status = TaskStatus::Cancelled.to_string();
         // TODO tx
@@ -150,7 +147,7 @@ impl Tasks {
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to create task_history: {e}")))?;
         // TODO \tx
-        
+
         Ok(())
     }
     pub async fn get_history(&self, item_id: Uuid) -> Result<Vec<TaskHistory>, UseCaseError> {

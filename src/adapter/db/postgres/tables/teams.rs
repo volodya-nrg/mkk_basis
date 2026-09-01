@@ -8,6 +8,7 @@ use crate::adapter::db::{
 #[derive(Clone)] // из-за axum-state
 pub struct Teams {
     pool: Pool<Postgres>,
+    #[allow(dead_code)]
     transactor: Transactor,
     table_basic: TableBasic,
 }
@@ -95,7 +96,7 @@ impl Teams {
             .await
             .map_err(RepositoryError::FailedToInsert)?
             .try_get(0)
-            .map_err(|e| RepositoryError::Common(e))
+            .map_err(RepositoryError::Common)
     }
     pub async fn update(&self, item: Team) -> Result<(), RepositoryError> {
         let query = format!(

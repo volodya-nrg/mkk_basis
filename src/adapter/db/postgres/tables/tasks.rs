@@ -39,6 +39,7 @@ impl fmt::Display for Status {
 #[derive(Clone)]
 pub struct Tasks {
     pool: Pool<Postgres>,
+    #[allow(dead_code)]
     transactor: Transactor,
     table_basic: TableBasic,
 }
@@ -175,7 +176,7 @@ impl Tasks {
             .await
             .map_err(RepositoryError::FailedToInsert)?
             .try_get(0)
-            .map_err(|e| RepositoryError::Common(e))
+            .map_err(RepositoryError::Common)
     }
     pub async fn update(&self, item: Task) -> Result<(), RepositoryError> {
         let query = format!(
@@ -203,6 +204,7 @@ impl Tasks {
                 }
             })
     }
+    #[allow(dead_code)]
     pub async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE task_id=$1", self.table_basic.name);
         QueryBuilder::new(query)

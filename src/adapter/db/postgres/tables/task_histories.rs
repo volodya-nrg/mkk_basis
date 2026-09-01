@@ -8,6 +8,7 @@ use crate::adapter::db::{
 #[derive(Clone)]
 pub struct TaskHistories {
     pool: Pool<Postgres>,
+    #[allow(dead_code)]
     transactor: Transactor,
     table_basic: TableBasic,
 }
@@ -29,6 +30,7 @@ impl TaskHistories {
             },
         }
     }
+    #[allow(dead_code)]
     pub async fn list(
         &self,
         limit: i32,
@@ -73,6 +75,7 @@ impl TaskHistories {
 
         Ok((items, total))
     }
+    #[allow(dead_code)]
     pub async fn one(&self, item_id: Uuid) -> Result<TaskHistory, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE task_history_id=$1",
@@ -88,7 +91,7 @@ impl TaskHistories {
             .ok_or(RepositoryError::NotFoundRow)
     }
     pub async fn by_task_id(&self, task_id: Uuid) -> Result<Vec<TaskHistory>, RepositoryError> {
-        Ok(QueryBuilder::new(format!(
+        QueryBuilder::new(format!(
             "SELECT {} FROM {} WHERE task_id=$1 ORDER BY created_at DESC",
             self.table_basic.fields.join(","),
             self.table_basic.name,
@@ -97,7 +100,7 @@ impl TaskHistories {
         .bind(task_id)
         .fetch_all(&self.pool)
         .await
-        .map_err(RepositoryError::FailedToQuery)?)
+        .map_err(RepositoryError::FailedToQuery)
     }
     pub async fn create(&self, item: TaskHistory) -> Result<Uuid, RepositoryError> {
         let query = format!(
@@ -113,8 +116,9 @@ impl TaskHistories {
             .await
             .map_err(RepositoryError::FailedToInsert)?
             .try_get(0)
-            .map_err(|e| RepositoryError::Common(e))
+            .map_err(RepositoryError::Common)
     }
+    #[allow(dead_code)]
     pub async fn update(&self, item: TaskHistory) -> Result<(), RepositoryError> {
         let query = format!(
             "UPDATE {} SET task_id=$1, user_id=$2, msg=$3 WHERE task_history_id=$4",
@@ -138,6 +142,7 @@ impl TaskHistories {
                 }
             })
     }
+    #[allow(dead_code)]
     pub async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError> {
         let query = format!(
             "DELETE FROM {} WHERE task_history_id=$1",

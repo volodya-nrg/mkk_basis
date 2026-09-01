@@ -8,6 +8,7 @@ use crate::adapter::db::{
 #[derive(Clone)]
 pub struct TaskComments {
     pool: Pool<Postgres>,
+    #[allow(dead_code)]
     transactor: Transactor,
     table_basic: TableBasic,
 }
@@ -109,8 +110,9 @@ impl TaskComments {
             .await
             .map_err(RepositoryError::FailedToInsert)?
             .try_get(0)
-            .map_err(|e| RepositoryError::Common(e))
+            .map_err(RepositoryError::Common)
     }
+    #[allow(dead_code)]
     pub async fn update(&self, item: TaskComment) -> Result<(), RepositoryError> {
         let query = format!(
             "UPDATE {} SET task_id=$1, user_id=$2, msg=$3 WHERE task_comment_id=$4",

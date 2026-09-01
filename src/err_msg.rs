@@ -20,6 +20,8 @@ pub enum ErrMsg {
     NoRules,
     NoAccessTeamMemberOnly,
     NotCorrectMultipartForm,
+    BadFileData,
+    UndefinedTypeImage,
 }
 impl ErrMsg {
     pub fn as_str(&self) -> String {
@@ -52,6 +54,8 @@ impl ErrMsg {
                 "у вас нет доступа к данному действию, только для участника команды".to_string()
             }
             ErrMsg::NotCorrectMultipartForm => "ошибка в обработки формы".to_string(),
+            ErrMsg::BadFileData => "не верные данные файла".to_string(),
+            ErrMsg::UndefinedTypeImage => "не известный тип изображения".to_string(),
         }
     }
 }
