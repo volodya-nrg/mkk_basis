@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use mkk_basis::adapter::{
     db::{
-        RepositoryError,
+        errors::RepositoryError,
         models::TaskData,
         postgres::{
             Postgres as PostgresService, tables::tasks::Status as TaskStatus, tables::users::Role as UserRoles,

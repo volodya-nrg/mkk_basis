@@ -4,7 +4,8 @@ use std::fmt::Formatter;
 use uuid::Uuid;
 
 use crate::adapter::db::{
-    RepositoryError, models::User, postgres::table_basic::TableBasic, transactor::Transactor,
+    errors::RepositoryError, models::User, postgres::table_basic::TableBasic,
+    transactor::Transactor,
 };
 
 pub enum Role {

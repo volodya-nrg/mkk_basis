@@ -2,7 +2,7 @@ use sqlx::{Pool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use crate::adapter::db::{
-    RepositoryError, models::TeamMember, postgres::table_basic::TableBasic, transactor::Transactor,
+    errors::RepositoryError, models::TeamMember, postgres::table_basic::TableBasic, transactor::Transactor,
 };
 
 #[derive(Clone)]

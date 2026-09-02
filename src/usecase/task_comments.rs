@@ -2,7 +2,7 @@ use http::StatusCode;
 use uuid::Uuid;
 
 use crate::{
-    adapter::db::RepositoryError,
+    adapter::db::errors::RepositoryError,
     adapter::db::postgres::tables::task_comments::TaskComments as TaskCommentsRepo,
     err_msg::ErrMsg,
 };

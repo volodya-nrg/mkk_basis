@@ -5,7 +5,7 @@ use strum_macros::EnumIter;
 use uuid::Uuid;
 
 use crate::adapter::db::{
-    RepositoryError,
+    errors::RepositoryError,
     models::{Task, TaskData},
     postgres::table_basic::TableBasic,
     transactor::Transactor,

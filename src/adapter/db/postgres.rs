@@ -9,7 +9,7 @@ use tables::{
     team_members::TeamMembers, teams::Teams, users::Users,
 };
 
-#[derive(Clone)] // даем возможность клонирования для тестов
+#[derive(Clone)] // клонирование нужно для транспортного теста
 pub struct Postgres {
     pub tbl_users: Users,
     pub tbl_teams: Teams,

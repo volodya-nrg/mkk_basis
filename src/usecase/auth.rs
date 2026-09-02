@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::{
     adapter::{
-        db::RepositoryError,
+        db::errors::RepositoryError,
         db::postgres::tables::users::Users as UsersRepo,
         db::models::User as UserDB,
         email::EmailSender,

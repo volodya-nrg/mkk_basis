@@ -14,7 +14,7 @@ use serde_json::json;
 use thiserror::Error as ThisError;
 
 use crate::adapter::{
-    db::RepositoryError, db::postgres::Postgres as PostgresService, email::EmailSender,
+    db::errors::RepositoryError, db::postgres::Postgres as PostgresService, email::EmailSender,
     jwt::Jwt as JWTService,
 };
 use crate::err_msg::ErrMsg;

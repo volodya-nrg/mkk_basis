@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use sqlx::FromRow;
 use uuid::Uuid;
 
-#[derive(Debug, FromRow, Clone, PartialEq)]
+#[derive(Debug, FromRow, Clone, Default, PartialEq)]
 pub struct User {
     pub user_id: Uuid,
     pub email: String,
@@ -15,7 +15,7 @@ pub struct User {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, FromRow, Clone, PartialEq)]
+#[derive(Debug, FromRow, Clone, Default, PartialEq)]
 pub struct Team {
     pub team_id: Uuid,
     pub name: String,
@@ -24,14 +24,14 @@ pub struct Team {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, FromRow, Clone, PartialEq)]
+#[derive(Debug, FromRow, Clone, Default, PartialEq)]
 pub struct TeamMember {
     pub team_id: Uuid,
     pub user_id: Uuid,
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, FromRow, Clone, PartialEq)]
+#[derive(Debug, FromRow, Clone, Default, PartialEq)]
 pub struct Task {
     pub task_id: Uuid,
     pub name: String,
@@ -44,7 +44,7 @@ pub struct Task {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, FromRow, Clone, PartialEq)]
+#[derive(Debug, FromRow, Clone, Default, PartialEq)]
 pub struct TaskHistory {
     pub task_history_id: Uuid,
     pub task_id: Uuid,
@@ -53,7 +53,7 @@ pub struct TaskHistory {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, FromRow, Clone, PartialEq)]
+#[derive(Debug, FromRow, Clone, Default, PartialEq)]
 pub struct TaskComment {
     pub task_comment_id: Uuid,
     pub task_id: Uuid,

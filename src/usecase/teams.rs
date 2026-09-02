@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::{
     adapter::{
-        db::RepositoryError,
+        db::errors::RepositoryError,
         db::postgres::tables::{
             team_members::TeamMembers as TeamMembersRepo, teams::Teams as TeamsRepo,
             users::Role as UserRole,
