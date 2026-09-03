@@ -2,22 +2,19 @@ use sqlx::{Pool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
 
 use crate::adapter::db::{
-    errors::RepositoryError, models::TaskComment, postgres::table_basic::TableBasic, transactor::Transactor,
+    errors::RepositoryError, models::TaskComment, postgres::table_basic::TableBasic,
 };
 
 #[derive(Clone)]
 pub struct TaskComments {
     pool: Pool<Postgres>,
-    #[allow(dead_code)]
-    transactor: Transactor,
     table_basic: TableBasic,
 }
 
 impl TaskComments {
-    pub fn new(pool: Pool<Postgres>, transactor: Transactor) -> Self {
+    pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
             pool,
-            transactor,
             table_basic: TableBasic {
                 name: "task_comments".to_string(),
                 fields: vec![

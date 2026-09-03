@@ -4,10 +4,9 @@ use uuid::Uuid;
 use crate::{
     adapter::{
         db::errors::RepositoryError,
-        db::postgres::tables::{
-            team_members::TeamMembers as TeamMembersRepo, teams::Teams as TeamsRepo,
-            users::Role as UserRole,
-        },
+        db::postgres::tables::team_members::TeamMembers as DBTeamMembers,
+        db::postgres::tables::teams::Teams as DBTeams,
+        db::postgres::tables::users::Role as UserRole,
     },
     err_msg::ErrMsg,
 };
@@ -19,12 +18,12 @@ use super::{
 
 #[derive(Clone)] // из-за axum-state
 pub struct Teams {
-    teams_repo: TeamsRepo,
-    team_members_repo: TeamMembersRepo,
+    teams_repo: DBTeams,
+    team_members_repo: DBTeamMembers,
 }
 
 impl Teams {
-    pub fn new(teams_repo: TeamsRepo, team_members_repo: TeamMembersRepo) -> Self {
+    pub fn new(teams_repo: DBTeams, team_members_repo: DBTeamMembers) -> Self {
         Self {
             teams_repo,
             team_members_repo,
@@ -45,7 +44,7 @@ impl Teams {
         let team_db = self.teams_repo.one(item_id).await.map_err(|e| match e {
             RepositoryError::NotFoundRow => UseCaseError::ForTransport {
                 status_code: StatusCode::NOT_FOUND,
-                public_err: ErrMsg::NotFoundItem.as_str(),
+                public_err: ErrMsg::NotFoundItem.to_string(),
                 internal_err: None,
             },
             other => UseCaseError::Common(other.to_string()),
@@ -102,7 +101,7 @@ impl Teams {
         if !is_has_access {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::FORBIDDEN,
-                public_err: ErrMsg::NoRules.as_str(),
+                public_err: ErrMsg::NoRules.to_string(),
                 internal_err: None,
             });
         }

@@ -15,16 +15,18 @@ use tower_http::services::{ServeDir, ServeFile};
 
 use crate::adapter::email::EmailSender;
 use crate::usecase::UseCase;
-
 use handlers::{auth, etc, task_comments, tasks, teams, users};
 
-pub struct HTTPServer<ES: EmailSender> {
+pub struct HTTPServer<ES> {
     addr: String,
     use_case: UseCase<ES>,
     tls_config: Option<RustlsConfig>,
 }
 
-impl<ES: EmailSender> HTTPServer<ES> {
+impl<ES> HTTPServer<ES>
+where
+    ES: EmailSender,
+{
     pub fn new(addr: String, use_case: UseCase<ES>, tls_config: Option<RustlsConfig>) -> Self {
         Self {
             addr,

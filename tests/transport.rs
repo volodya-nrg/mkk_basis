@@ -62,13 +62,14 @@ async fn run_test_server() -> &'static ClientData {
                 .await
                 .expect("failed to connect to db");
             let pg_service = PostgresService::new(pool.clone());
-            let private_key = rand::private_key(32);
-            let jwt_service =
-                JWTService::new(private_key, ACCESS_TOKEN_TTL_SEC, REFRESH_TOKEN_TTL_SEC);
             let use_case = UseCase::new(
                 "http://localhost.loc".to_string(),
                 pg_service.clone(),
-                jwt_service,
+                JWTService::new(
+                    rand::private_key(32),
+                    ACCESS_TOKEN_TTL_SEC,
+                    REFRESH_TOKEN_TTL_SEC,
+                ),
                 EmailServiceMock {},
             );
             let certs = helpers::certs::gen_certs().unwrap(); // создадим серты
@@ -93,7 +94,7 @@ async fn run_test_server() -> &'static ClientData {
                 ca: certs.ca_cert.pem(),
                 crt: certs.client_cert.pem(),
                 key: certs.client_key.serialize_pem(),
-                pool: pg_service.clone(),
+                pool: pg_service,
             }
         })
         .await

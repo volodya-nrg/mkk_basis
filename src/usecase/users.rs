@@ -2,7 +2,7 @@ use http::StatusCode;
 use std::fs;
 use uuid::Uuid;
 
-use crate::adapter::db::{models::User as UserDB, postgres::tables::users::Users as UsersRepo};
+use crate::adapter::db::{models::User as UserDB, postgres::tables::users::Users as DBUsers};
 
 use super::{
     UseCaseError, helpers, mapper,
@@ -11,11 +11,11 @@ use super::{
 
 #[derive(Clone)] // из-за axum-state
 pub struct Users {
-    users_repo: UsersRepo,
+    users_repo: DBUsers,
 }
 
 impl Users {
-    pub fn new(users_repo: UsersRepo) -> Self {
+    pub fn new(users_repo: DBUsers) -> Self {
         Self { users_repo }
     }
     pub async fn list(&self, limit: i32, offset: i32) -> Result<(Vec<User>, i64), UseCaseError> {

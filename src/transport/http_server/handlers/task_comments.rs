@@ -1,11 +1,3 @@
-use axum::Json;
-use axum::extract::Path;
-use axum::extract::State;
-use axum::http::StatusCode;
-use axum::response::IntoResponse;
-use serde_json::json;
-use uuid::Uuid;
-
 use crate::adapter::email::EmailSender;
 use crate::transport::{
     extractor::AuthenticatedUser,
@@ -13,19 +5,29 @@ use crate::transport::{
     models::{RequestLimitOffset, RequestTaskComment, ResponseTaskCommentsList},
 };
 use crate::usecase::UseCase;
+use axum::Json;
+use axum::extract::Path;
+use axum::extract::State;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use serde_json::json;
+use std::marker::PhantomData;
+use uuid::Uuid;
 
-pub struct Handlers {}
+pub struct Handlers<ES> {
+    _marker_es: PhantomData<ES>,
+}
 
-impl Handlers {
-    pub async fn list<ES>(
+impl<ES> Handlers<ES>
+where
+    ES: EmailSender,
+{
+    pub async fn list(
         _user: AuthenticatedUser<ES>,
         Path(task_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestLimitOffset>,
-    ) -> impl IntoResponse
-    where
-        ES: EmailSender,
-    {
+    ) -> impl IntoResponse {
         use_case
             .task_comments
             .list(task_id, payload.limit, payload.offset)
@@ -44,15 +46,12 @@ impl Handlers {
                 },
             )
     }
-    pub async fn create<ES>(
+    pub async fn create(
         user: AuthenticatedUser<ES>,
         Path(task_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestTaskComment>,
-    ) -> impl IntoResponse
-    where
-        ES: EmailSender,
-    {
+    ) -> impl IntoResponse {
         let result = use_case
             .task_comments
             .create(mapper::task_comment_tr_to_task_comment_uc(
@@ -77,14 +76,11 @@ impl Handlers {
             },
         )
     }
-    pub async fn delete<ES>(
+    pub async fn delete(
         _user: AuthenticatedUser<ES>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
-    ) -> impl IntoResponse
-    where
-        ES: EmailSender,
-    {
+    ) -> impl IntoResponse {
         use_case
             .task_comments
             .delete(item_id)

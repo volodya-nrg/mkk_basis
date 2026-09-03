@@ -2,8 +2,9 @@ use http::StatusCode;
 use uuid::Uuid;
 
 use crate::{
-    adapter::db::errors::RepositoryError,
-    adapter::db::postgres::tables::task_comments::TaskComments as TaskCommentsRepo,
+    adapter::db::{
+        errors::RepositoryError, postgres::tables::task_comments::TaskComments as DBTaskComments,
+    },
     err_msg::ErrMsg,
 };
 
@@ -11,11 +12,11 @@ use super::{UseCaseError, mapper, models::TaskComment};
 
 #[derive(Clone)] // из-за axum-state
 pub struct TaskComments {
-    task_comments_repo: TaskCommentsRepo,
+    task_comments_repo: DBTaskComments,
 }
 
 impl TaskComments {
-    pub fn new(task_comments_repo: TaskCommentsRepo) -> Self {
+    pub fn new(task_comments_repo: DBTaskComments) -> Self {
         Self { task_comments_repo }
     }
     pub async fn list(
@@ -46,7 +47,7 @@ impl TaskComments {
             .map_err(|e| match e {
                 RepositoryError::NotFoundRow => UseCaseError::ForTransport {
                     status_code: StatusCode::NOT_FOUND,
-                    public_err: ErrMsg::NotFoundItem.as_str(),
+                    public_err: ErrMsg::NotFoundItem.to_string(),
                     internal_err: None,
                 },
                 other => UseCaseError::Common(other.to_string()),

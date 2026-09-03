@@ -1,3 +1,5 @@
+use std::fmt;
+
 use super::consts;
 
 pub enum ErrMsg {
@@ -23,39 +25,39 @@ pub enum ErrMsg {
     BadFileData,
     UndefinedTypeImage,
 }
-impl ErrMsg {
-    pub fn as_str(&self) -> String {
+impl fmt::Display for ErrMsg {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ErrMsg::EmailNotCorrect => "е-мэйл не корректен".to_string(),
-            ErrMsg::EmailAlreadyConfirm => "е-мэйл уже подтверждён".to_string(),
-            ErrMsg::EmailNotBeEmpty => "отсутствует е-мэйл".to_string(),
-            ErrMsg::VerifyYourEmail => "е-мэйл необходимо верифицировать".to_string(),
-            ErrMsg::VerifyCodeNotBeEmpty => "проверочный код для е-мэйла отсутствует".to_string(),
-            ErrMsg::PasswordsNotEquals => "пароли не равны".to_string(),
-            ErrMsg::PasswordIsShort => {
-                format!(
-                    "пароль слишком короткий, нужно более или равно {}",
-                    consts::MIN_PASSWORD_LEN
-                )
-            }
-            ErrMsg::NotFoundUser => "такой пользователь не найден".to_string(),
-            ErrMsg::NotFoundItem => "запись не найдена".to_string(),
-            ErrMsg::LoginOrPasswordNotCorrect => "логин или пароль не верные".to_string(),
-            ErrMsg::NeedAcceptAgreement => "необходимо принять условия оферты".to_string(),
+            ErrMsg::EmailNotCorrect => write!(f, "е-мэйл не корректен"),
+            ErrMsg::EmailAlreadyConfirm => write!(f, "е-мэйл уже подтверждён"),
+            ErrMsg::EmailNotBeEmpty => write!(f, "отсутствует е-мэйл"),
+            ErrMsg::VerifyYourEmail => write!(f, "е-мэйл необходимо верифицировать"),
+            ErrMsg::VerifyCodeNotBeEmpty => write!(f, "проверочный код для е-мэйла отсутствует"),
+            ErrMsg::PasswordsNotEquals => write!(f, "пароли не равны"),
+            ErrMsg::PasswordIsShort => write!(
+                f,
+                "пароль слишком короткий, нужно более или равно {}",
+                consts::MIN_PASSWORD_LEN
+            ),
+            ErrMsg::NotFoundUser => write!(f, "такой пользователь не найден"),
+            ErrMsg::NotFoundItem => write!(f, "запись не найдена"),
+            ErrMsg::LoginOrPasswordNotCorrect => write!(f, "логин или пароль не верные"),
+            ErrMsg::NeedAcceptAgreement => write!(f, "необходимо принять условия оферты"),
             ErrMsg::NeedAcceptPrivacyPolicy => {
-                "необходимо принять политику конфиденциальности".to_string()
+                write!(f, "необходимо принять политику конфиденциальности")
             }
-            ErrMsg::NotCorrectVerifyEmailCode => "проверочный код е-мэйла не верный".to_string(),
-            ErrMsg::TokenExpired => "токен просрочен".to_string(),
-            ErrMsg::TokenNotValid => "токен не действителен".to_string(),
-            ErrMsg::TokenIsNotRefresh => "токен не является токеном обновления".to_string(),
-            ErrMsg::NoRules => "у вас нет прав на данное действие".to_string(),
-            ErrMsg::NoAccessTeamMemberOnly => {
-                "у вас нет доступа к данному действию, только для участника команды".to_string()
-            }
-            ErrMsg::NotCorrectMultipartForm => "ошибка в обработки формы".to_string(),
-            ErrMsg::BadFileData => "не верные данные файла".to_string(),
-            ErrMsg::UndefinedTypeImage => "не известный тип изображения".to_string(),
+            ErrMsg::NotCorrectVerifyEmailCode => write!(f, "проверочный код е-мэйла не верный"),
+            ErrMsg::TokenExpired => write!(f, "токен просрочен"),
+            ErrMsg::TokenNotValid => write!(f, "токен не действителен"),
+            ErrMsg::TokenIsNotRefresh => write!(f, "токен не является токеном обновления"),
+            ErrMsg::NoRules => write!(f, "у вас нет прав на данное действие"),
+            ErrMsg::NoAccessTeamMemberOnly => write!(
+                f,
+                "у вас нет доступа к данному действию, только для участника команды"
+            ),
+            ErrMsg::NotCorrectMultipartForm => write!(f, "ошибка в обработки формы"),
+            ErrMsg::BadFileData => write!(f, "не верные данные файла"),
+            ErrMsg::UndefinedTypeImage => write!(f, "не известный тип изображения"),
         }
     }
 }

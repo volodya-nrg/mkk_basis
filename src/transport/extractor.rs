@@ -12,7 +12,7 @@ use crate::usecase::UseCase;
 pub struct AuthenticatedUser<ES> {
     pub user_id: Uuid,
     pub role: Option<String>,
-    pub _marker: PhantomData<ES>,
+    pub _marker_es: PhantomData<ES>,
 }
 
 impl<S, ES> FromRequestParts<S> for AuthenticatedUser<ES>
@@ -50,7 +50,7 @@ where
         Ok(Self {
             user_id: claim.sub,
             role: claim.role,
-            _marker: Default::default(),
+            _marker_es: Default::default(),
         })
     }
 }

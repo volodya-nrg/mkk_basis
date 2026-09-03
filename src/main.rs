@@ -68,11 +68,12 @@ async fn run(config_filepath: &str) -> Result<(), String> {
         .connect(&cfg.postgres.dsn)
         .await
         .map_err(|e| format!("failed to connect on DB: {e}"))?;
+    let postgres_service = PostgresService::new(pool);
     let http_server = HTTPServer::new(
         cfg.http_server.address.clone(),
         UseCase::new(
             cfg.addr,
-            PostgresService::new(pool),
+            postgres_service,
             JWTService::new(private_key_bytes, 60 * 20, 60 * 60 * 24),
             EmailService::new(
                 cfg.email.host,

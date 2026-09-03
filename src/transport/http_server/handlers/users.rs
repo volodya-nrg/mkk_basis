@@ -1,14 +1,4 @@
-use axum::Json;
-use axum::extract::multipart::MultipartError;
-use axum::extract::{Multipart, Path, State};
-use axum::http::StatusCode;
-use axum::response::IntoResponse;
-use chrono::Utc;
-use std::collections::HashMap;
-use std::fs::File;
-use std::io::Write;
-use uuid::Uuid;
-
+use crate::adapter::db::traits::DBInterface;
 use crate::adapter::email::EmailSender;
 use crate::adapter::helpers;
 use crate::err_msg::ErrMsg;
@@ -20,23 +10,36 @@ use crate::transport::{
     },
 };
 use crate::usecase::UseCase;
+use axum::Json;
+use axum::extract::multipart::MultipartError;
+use axum::extract::{Multipart, Path, State};
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use chrono::Utc;
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::Write;
+use std::marker::PhantomData;
+use uuid::Uuid;
 
 struct UploadErr {
     status_code: StatusCode,
     msg: String,
 }
 
-pub struct Handlers {}
+pub struct Handlers<ES> {
+    _marker_es: PhantomData<ES>,
+}
 
-impl Handlers {
-    pub async fn list<ES>(
+impl<ES> Handlers<ES>
+where
+    ES: EmailSender,
+{
+    pub async fn list(
         _user: AuthenticatedUser<ES>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestLimitOffset>,
-    ) -> impl IntoResponse
-    where
-        ES: EmailSender,
-    {
+    ) -> impl IntoResponse {
         use_case
             .users
             .list(payload.limit, payload.offset)
@@ -52,27 +55,21 @@ impl Handlers {
                 },
             )
     }
-    pub async fn one<ES>(
+    pub async fn one(
         _user: AuthenticatedUser<ES>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
-    ) -> impl IntoResponse
-    where
-        ES: EmailSender,
-    {
+    ) -> impl IntoResponse {
         use_case.users.one(item_id).await.map_or_else(
             |e| e.into_response(),
             |v| (StatusCode::OK, Json(mapper::user_uc_to_user_tr(v))).into_response(),
         )
     }
-    pub async fn create<ES>(
+    pub async fn create(
         _user: AuthenticatedUser<ES>,
         State(use_case): State<UseCase<ES>>,
         multipart: Multipart,
-    ) -> impl IntoResponse
-    where
-        ES: EmailSender,
-    {
+    ) -> impl IntoResponse {
         let m = match multipart_to_map(multipart).await {
             Ok(v) => v,
             Err(e) => {
@@ -80,7 +77,7 @@ impl Handlers {
                 return (
                     StatusCode::BAD_REQUEST,
                     Json(ResponseMsg {
-                        msg: ErrMsg::NotCorrectMultipartForm.as_str(),
+                        msg: ErrMsg::NotCorrectMultipartForm.to_string(),
                     }),
                 )
                     .into_response();
@@ -115,15 +112,12 @@ impl Handlers {
             |v| (StatusCode::OK, Json(mapper::user_uc_to_user_tr(v))).into_response(),
         )
     }
-    pub async fn update<ES>(
+    pub async fn update(
         _user: AuthenticatedUser<ES>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
         multipart: Multipart,
-    ) -> impl IntoResponse
-    where
-        ES: EmailSender,
-    {
+    ) -> impl IntoResponse {
         let m = match multipart_to_map(multipart).await {
             Ok(v) => v,
             Err(e) => {
@@ -131,7 +125,7 @@ impl Handlers {
                 return (
                     StatusCode::BAD_REQUEST,
                     Json(ResponseMsg {
-                        msg: ErrMsg::NotCorrectMultipartForm.as_str(),
+                        msg: ErrMsg::NotCorrectMultipartForm.to_string(),
                     }),
                 )
                     .into_response();
@@ -165,14 +159,11 @@ impl Handlers {
             |v| (StatusCode::OK, Json(mapper::user_uc_to_user_tr(v))).into_response(),
         )
     }
-    pub async fn delete<ES>(
+    pub async fn delete(
         _user: AuthenticatedUser<ES>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
-    ) -> impl IntoResponse
-    where
-        ES: EmailSender,
-    {
+    ) -> impl IntoResponse {
         use_case
             .users
             .delete(item_id)
@@ -220,7 +211,7 @@ fn upload_file(file_data: Vec<u8>) -> Result<String, UploadErr> {
         .first()
         .ok_or_else(|| UploadErr {
             status_code: StatusCode::BAD_REQUEST,
-            msg: ErrMsg::UndefinedTypeImage.as_str(),
+            msg: ErrMsg::UndefinedTypeImage.to_string(),
         })?;
     let new_filename = format!(
         "{}_{}.{}",
@@ -243,7 +234,7 @@ fn upload_file(file_data: Vec<u8>) -> Result<String, UploadErr> {
             log::error!("failed to write file-data: {}", e);
             UploadErr {
                 status_code: StatusCode::BAD_REQUEST,
-                msg: ErrMsg::BadFileData.as_str(),
+                msg: ErrMsg::BadFileData.to_string(),
             }
         })?;
 

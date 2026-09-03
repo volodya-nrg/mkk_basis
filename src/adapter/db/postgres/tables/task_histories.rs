@@ -2,22 +2,20 @@ use sqlx::{Pool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
 
 use crate::adapter::db::{
-    errors::RepositoryError, models::TaskHistory, postgres::table_basic::TableBasic, transactor::Transactor,
+    errors::RepositoryError, models::TaskHistory, postgres::table_basic::TableBasic,
 };
 
 #[derive(Clone)]
 pub struct TaskHistories {
     pool: Pool<Postgres>,
-    #[allow(dead_code)]
-    transactor: Transactor,
     table_basic: TableBasic,
 }
 
 impl TaskHistories {
-    pub fn new(pool: Pool<Postgres>, transactor: Transactor) -> Self {
+    pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
             pool,
-            transactor,
+            // transactor,
             table_basic: TableBasic {
                 name: "task_histories".to_string(),
                 fields: vec![
@@ -30,7 +28,6 @@ impl TaskHistories {
             },
         }
     }
-    #[allow(dead_code)]
     pub async fn list(
         &self,
         limit: i32,
@@ -75,7 +72,6 @@ impl TaskHistories {
 
         Ok((items, total))
     }
-    #[allow(dead_code)]
     pub async fn one(&self, item_id: Uuid) -> Result<TaskHistory, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE task_history_id=$1",
@@ -118,7 +114,6 @@ impl TaskHistories {
             .try_get(0)
             .map_err(RepositoryError::Common)
     }
-    #[allow(dead_code)]
     pub async fn update(&self, item: TaskHistory) -> Result<(), RepositoryError> {
         let query = format!(
             "UPDATE {} SET task_id=$1, user_id=$2, msg=$3 WHERE task_history_id=$4",
@@ -142,7 +137,6 @@ impl TaskHistories {
                 }
             })
     }
-    #[allow(dead_code)]
     pub async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError> {
         let query = format!(
             "DELETE FROM {} WHERE task_history_id=$1",

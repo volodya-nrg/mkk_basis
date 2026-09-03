@@ -1,5 +1,5 @@
 use sqlx::{AssertSqlSafe, Pool, Postgres, QueryBuilder, Row};
-use std::fmt::{self, Formatter};
+use std::fmt;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use uuid::Uuid;
@@ -8,7 +8,6 @@ use crate::adapter::db::{
     errors::RepositoryError,
     models::{Task, TaskData},
     postgres::table_basic::TableBasic,
-    transactor::Transactor,
 };
 
 #[derive(Debug, EnumIter, PartialEq)]
@@ -23,9 +22,9 @@ impl Status {
         Status::iter().any(|s| s.to_string() == v)
     }
 }
-// можно поставить заклинание Display, но тогда будет начинаться с большой буквы, поэтому пишем сами как надо
+// можно поставить "заклинание" Display, но тогда будет начинаться с большой буквы, поэтому пишем сами как надо
 impl fmt::Display for Status {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
             Status::Start => "start",
             Status::Todo => "todo",
@@ -39,15 +38,12 @@ impl fmt::Display for Status {
 #[derive(Clone)]
 pub struct Tasks {
     pool: Pool<Postgres>,
-    #[allow(dead_code)]
-    transactor: Transactor,
     table_basic: TableBasic,
 }
 impl Tasks {
-    pub fn new(pool: Pool<Postgres>, transactor: Transactor) -> Self {
+    pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
             pool,
-            transactor,
             table_basic: TableBasic {
                 name: "tasks".to_string(),
                 fields: vec![
@@ -204,7 +200,6 @@ impl Tasks {
                 }
             })
     }
-    #[allow(dead_code)]
     pub async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE task_id=$1", self.table_basic.name);
         QueryBuilder::new(query)

@@ -2,33 +2,32 @@ use http::StatusCode;
 use uuid::Uuid;
 
 use crate::{
-    adapter::{
-        db::errors::RepositoryError,
-        db::postgres::tables::{
-            task_histories::TaskHistories as TaskHistoriesRepo, tasks::Status as TaskStatus,
-            tasks::Tasks as TasksRepo, team_members::TeamMembers as TeamMembersRepo,
-        },
+    adapter::db::{
+        errors::RepositoryError,
+        postgres::tables::task_histories::TaskHistories as DBTaskHistories,
+        postgres::tables::tasks::Status as TaskStatus, postgres::tables::tasks::Tasks as DBTasks,
+        postgres::tables::team_members::TeamMembers as DBTeamMembers,
     },
     err_msg::ErrMsg,
 };
 
 use super::{
     UseCaseError, mapper,
-    models::{Task, TaskHistory, TaskData},
+    models::{Task, TaskData, TaskHistory},
 };
 
 #[derive(Clone)] // из-за axum-state
 pub struct Tasks {
-    tasks_repo: TasksRepo,
-    task_histories_repo: TaskHistoriesRepo,
-    team_members_repo: TeamMembersRepo,
+    tasks_repo: DBTasks,
+    task_histories_repo: DBTaskHistories,
+    team_members_repo: DBTeamMembers,
 }
 
 impl Tasks {
     pub fn new(
-        tasks_repo: TasksRepo,
-        task_histories_repo: TaskHistoriesRepo,
-        team_members_repo: TeamMembersRepo,
+        tasks_repo: DBTasks,
+        task_histories_repo: DBTaskHistories,
+        team_members_repo: DBTeamMembers,
     ) -> Self {
         Self {
             tasks_repo,
@@ -36,10 +35,7 @@ impl Tasks {
             team_members_repo,
         }
     }
-    pub async fn list(
-        &self,
-        data: TaskData,
-    ) -> Result<(Vec<Task>, i64), UseCaseError> {
+    pub async fn list(&self, data: TaskData) -> Result<(Vec<Task>, i64), UseCaseError> {
         let (items, total) = self
             .tasks_repo
             .list(mapper::task_data_uc_to_task_data_db(data))
@@ -54,7 +50,7 @@ impl Tasks {
         let task_db = self.tasks_repo.one(item_id).await.map_err(|e| match e {
             RepositoryError::NotFoundRow => UseCaseError::ForTransport {
                 status_code: StatusCode::NOT_FOUND,
-                public_err: ErrMsg::NotFoundItem.as_str(),
+                public_err: ErrMsg::NotFoundItem.to_string(),
                 internal_err: None,
             },
             other => UseCaseError::Common(other.to_string()),
@@ -119,7 +115,7 @@ impl Tasks {
         let task_db = self.tasks_repo.one(task_id).await.map_err(|e| match e {
             RepositoryError::NotFoundRow => UseCaseError::ForTransport {
                 status_code: StatusCode::NOT_FOUND,
-                public_err: ErrMsg::NotFoundItem.as_str(),
+                public_err: ErrMsg::NotFoundItem.to_string(),
                 internal_err: None,
             },
             other => UseCaseError::Common(other.to_string()),
@@ -172,7 +168,7 @@ impl Tasks {
             .map_err(|e| match e {
                 RepositoryError::NotFoundRow => UseCaseError::ForTransport {
                     status_code: StatusCode::FORBIDDEN,
-                    public_err: ErrMsg::NoAccessTeamMemberOnly.as_str(),
+                    public_err: ErrMsg::NoAccessTeamMemberOnly.to_string(),
                     internal_err: None,
                 },
                 other => UseCaseError::Common(other.to_string()),

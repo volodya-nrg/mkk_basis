@@ -3,6 +3,7 @@ use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde_json::json;
+use std::marker::PhantomData;
 
 use crate::adapter::email::EmailSender;
 use crate::transport::{
@@ -14,16 +15,18 @@ use crate::transport::{
 };
 use crate::usecase::UseCase;
 
-pub struct Handlers {}
+pub struct Handlers<ES> {
+    _marker_es: PhantomData<ES>,
+}
 
-impl Handlers {
-    pub async fn register<ES>(
+impl<ES> Handlers<ES>
+where
+    ES: EmailSender,
+{
+    pub async fn register(
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestRegister>,
-    ) -> impl IntoResponse
-    where
-        ES: EmailSender,
-    {
+    ) -> impl IntoResponse {
         use_case
             .auth
             .register(
@@ -41,13 +44,10 @@ impl Handlers {
                 },
             )
     }
-    pub async fn register_confirm<ES>(
+    pub async fn register_confirm(
         State(use_case): State<UseCase<ES>>,
         Query(query): Query<RequestRegisterConfirm>,
-    ) -> impl IntoResponse
-    where
-        ES: EmailSender,
-    {
+    ) -> impl IntoResponse {
         use_case
             .auth
             .register_confirm(
@@ -57,13 +57,10 @@ impl Handlers {
             .await
             .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())
     }
-    pub async fn login<ES>(
+    pub async fn login(
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestLogin>,
-    ) -> impl IntoResponse
-    where
-        ES: EmailSender,
-    {
+    ) -> impl IntoResponse {
         use_case
             .auth
             .login(payload.email, payload.password)
@@ -79,26 +76,20 @@ impl Handlers {
                 },
             )
     }
-    pub async fn logout<ES>(
+    pub async fn logout(
         _user: AuthenticatedUser<ES>,
         State(use_case): State<UseCase<ES>>,
-    ) -> impl IntoResponse
-    where
-        ES: EmailSender,
-    {
+    ) -> impl IntoResponse {
         use_case
             .auth
             .logout()
             .await
             .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())
     }
-    pub async fn refresh_tokens<ES>(
+    pub async fn refresh_tokens(
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestRefreshToken>,
-    ) -> impl IntoResponse
-    where
-        ES: EmailSender,
-    {
+    ) -> impl IntoResponse {
         use_case
             .auth
             .refresh_tokens(payload.token.to_string())

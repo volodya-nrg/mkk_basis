@@ -3,9 +3,11 @@ use uuid::Uuid;
 
 use crate::{
     adapter::{
-        db::errors::RepositoryError,
-        db::postgres::tables::users::Users as UsersRepo,
-        db::models::User as UserDB,
+        db::{
+            errors::RepositoryError, 
+            models::User as UserDB,
+            postgres::tables::users::Users as DBUsers,
+        },
         email::EmailSender,
         helpers as HelpersService,
         jwt::{JWTError, Jwt as JWTService, TYPE_REFRESH},
@@ -17,17 +19,20 @@ use crate::{
 use super::{UseCaseError, helpers};
 
 #[derive(Clone)] // из-за axum-state
-pub struct Auth<ES: EmailSender> {
+pub struct Auth<ES> {
     addr: String,
-    users_repo: UsersRepo,
+    users_repo: DBUsers,
     pub jwt_service: JWTService, // публичен для экстрактора
     email_sender: ES,
 }
 
-impl<ES: EmailSender> Auth<ES> {
+impl<ES> Auth<ES>
+where
+    ES: EmailSender,
+{
     pub fn new(
         addr: String,
-        users_repo: UsersRepo,
+        users_repo: DBUsers,
         jwt_service: JWTService,
         email_sender: ES,
     ) -> Self {
@@ -49,35 +54,35 @@ impl<ES: EmailSender> Auth<ES> {
         if !HelpersService::is_valid_email(&email) {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::EmailNotCorrect.as_str(),
+                public_err: ErrMsg::EmailNotCorrect.to_string(),
                 internal_err: Some(format!("user send bad email ({})", email)),
             });
         }
         if password.chars().count() < consts::MIN_PASSWORD_LEN {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::PasswordIsShort.as_str(),
+                public_err: ErrMsg::PasswordIsShort.to_string(),
                 internal_err: Default::default(),
             });
         }
         if password != password_confirm {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::PasswordsNotEquals.as_str(),
+                public_err: ErrMsg::PasswordsNotEquals.to_string(),
                 internal_err: Default::default(),
             });
         }
         if !agreement {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::NeedAcceptAgreement.as_str(),
+                public_err: ErrMsg::NeedAcceptAgreement.to_string(),
                 internal_err: Default::default(),
             });
         }
         if !privacy_policy {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::NeedAcceptPrivacyPolicy.as_str(),
+                public_err: ErrMsg::NeedAcceptPrivacyPolicy.to_string(),
                 internal_err: Default::default(),
             });
         }
@@ -95,7 +100,7 @@ impl<ES: EmailSender> Auth<ES> {
         // TODO tx
         let result = self
             .users_repo
-            .create(UserDB{
+            .create(UserDB {
                 user_id: Default::default(),
                 email: email.clone(),
                 password: password_hash.to_string(),
@@ -124,21 +129,21 @@ impl<ES: EmailSender> Auth<ES> {
         if email.is_empty() {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::EmailNotBeEmpty.as_str(),
+                public_err: ErrMsg::EmailNotBeEmpty.to_string(),
                 internal_err: None,
             });
         }
         if actual_code.is_empty() {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::VerifyCodeNotBeEmpty.as_str(),
+                public_err: ErrMsg::VerifyCodeNotBeEmpty.to_string(),
                 internal_err: None,
             });
         }
         if !HelpersService::is_valid_email(&email) {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::EmailNotCorrect.as_str(),
+                public_err: ErrMsg::EmailNotCorrect.to_string(),
                 internal_err: None,
             });
         }
@@ -149,7 +154,7 @@ impl<ES: EmailSender> Auth<ES> {
                 if let RepositoryError::NotFoundRow = e {
                     return Err(UseCaseError::ForTransport {
                         status_code: StatusCode::BAD_REQUEST,
-                        public_err: ErrMsg::NotFoundUser.as_str(),
+                        public_err: ErrMsg::NotFoundUser.to_string(),
                         internal_err: Some(format!("user send other email ({})", email)),
                     });
                 }
@@ -158,14 +163,14 @@ impl<ES: EmailSender> Auth<ES> {
         };
         let expected_code = user.email_code.ok_or_else(|| UseCaseError::ForTransport {
             status_code: StatusCode::BAD_REQUEST,
-            public_err: ErrMsg::EmailAlreadyConfirm.as_str(),
+            public_err: ErrMsg::EmailAlreadyConfirm.to_string(),
             internal_err: None,
         })?;
 
         if expected_code != actual_code {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::NotCorrectVerifyEmailCode.as_str(),
+                public_err: ErrMsg::NotCorrectVerifyEmailCode.to_string(),
                 internal_err: None,
             });
         }
@@ -178,7 +183,6 @@ impl<ES: EmailSender> Auth<ES> {
 
         Ok(())
     }
-
     pub async fn login(
         &self,
         email: String,
@@ -187,14 +191,14 @@ impl<ES: EmailSender> Auth<ES> {
         if !HelpersService::is_valid_email(&email) {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::EmailNotCorrect.as_str(),
+                public_err: ErrMsg::EmailNotCorrect.to_string(),
                 internal_err: Some(format!("user send bad email ({})", email)),
             });
         }
         if password.chars().count() < consts::MIN_PASSWORD_LEN {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::PasswordIsShort.as_str(),
+                public_err: ErrMsg::PasswordIsShort.to_string(),
                 internal_err: None,
             });
         }
@@ -206,7 +210,7 @@ impl<ES: EmailSender> Auth<ES> {
                 if let RepositoryError::NotFoundRow = e {
                     return Err(UseCaseError::ForTransport {
                         status_code: StatusCode::BAD_REQUEST,
-                        public_err: ErrMsg::NotFoundUser.as_str(),
+                        public_err: ErrMsg::NotFoundUser.to_string(),
                         internal_err: Some(format!("user send other email ({})", email)),
                     });
                 }
@@ -217,7 +221,7 @@ impl<ES: EmailSender> Auth<ES> {
         if user.email_code.is_some() {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::VerifyYourEmail.as_str(),
+                public_err: ErrMsg::VerifyYourEmail.to_string(),
                 internal_err: None,
             });
         }
@@ -228,7 +232,7 @@ impl<ES: EmailSender> Auth<ES> {
         if !password_is_eq {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::LoginOrPasswordNotCorrect.as_str(),
+                public_err: ErrMsg::LoginOrPasswordNotCorrect.to_string(),
                 internal_err: None,
             });
         }
@@ -254,19 +258,19 @@ impl<ES: EmailSender> Auth<ES> {
             .map_err(|e| match e {
                 JWTError::ExpiredToken => UseCaseError::ForTransport {
                     status_code: StatusCode::BAD_REQUEST,
-                    public_err: ErrMsg::TokenExpired.as_str(),
+                    public_err: ErrMsg::TokenExpired.to_string(),
                     internal_err: None,
                 },
                 _ => UseCaseError::ForTransport {
                     status_code: StatusCode::BAD_REQUEST,
-                    public_err: ErrMsg::TokenNotValid.as_str(),
+                    public_err: ErrMsg::TokenNotValid.to_string(),
                     internal_err: None,
                 },
             })?;
         if claims.token_type != TYPE_REFRESH {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::TokenIsNotRefresh.as_str(),
+                public_err: ErrMsg::TokenIsNotRefresh.to_string(),
                 internal_err: None,
             });
         }
@@ -278,7 +282,7 @@ impl<ES: EmailSender> Auth<ES> {
                 if let RepositoryError::NotFoundRow = e {
                     return Err(UseCaseError::ForTransport {
                         status_code: StatusCode::BAD_REQUEST,
-                        public_err: ErrMsg::NotFoundUser.as_str(),
+                        public_err: ErrMsg::NotFoundUser.to_string(),
                         internal_err: None,
                     });
                 }

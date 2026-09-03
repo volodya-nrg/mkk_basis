@@ -2,22 +2,19 @@ use sqlx::{Pool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use crate::adapter::db::{
-    errors::RepositoryError, models::TeamMember, postgres::table_basic::TableBasic, transactor::Transactor,
+    errors::RepositoryError, models::TeamMember, postgres::table_basic::TableBasic,
 };
 
 #[derive(Clone)]
 pub struct TeamMembers {
     pool: Pool<Postgres>,
-    #[allow(dead_code)]
-    transactor: Transactor,
     table_basic: TableBasic,
 }
 
 impl TeamMembers {
-    pub fn new(pool: Pool<Postgres>, transactor: Transactor) -> Self {
+    pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
             pool,
-            transactor,
             table_basic: TableBasic {
                 name: "team_members".to_string(),
                 fields: vec![
@@ -28,7 +25,6 @@ impl TeamMembers {
             },
         }
     }
-    #[allow(dead_code)]
     pub async fn all(&self) -> Result<Vec<TeamMember>, RepositoryError> {
         QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
@@ -69,7 +65,6 @@ impl TeamMembers {
             .map_err(RepositoryError::FailedToInsert)
             .map(|_| ())
     }
-    #[allow(dead_code)]
     pub async fn delete(&self, team_id: Uuid, user_id: Uuid) -> Result<(), RepositoryError> {
         let query = format!(
             "DELETE FROM {} WHERE team_id=$1 AND user_id=$2",

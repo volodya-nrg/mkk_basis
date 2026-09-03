@@ -5,7 +5,6 @@ use uuid::Uuid;
 
 use crate::adapter::db::{
     errors::RepositoryError, models::User, postgres::table_basic::TableBasic,
-    transactor::Transactor,
 };
 
 pub enum Role {
@@ -28,16 +27,13 @@ impl fmt::Display for Role {
 #[derive(Clone)]
 pub struct Users {
     pool: Pool<Postgres>,
-    #[allow(dead_code)]
-    transactor: Transactor,
     table_basic: TableBasic,
 }
 
 impl Users {
-    pub fn new(pool: Pool<Postgres>, transactor: Transactor) -> Self {
+    pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
             pool,
-            transactor,
             table_basic: TableBasic {
                 name: "users".to_string(),
                 fields: vec![
@@ -52,6 +48,16 @@ impl Users {
                     "updated_at".to_string(),
                 ],
             },
+        }
+    }
+    fn get_valid_role(&self, role: Option<String>) -> Option<String> {
+        let role_loc = role.clone();
+        if let Some(v) = role
+            && v == Role::Null.to_string()
+        {
+            None
+        } else {
+            role_loc
         }
     }
     pub async fn list(&self, limit: i32, offset: i32) -> Result<(Vec<User>, i64), RepositoryError> {
@@ -183,15 +189,5 @@ impl Users {
                     Err(RepositoryError::ExpectedOneRow(rows))
                 }
             })
-    }
-    fn get_valid_role(&self, role: Option<String>) -> Option<String> {
-        let role_loc = role.clone();
-        if let Some(v) = role
-            && v == Role::Null.to_string()
-        {
-            None
-        } else {
-            role_loc
-        }
     }
 }
