@@ -8,6 +8,7 @@ use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use sqlx::postgres::PgPoolOptions;
 use std::fs;
+use std::process;
 use std::time::Duration;
 
 use adapter::{
@@ -27,7 +28,7 @@ struct Args {
 async fn main() {
     if let Err(e) = run(&Args::parse().config).await {
         log::error!("failed to run app: {e}");
-        std::process::exit(1);
+        process::exit(1);
     }
 }
 
@@ -64,7 +65,7 @@ async fn run(config_filepath: &str) -> Result<(), String> {
     }
 
     let pool = PgPoolOptions::new()
-        // .acquire_timeout(Duration::new(1, 0))
+        .acquire_timeout(Duration::new(3, 0))
         .connect(&cfg.postgres.dsn)
         .await
         .map_err(|e| format!("failed to connect on DB: {e}"))?;
