@@ -1,4 +1,5 @@
 mod extractor;
-pub mod http_server;
 mod mapper;
+
+pub mod http_server;
 pub mod models;

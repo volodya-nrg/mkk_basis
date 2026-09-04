@@ -1,10 +1,3 @@
-use crate::adapter::email::EmailSender;
-use crate::transport::{
-    extractor::AuthenticatedUser,
-    mapper,
-    models::{RequestLimitOffset, RequestTaskComment, ResponseTaskCommentsList},
-};
-use crate::usecase::UseCase;
 use axum::Json;
 use axum::extract::Path;
 use axum::extract::State;
@@ -13,6 +6,14 @@ use axum::response::IntoResponse;
 use serde_json::json;
 use std::marker::PhantomData;
 use uuid::Uuid;
+
+use crate::adapter::email::EmailSender;
+use crate::transport::{
+    extractor::AuthenticatedUser,
+    mapper,
+    models::{RequestLimitOffset, RequestTaskComment, ResponseTaskCommentsList},
+};
+use crate::usecase::UseCase;
 
 pub struct Handlers<ES> {
     _marker_es: PhantomData<ES>,

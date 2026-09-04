@@ -17,7 +17,7 @@ serde_json = "1.0.151"
 env_logger = "0.11.11"
 reqwest = { version = "0.13.4", features = ["form", "json", "multipart", "stream"] }
 tower-http = { version = "0.7.0", features = ["fs", "limit"] }
-argon2 = "0.6.0" # { version = "0.6.0", features = ["std"] }
+argon2 = "0.6.0"
 email_address = "0.2.9"
 http = "1.5.0"
 ctor = "1.0.12"

@@ -25,6 +25,7 @@ impl TeamMembers {
             },
         }
     }
+    #[allow(dead_code)]
     pub async fn all(&self) -> Result<Vec<TeamMember>, RepositoryError> {
         QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
@@ -65,6 +66,7 @@ impl TeamMembers {
             .map_err(RepositoryError::FailedToInsert)
             .map(|_| ())
     }
+    #[allow(dead_code)]
     pub async fn delete(&self, team_id: Uuid, user_id: Uuid) -> Result<(), RepositoryError> {
         let query = format!(
             "DELETE FROM {} WHERE team_id=$1 AND user_id=$2",

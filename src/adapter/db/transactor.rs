@@ -2,6 +2,7 @@
 pub struct Transactor {}
 
 impl Transactor {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self{}
     }

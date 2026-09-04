@@ -28,6 +28,7 @@ impl TaskHistories {
             },
         }
     }
+    #[allow(dead_code)]
     pub async fn list(
         &self,
         limit: i32,
@@ -72,6 +73,7 @@ impl TaskHistories {
 
         Ok((items, total))
     }
+    #[allow(dead_code)]
     pub async fn one(&self, item_id: Uuid) -> Result<TaskHistory, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE task_history_id=$1",
@@ -114,6 +116,7 @@ impl TaskHistories {
             .try_get(0)
             .map_err(RepositoryError::Common)
     }
+    #[allow(dead_code)]
     pub async fn update(&self, item: TaskHistory) -> Result<(), RepositoryError> {
         let query = format!(
             "UPDATE {} SET task_id=$1, user_id=$2, msg=$3 WHERE task_history_id=$4",
@@ -137,6 +140,7 @@ impl TaskHistories {
                 }
             })
     }
+    #[allow(dead_code)]
     pub async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError> {
         let query = format!(
             "DELETE FROM {} WHERE task_history_id=$1",

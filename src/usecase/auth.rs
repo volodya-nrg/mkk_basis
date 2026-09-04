@@ -4,8 +4,7 @@ use uuid::Uuid;
 use crate::{
     adapter::{
         db::{
-            errors::RepositoryError, 
-            models::User as UserDB,
+            errors::RepositoryError, models::User as UserDB,
             postgres::tables::users::Users as DBUsers,
         },
         email::EmailSender,

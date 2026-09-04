@@ -200,6 +200,7 @@ impl Tasks {
                 }
             })
     }
+    #[allow(dead_code)]
     pub async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE task_id=$1", self.table_basic.name);
         QueryBuilder::new(query)

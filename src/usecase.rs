@@ -14,8 +14,11 @@ use http::StatusCode;
 use serde_json::json;
 use thiserror::Error as ThisError;
 
-use crate::adapter::db::postgres::Postgres;
-use crate::adapter::{db::errors::RepositoryError, email::EmailSender, jwt::Jwt as JWTService};
+use crate::adapter::{
+    db::{errors::RepositoryError, postgres::Postgres},
+    email::EmailSender,
+    jwt::Jwt as JWTService,
+};
 use crate::err_msg::ErrMsg;
 
 #[derive(Clone)] // из-за axum-state

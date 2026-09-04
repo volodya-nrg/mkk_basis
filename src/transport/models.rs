@@ -61,7 +61,7 @@ pub struct RequestUserCreate {
     pub avatar: Option<String>, // "String" потому что в БД в итоге залетает путь к файлу
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct RequestUserUpdate {
     pub email: Option<String>,
     pub password: Option<String>,

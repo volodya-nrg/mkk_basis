@@ -14,7 +14,8 @@ use mkk_basis::adapter::{
         errors::RepositoryError,
         models::TaskData,
         postgres::{
-            Postgres as PostgresService, tables::tasks::Status as TaskStatus, tables::users::Role as UserRoles,
+            Postgres as PostgresService, tables::tasks::Status as TaskStatus,
+            tables::users::Role as UserRoles,
         },
     },
     logger,
@@ -38,7 +39,7 @@ async fn get_postgres() -> (PostgresService, DateTime<Local>) {
         .acquire_timeout(Duration::new(3, 0))
         .connect(DSN)
         .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
+        .unwrap();
     (PostgresService::new(pool), time_now)
 }
 
@@ -398,101 +399,65 @@ async fn check_tasks() {
     task_expected.updated_at = task_actual.updated_at; // подменим на валидное явно
     assert_eq!(task_expected, task_actual);
 
-    let mut task_limit_offset_filter = TaskData {
-        limit: -1,
-        offset: -1,
-        team_id: None,
-        assignee_id: None,
-        status: None,
-    };
+    let mut task_data = TaskData::default();
+    task_data.limit = -1;
+    task_data.offset = -1;
 
     // ok: проверим что список не пустой
-    let (mut items, mut total) = db
-        .tbl_tasks
-        .list(task_limit_offset_filter.clone())
-        .await
-        .unwrap();
+    let (mut items, mut total) = db.tbl_tasks.list(task_data.clone()).await.unwrap();
     assert!(!items.is_empty());
     assert!(total > 0);
 
     // ok: проверим пустой результат
-    task_limit_offset_filter.limit = 0;
-    task_limit_offset_filter.offset = 0;
-    (items, total) = db
-        .tbl_tasks
-        .list(task_limit_offset_filter.clone())
-        .await
-        .unwrap();
+    task_data.limit = 0;
+    task_data.offset = 0;
+    (items, total) = db.tbl_tasks.list(task_data.clone()).await.unwrap();
     assert!(items.is_empty());
     assert!(total > 0); // список пустой, но общее кол-во есть
 
     // проверим фильтрацию списка
     // - список пустой, т.к. не известный team_id
-    task_limit_offset_filter.limit = -1;
-    task_limit_offset_filter.offset = -1;
-    task_limit_offset_filter.team_id = Some(Uuid::new_v4());
-    (items, total) = db
-        .tbl_tasks
-        .list(task_limit_offset_filter.clone())
-        .await
-        .unwrap();
+    task_data.limit = -1;
+    task_data.offset = -1;
+    task_data.team_id = Some(Uuid::new_v4());
+    (items, total) = db.tbl_tasks.list(task_data.clone()).await.unwrap();
     assert!(items.is_empty());
     assert_eq!(0, total);
 
     // - список не пустой, т.к. известный team_id
-    task_limit_offset_filter.team_id = Some(team_id);
-    (items, total) = db
-        .tbl_tasks
-        .list(task_limit_offset_filter.clone())
-        .await
-        .unwrap();
+    task_data.team_id = Some(team_id);
+    (items, total) = db.tbl_tasks.list(task_data.clone()).await.unwrap();
     assert!(!items.is_empty());
     assert_eq!(1, total);
 
     // - список пустой, т.к. известный team_id и не известный assignee_id
-    task_limit_offset_filter.assignee_id = Some(Uuid::new_v4());
-    (items, total) = db
-        .tbl_tasks
-        .list(task_limit_offset_filter.clone())
-        .await
-        .unwrap();
+    task_data.assignee_id = Some(Uuid::new_v4());
+    (items, total) = db.tbl_tasks.list(task_data.clone()).await.unwrap();
     assert!(items.is_empty());
     assert_eq!(0, total);
 
     // - список не пустой, т.к. известный team_id и известный assignee_id
-    task_limit_offset_filter.assignee_id = Some(user_id2);
-    (items, total) = db
-        .tbl_tasks
-        .list(task_limit_offset_filter.clone())
-        .await
-        .unwrap();
+    task_data.assignee_id = Some(user_id2);
+    (items, total) = db.tbl_tasks.list(task_data.clone()).await.unwrap();
     assert!(!items.is_empty());
     assert_eq!(1, total);
 
     // - список пустой, т.к. известный team_id, assignee_id и не тот статус
-    task_limit_offset_filter.status = Some(TaskStatus::Cancelled.to_string());
-    (items, total) = db
-        .tbl_tasks
-        .list(task_limit_offset_filter.clone())
-        .await
-        .unwrap();
+    task_data.status = Some(TaskStatus::Cancelled.to_string());
+    (items, total) = db.tbl_tasks.list(task_data.clone()).await.unwrap();
     assert!(items.is_empty());
     assert_eq!(0, total);
 
     // - список не пустой, т.к. известный team_id, assignee_id и верный статус
-    task_limit_offset_filter.status = Some(TaskStatus::Start.to_string());
-    (items, total) = db
-        .tbl_tasks
-        .list(task_limit_offset_filter.clone())
-        .await
-        .unwrap();
+    task_data.status = Some(TaskStatus::Start.to_string());
+    (items, total) = db.tbl_tasks.list(task_data.clone()).await.unwrap();
     assert!(!items.is_empty());
     assert_eq!(1, total);
 
     // - список пустой, т.к. известный team_id, assignee_id и верный статус, но лимит 0
-    task_limit_offset_filter.limit = 0;
-    task_limit_offset_filter.status = Some(TaskStatus::Start.to_string());
-    (items, total) = db.tbl_tasks.list(task_limit_offset_filter).await.unwrap();
+    task_data.limit = 0;
+    task_data.status = Some(TaskStatus::Start.to_string());
+    (items, total) = db.tbl_tasks.list(task_data).await.unwrap();
     assert!(items.is_empty());
     assert_eq!(1, total);
 

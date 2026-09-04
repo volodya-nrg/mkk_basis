@@ -1,15 +1,3 @@
-use crate::adapter::db::traits::DBInterface;
-use crate::adapter::email::EmailSender;
-use crate::adapter::helpers;
-use crate::err_msg::ErrMsg;
-use crate::transport::{
-    extractor::AuthenticatedUser,
-    mapper,
-    models::{
-        RequestLimitOffset, RequestUserCreate, RequestUserUpdate, ResponseMsg, ResponseUsersList,
-    },
-};
-use crate::usecase::UseCase;
 use axum::Json;
 use axum::extract::multipart::MultipartError;
 use axum::extract::{Multipart, Path, State};
@@ -21,6 +9,17 @@ use std::fs::File;
 use std::io::Write;
 use std::marker::PhantomData;
 use uuid::Uuid;
+
+use crate::adapter::{email::EmailSender, helpers};
+use crate::err_msg::ErrMsg;
+use crate::transport::{
+    extractor::AuthenticatedUser,
+    mapper,
+    models::{
+        RequestLimitOffset, RequestUserCreate, RequestUserUpdate, ResponseMsg, ResponseUsersList,
+    },
+};
+use crate::usecase::UseCase;
 
 struct UploadErr {
     status_code: StatusCode,
