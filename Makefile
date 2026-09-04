@@ -64,7 +64,7 @@ check_version_certs:
 
 .PHONY: test_db
 test_db:
-	cargo test --test db -- --nocapture # --include-ignored
+	RUST_BACKTRACE=1 cargo test --test db -- --nocapture # --include-ignored
 
 .PHONY: test_transport
 test_transport:

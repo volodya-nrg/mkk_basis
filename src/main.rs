@@ -64,7 +64,7 @@ async fn run(config_filepath: &str) -> Result<(), String> {
     }
 
     let pool = PgPoolOptions::new()
-        .acquire_timeout(Duration::new(1, 0))
+        // .acquire_timeout(Duration::new(1, 0))
         .connect(&cfg.postgres.dsn)
         .await
         .map_err(|e| format!("failed to connect on DB: {e}"))?;

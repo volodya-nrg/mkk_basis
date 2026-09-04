@@ -2,104 +2,44 @@ mod helpers;
 
 use axum::http::StatusCode;
 use ctor::ctor;
-use sqlx::postgres::PgPoolOptions;
-use std::net::TcpListener;
 use std::time::Duration;
+use tokio::sync::OnceCell;
 use tokio::time::sleep;
 use uuid::Uuid;
 
 use mkk_basis::{
-    adapter::{
-        db::postgres::{Postgres as PostgresService, tables::users::Role as UsersRole},
-        helpers as HelpersService,
-        jwt::Jwt as JWTService,
-        logger,
+    adapter::{db::postgres::tables::users::Role as UsersRole, helpers as HelpersService, logger},
+    consts::MIN_PASSWORD_LEN,
+    transport::models::{
+        RequestLogin, RequestTaskData, RequestTeamInvite, RequestUserUpdate, ResponseLogin,
+        ResponseRefreshToken, ResponseTask, ResponseTaskComment, ResponseTaskCommentsList,
+        ResponseTaskHistories, ResponseTasksList, ResponseTeam, ResponseTeamsList, ResponseUUID,
+        ResponseUser, ResponseUsersList,
     },
-    consts,
-    transport::{
-        self,
-        http_server::HTTPServer,
-        models::{
-            RequestLogin, RequestTaskData, RequestTeamInvite, RequestUserUpdate, ResponseLogin,
-            ResponseRefreshToken, ResponseTask, ResponseTaskComment, ResponseTaskCommentsList,
-            ResponseTaskHistories, ResponseTasksList, ResponseTeam, ResponseTeamsList,
-            ResponseUUID, ResponseUser, ResponseUsersList,
-        },
-    },
-    usecase::UseCase,
 };
 
-use helpers::{client::Client, mocks::EmailServiceMock, rand};
-
-const ACCESS_TOKEN_TTL_SEC: i64 = 3;
-const REFRESH_TOKEN_TTL_SEC: i64 = ACCESS_TOKEN_TTL_SEC * 2;
-const DSN: &str =
-    "postgres://postgres:postgres@127.0.0.1:5432/postgres?options=-c%20search_path%3Dmkk_basis";
-const ERR_PARSE_JSON: &str = "failed to parse str to json";
-
-struct Data {
-    http_addr: String,
-    ca: String,
-    crt: String,
-    key: String,
-    pg: PostgresService,
-}
+use helpers::{client::Client, consts, context::Context, rand};
 
 #[ctor(unsafe)]
 fn init() {
     logger::init(String::new(), String::new(), String::new(), None, true).unwrap()
 }
 
-// init_server - пусть пока будет разный сервер для каждого теста
-async fn init_server() -> Data {
-    let addr_socket = TcpListener::bind(format!("{}:0", helpers::certs::LOCALHOST))
-        .unwrap()
-        .local_addr()
-        .unwrap();
-    let addr_str = addr_socket.to_string();
-    let http_addr = format!("https://{}", addr_str); // явно используем https
-    let pool = PgPoolOptions::new().connect(DSN).await.unwrap();
-    let pg_service = PostgresService::new(pool.clone());
-    let use_case = UseCase::new(
-        "http://localhost.loc".to_string(),
-        pg_service.clone(),
-        JWTService::new(
-            rand::private_key(32),
-            ACCESS_TOKEN_TTL_SEC,
-            REFRESH_TOKEN_TTL_SEC,
-        ),
-        EmailServiceMock {},
-    );
-    let certs = helpers::certs::gen_certs().unwrap(); // создадим серты
-    let tls_config = transport::http_server::configure_tls(
-        certs.ca_cert.pem().into_bytes(),
-        certs.server_cert.pem().into_bytes(),
-        certs.server_key.serialize_pem().into_bytes(),
-    )
-    .unwrap();
-    let http_server = HTTPServer::new(addr_str.clone(), use_case, Some(tls_config));
+static CONTEXT: OnceCell<Context> = OnceCell::const_new();
 
-    tokio::spawn(async move { http_server.run().await.unwrap() });
-    sleep(Duration::from_secs(1)).await;
-
-    Data {
-        http_addr,
-        ca: certs.ca_cert.pem(),
-        crt: certs.client_cert.pem(),
-        key: certs.client_key.serialize_pem(),
-        pg: pg_service,
-    }
+async fn get_context() -> &'static Context {
+    CONTEXT.get_or_init(|| async { Context::new().await }).await
 }
 
 #[tokio::test]
 async fn check_etc() {
-    let data = init_server().await;
+    let ctx = get_context().await;
     let mut cl = Client::new(
-        data.http_addr.to_string(),
-        data.ca.to_string(),
-        data.crt.to_string(),
-        data.key.to_string(),
-        &data.pg,
+        ctx.http_addr.to_string(),
+        ctx.ca.to_string(),
+        ctx.crt.to_string(),
+        ctx.key.to_string(),
+        &ctx.db,
     );
 
     cl.index(|result| {
@@ -136,13 +76,13 @@ async fn check_etc() {
 
 #[tokio::test]
 async fn check_auth() {
-    let data = init_server().await;
+    let ctx = get_context().await;
     let mut cl = Client::new(
-        data.http_addr.to_string(),
-        data.ca.to_string(),
-        data.crt.to_string(),
-        data.key.to_string(),
-        &data.pg,
+        ctx.http_addr.to_string(),
+        ctx.ca.to_string(),
+        ctx.crt.to_string(),
+        ctx.key.to_string(),
+        &ctx.db,
     );
 
     let wrong_email = "abc".to_string();
@@ -165,7 +105,7 @@ async fn check_auth() {
         assert_eq!(StatusCode::BAD_REQUEST, status_code);
 
         req_register2.email = rand::email();
-        req_register2.password = HelpersService::rand_str_limit(consts::MIN_PASSWORD_LEN - 1);
+        req_register2.password = HelpersService::rand_str_limit(MIN_PASSWORD_LEN - 1);
     })
     .await // err: проверка пароля на длину
     .register(req_register2.clone(), false, |result| {
@@ -289,7 +229,7 @@ async fn check_auth() {
         assert_eq!(StatusCode::BAD_REQUEST, status_code);
 
         req_login.email = req_register2.email.clone();
-        req_login.password = HelpersService::rand_str_limit(consts::MIN_PASSWORD_LEN - 1);
+        req_login.password = HelpersService::rand_str_limit(MIN_PASSWORD_LEN - 1);
     })
     .await // err: проверим что пароль короткий
     .login(req_login.clone(), |result| {
@@ -316,7 +256,7 @@ async fn check_auth() {
         assert!(status_code.is_success());
 
         let resp_login: ResponseLogin =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert!(!resp_login.access_token.is_empty());
         assert!(!resp_login.refresh_token.is_empty());
     })
@@ -345,7 +285,7 @@ async fn check_auth() {
         assert!(status_code.is_success());
 
         let resp_login: ResponseRefreshToken =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert!(!resp_login.access_token.is_empty());
         assert!(!resp_login.refresh_token.is_empty());
     })
@@ -371,7 +311,7 @@ async fn check_auth() {
     .await;
 
     sleep(Duration::from_secs(
-        REFRESH_TOKEN_TTL_SEC.cast_unsigned() + 1,
+        consts::REFRESH_TOKEN_TTL_SEC.cast_unsigned() + 1,
     ))
     .await;
 
@@ -385,13 +325,13 @@ async fn check_auth() {
 
 #[tokio::test]
 async fn check_teams() {
-    let data = init_server().await;
+    let ctx = get_context().await;
     let mut cl = Client::new(
-        data.http_addr.to_string(),
-        data.ca.to_string(),
-        data.crt.to_string(),
-        data.key.to_string(),
-        &data.pg,
+        ctx.http_addr.to_string(),
+        ctx.ca.to_string(),
+        ctx.crt.to_string(),
+        ctx.key.to_string(),
+        &ctx.db,
     );
 
     let mut user_id = Uuid::nil();
@@ -440,7 +380,8 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        let resp: ResponseUUID =
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         user_id = resp.uuid;
     })
     .await
@@ -456,7 +397,7 @@ async fn check_teams() {
         assert!(status_code.is_success());
 
         let resp_team_actual: ResponseTeam =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert_eq!(user_id, resp_team_actual.created_by);
         team_id = resp_team_actual.team_id;
     })
@@ -471,7 +412,7 @@ async fn check_teams() {
         assert!(status_code.is_success());
 
         let resp: ResponseTeamsList =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert!(!resp.items.is_empty());
         assert!(resp.total > 0);
     })
@@ -481,7 +422,7 @@ async fn check_teams() {
         assert!(status_code.is_success());
 
         let resp: ResponseTeamsList =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert!(resp.items.is_empty());
         assert!(resp.total > 0);
     })
@@ -490,7 +431,8 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTeam = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        let resp: ResponseTeam =
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert_eq!(team_id, resp.team_id)
     })
     .await // err
@@ -505,7 +447,8 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTeam = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        let resp: ResponseTeam =
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert_eq!(req_team.name, resp.name)
     })
     .await // ok
@@ -533,7 +476,8 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        let resp: ResponseUUID =
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         admin_id = resp.uuid;
     })
     .await
@@ -541,7 +485,8 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        let resp: ResponseUUID =
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         owner_id = resp.uuid;
     })
     .await
@@ -549,7 +494,8 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        let resp: ResponseUUID =
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         other_id = resp.uuid;
     })
     .await;
@@ -581,7 +527,8 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTeam = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        let resp: ResponseTeam =
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         team_id = resp.team_id;
     })
     .await
@@ -687,13 +634,13 @@ async fn check_teams() {
 
 #[tokio::test]
 async fn check_tasks() {
-    let data = init_server().await;
+    let ctx = get_context().await;
     let mut cl = Client::new(
-        data.http_addr.to_string(),
-        data.ca.to_string(),
-        data.crt.to_string(),
-        data.key.to_string(),
-        &data.pg,
+        ctx.http_addr.to_string(),
+        ctx.ca.to_string(),
+        ctx.crt.to_string(),
+        ctx.key.to_string(),
+        &ctx.db,
     );
 
     let mut user_id1 = Uuid::nil();
@@ -754,7 +701,8 @@ async fn check_tasks() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        let resp: ResponseUUID =
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         user_id1 = resp.uuid;
     })
     .await
@@ -762,7 +710,8 @@ async fn check_tasks() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        let resp: ResponseUUID =
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         user_id2 = resp.uuid;
     })
     .await;
@@ -778,7 +727,7 @@ async fn check_tasks() {
         assert!(status_code.is_success());
 
         let resp_ream_actual: ResponseTeam =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         team_id = resp_ream_actual.team_id;
 
         req_task1.created_by = user_id1;
@@ -795,7 +744,7 @@ async fn check_tasks() {
         assert!(status_code.is_success());
 
         let resp_task: ResponseTask =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         task_id = resp_task.task_id;
     })
     .await // err: с теми же данными
@@ -857,7 +806,7 @@ async fn check_tasks() {
         assert!(status_code.is_success());
 
         let resp: ResponseTasksList =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert!(!resp.items.is_empty());
         assert!(resp.total > 0);
 
@@ -870,7 +819,7 @@ async fn check_tasks() {
         assert!(status_code.is_success());
 
         let resp: ResponseTasksList =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert!(resp.items.is_empty());
         assert!(resp.total > 0);
 
@@ -884,7 +833,7 @@ async fn check_tasks() {
         assert!(status_code.is_success());
 
         let resp: ResponseTasksList =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert!(resp.items.is_empty());
         assert_eq!(0, resp.total);
     })
@@ -898,7 +847,8 @@ async fn check_tasks() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTask = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        let resp: ResponseTask =
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert_eq!(task_id, resp.task_id)
     })
     .await // ok: обновление происходит корректно, т.к. user_id явл. членом команды
@@ -906,7 +856,8 @@ async fn check_tasks() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTask = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        let resp: ResponseTask =
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert_eq!(req_task2.status, resp.status);
         assert_eq!(task_id, resp.task_id);
     })
@@ -926,7 +877,7 @@ async fn check_tasks() {
         assert!(status_code.is_success());
 
         let resp: ResponseTaskHistories =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert_eq!(3, resp.items.len());
     })
     .await;
@@ -934,13 +885,13 @@ async fn check_tasks() {
 
 #[tokio::test]
 async fn check_task_comments() {
-    let data = init_server().await;
+    let ctx = get_context().await;
     let mut cl = Client::new(
-        data.http_addr.to_string(),
-        data.ca.to_string(),
-        data.crt.to_string(),
-        data.key.to_string(),
-        &data.pg,
+        ctx.http_addr.to_string(),
+        ctx.ca.to_string(),
+        ctx.crt.to_string(),
+        ctx.key.to_string(),
+        &ctx.db,
     );
 
     let mut user_id = Uuid::nil();
@@ -979,7 +930,8 @@ async fn check_task_comments() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        let resp: ResponseUUID =
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         user_id = resp.uuid;
     })
     .await
@@ -993,7 +945,7 @@ async fn check_task_comments() {
         assert!(status_code.is_success());
 
         let resp_ream_actual: ResponseTeam =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         team_id = resp_ream_actual.team_id;
 
         req_task.created_by = user_id;
@@ -1006,7 +958,7 @@ async fn check_task_comments() {
         assert!(status_code.is_success());
 
         let resp_task: ResponseTask =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         task_id = resp_task.task_id;
     })
     .await;
@@ -1017,7 +969,7 @@ async fn check_task_comments() {
         assert!(status_code.is_success());
 
         let resp: ResponseTaskComment =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
 
         assert_ne!(Uuid::nil(), resp.task_comment_id);
         assert_eq!(task_id, resp.task_id);
@@ -1032,7 +984,7 @@ async fn check_task_comments() {
         assert!(status_code.is_success());
 
         let resp: ResponseTaskComment =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
 
         assert_ne!(Uuid::nil(), resp.task_comment_id);
         assert_eq!(task_id, resp.task_id);
@@ -1047,7 +999,7 @@ async fn check_task_comments() {
         assert!(status_code.is_success());
 
         let resp: ResponseTaskCommentsList =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert_eq!(2, resp.items.len());
         assert_eq!(2, resp.total);
     })
@@ -1057,7 +1009,7 @@ async fn check_task_comments() {
         assert!(status_code.is_success());
 
         let resp: ResponseTaskCommentsList =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert_eq!(2, resp.items.len());
         assert_eq!(2, resp.total);
     })
@@ -1067,7 +1019,7 @@ async fn check_task_comments() {
         assert!(status_code.is_success());
 
         let resp: ResponseTaskCommentsList =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert!(resp.items.is_empty());
         assert_eq!(2, resp.total);
     })
@@ -1077,7 +1029,7 @@ async fn check_task_comments() {
         assert!(status_code.is_success());
 
         let resp: ResponseTaskCommentsList =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert!(resp.items.is_empty());
         assert_eq!(0, resp.total);
     })
@@ -1097,7 +1049,7 @@ async fn check_task_comments() {
         assert!(status_code.is_success());
 
         let resp: ResponseTaskCommentsList =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert_eq!(1, resp.items.len());
         assert_eq!(1, resp.total);
     })
@@ -1112,7 +1064,7 @@ async fn check_task_comments() {
         assert!(status_code.is_success());
 
         let resp: ResponseTaskCommentsList =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert_eq!(0, resp.items.len());
         assert_eq!(0, resp.total);
     })
@@ -1121,13 +1073,13 @@ async fn check_task_comments() {
 
 #[tokio::test]
 async fn check_users() {
-    let data = init_server().await;
+    let ctx = get_context().await;
     let mut cl = Client::new(
-        data.http_addr.to_string(),
-        data.ca.to_string(),
-        data.crt.to_string(),
-        data.key.to_string(),
-        &data.pg,
+        ctx.http_addr.to_string(),
+        ctx.ca.to_string(),
+        ctx.crt.to_string(),
+        ctx.key.to_string(),
+        &ctx.db,
     );
 
     let mut owner_id = Uuid::nil();
@@ -1171,7 +1123,8 @@ async fn check_users() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+        let resp: ResponseUUID =
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         owner_id = resp.uuid;
     })
     .await
@@ -1202,7 +1155,7 @@ async fn check_users() {
         assert!(status_code.is_success());
 
         let resp_user_actual: ResponseUser =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         // cравниваем частями, т.к. типы разные и где-то данных может не быть, а где-то быть
         assert_eq!(req_user_create.email, resp_user_actual.email);
         assert_eq!(req_user_create.name, resp_user_actual.name);
@@ -1232,7 +1185,7 @@ async fn check_users() {
         assert!(status_code.is_success());
 
         let resp_user_actual: ResponseUser =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert_eq!(req_user_create.email, resp_user_actual.email); // !
         assert_eq!(req_user_update.name, resp_user_actual.name);
         assert!(resp_user_actual.role.is_none());
@@ -1244,7 +1197,7 @@ async fn check_users() {
         assert!(status_code.is_success());
 
         let list: ResponseUsersList =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert_eq!(list.items.len(), 0);
         assert!(list.total > 0);
     })
@@ -1254,7 +1207,7 @@ async fn check_users() {
         assert!(status_code.is_success());
 
         let resp: ResponseUsersList =
-            serde_json::from_str(body_str.as_str()).expect(ERR_PARSE_JSON);
+            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
         assert!(resp.items.len() > 0);
         assert!(resp.total > 0);
         assert!(
