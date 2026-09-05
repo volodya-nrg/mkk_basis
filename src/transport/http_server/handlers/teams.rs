@@ -1,4 +1,4 @@
-use axum::Json;
+use axum::{Extension, Json};
 use axum::extract::Path;
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -9,10 +9,10 @@ use uuid::Uuid;
 
 use crate::adapter::email::EmailSender;
 use crate::transport::{
-    extractor::AuthenticatedUser,
     mapper,
     models::{RequestLimitOffset, RequestTeam, RequestTeamInvite, ResponseTeamsList},
 };
+use crate::transport::models::AuthUser;
 use crate::usecase::UseCase;
 
 pub struct Handlers<ES> {
@@ -24,7 +24,8 @@ where
     ES: EmailSender,
 {
     pub async fn list(
-        _user: AuthenticatedUser<ES>,
+        // _user: AuthenticatedUser<ES>,
+        Extension(_user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestLimitOffset>,
     ) -> impl IntoResponse {
@@ -44,7 +45,8 @@ where
             )
     }
     pub async fn one(
-        _user: AuthenticatedUser<ES>,
+        // _user: AuthenticatedUser<ES>,
+        Extension(_user): Extension<AuthUser>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
     ) -> impl IntoResponse {
@@ -57,7 +59,8 @@ where
         )
     }
     pub async fn create(
-        user: AuthenticatedUser<ES>,
+        // user: AuthenticatedUser<ES>,
+        Extension(user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestTeam>,
     ) -> impl IntoResponse {
@@ -75,7 +78,8 @@ where
         )
     }
     pub async fn update(
-        _user: AuthenticatedUser<ES>,
+        // _user: AuthenticatedUser<ES>,
+        Extension(_user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         Path(item_id): Path<Uuid>,
         Json(payload): Json<RequestTeam>,
@@ -93,7 +97,8 @@ where
         )
     }
     pub async fn delete(
-        _user: AuthenticatedUser<ES>,
+        // _user: AuthenticatedUser<ES>,
+        Extension(_user): Extension<AuthUser>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
     ) -> impl IntoResponse {
@@ -104,7 +109,8 @@ where
             .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())
     }
     pub async fn invite(
-        user: AuthenticatedUser<ES>,
+        // user: AuthenticatedUser<ES>,
+        Extension(user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         Path(team_id): Path<Uuid>,
         Json(payload): Json<RequestTeamInvite>,

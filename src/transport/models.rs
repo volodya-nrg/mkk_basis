@@ -2,6 +2,12 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[derive(Clone)]
+pub struct AuthUser {
+    pub user_id: Uuid,
+    pub role: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct RequestRegister {
     pub email: String,
@@ -78,22 +84,11 @@ pub struct RequestRegisterConfirm {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct RequestRefreshToken {
-    pub token: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RequestTaskComment {
     pub msg: String,
 }
 
 // ------------------------------------
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct ResponseLogin {
-    pub access_token: String,
-    pub refresh_token: String,
-}
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct ResponseTeamsList {
@@ -163,12 +158,6 @@ pub struct ResponseUser {
 pub struct ResponseUsersList {
     pub items: Vec<ResponseUser>,
     pub total: u32,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct ResponseRefreshToken {
-    pub access_token: String,
-    pub refresh_token: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]

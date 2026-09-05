@@ -8,9 +8,8 @@ use uuid::Uuid;
 
 use mkk_basis::adapter::db::postgres::Postgres as PostgresService;
 use mkk_basis::transport::models::{
-    RequestLimitOffset, RequestLogin, RequestRefreshToken, RequestRegister, RequestTask,
-    RequestTaskComment, RequestTaskData, RequestTeam, RequestTeamInvite, RequestUserCreate,
-    RequestUserUpdate, ResponseLogin, ResponseRefreshToken,
+    RequestLimitOffset, RequestLogin, RequestRegister, RequestTask, RequestTaskComment,
+    RequestTaskData, RequestTeam, RequestTeamInvite, RequestUserCreate, RequestUserUpdate,
 };
 
 use super::rand;
@@ -23,8 +22,6 @@ pub type StatusCodeBodyError = Result<(StatusCode, String), ReqwestError>;
 pub struct Client<'a> {
     addr: String,
     client: ReqwestClient,
-    pub access_token: String,
-    pub refresh_token: String,
     pub pg_service: &'a PostgresService,
 }
 
@@ -52,24 +49,11 @@ impl<'a> Client<'a> {
                 .add_root_certificate(ca)
                 .identity(identity)
                 .timeout(Duration::from_secs(10)) // общее время соединения
+                .cookie_store(true)
                 .build()
                 .unwrap(),
-            access_token: String::new(),
-            refresh_token: String::new(),
             pg_service,
         }
-    }
-    async fn headers(&self) -> header::HeaderMap {
-        let mut headers = header::HeaderMap::new();
-
-        if !self.access_token.is_empty() {
-            headers.insert(
-                header::AUTHORIZATION,
-                header::HeaderValue::from_str(&format!("Bearer {}", self.access_token)).unwrap(),
-            );
-        }
-
-        headers
     }
     async fn parse_response(&self, resp: Response) -> StatusCodeBodyError {
         let status_code = resp.status();
@@ -220,18 +204,14 @@ impl<'a> Client<'a> {
                 .json(&req)
                 .send()
                 .await?;
+            let set_cookies: Vec<_> = response.headers().get_all("set-cookie").iter().collect();
+            for header_value in set_cookies {
+                let value = header_value.to_str().unwrap().to_string();
+                log::debug!("new cookie: {}", value);
+            }
             self.parse_response(response).await
         })()
         .await;
-
-        if let Ok((status_code, body_str)) = &result
-            && status_code.is_success()
-        {
-            let resp_login: ResponseLogin =
-                serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
-            self.access_token = resp_login.access_token;
-            self.refresh_token = resp_login.refresh_token;
-        }
 
         cb(result);
         self
@@ -244,24 +224,16 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .post(format!("{}/api/v1/logout", self.addr))
-                .headers(self.headers().await)
                 .send()
                 .await?;
             self.parse_response(response).await
         })()
         .await;
 
-        if let Ok((status_code, _body_str)) = &result
-            && status_code.is_success()
-        {
-            self.access_token = String::new();
-            self.refresh_token = String::new();
-        }
-
         cb(result);
         self
     }
-    pub async fn refresh_tokens<F>(&mut self, req: RequestRefreshToken, mut cb: F) -> &mut Self
+    pub async fn refresh_tokens<F>(&mut self, mut cb: F) -> &mut Self
     where
         F: FnMut(StatusCodeBodyError),
     {
@@ -269,21 +241,11 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .post(format!("{}/api/v1/refresh_tokens", self.addr))
-                .json(&req)
                 .send()
                 .await?;
             self.parse_response(response).await
         })()
         .await;
-
-        if let Ok((status_code, body_str)) = &result
-            && status_code.is_success()
-        {
-            let resp_login: ResponseRefreshToken =
-                serde_json::from_str(body_str.as_str()).expect("failed to parse str to json");
-            self.access_token = resp_login.access_token;
-            self.refresh_token = resp_login.refresh_token;
-        }
 
         cb(result);
         self
@@ -298,7 +260,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .get(format!("{}/api/v1/teams", self.addr))
-                .headers(self.headers().await)
                 .json(&RequestLimitOffset { limit, offset })
                 .send()
                 .await?;
@@ -316,7 +277,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .get(format!("{}/api/v1/teams/{}", self.addr, uuid))
-                .headers(self.headers().await)
                 .send()
                 .await?;
             self.parse_response(response).await
@@ -333,7 +293,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .post(format!("{}/api/v1/teams", self.addr))
-                .headers(self.headers().await)
                 .json(&req)
                 .send()
                 .await?;
@@ -351,7 +310,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .put(format!("{}/api/v1/teams/{}", self.addr, item_id))
-                .headers(self.headers().await)
                 .json(&req)
                 .send()
                 .await?;
@@ -369,7 +327,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .delete(format!("{}/api/v1/teams/{}", self.addr, item_id))
-                .headers(self.headers().await)
                 .send()
                 .await?;
             self.parse_response(response).await
@@ -391,7 +348,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .post(format!("{}/api/v1/teams/{}/invite", self.addr, item_id))
-                .headers(self.headers().await)
                 .json(&req)
                 .send()
                 .await?;
@@ -411,7 +367,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .get(format!("{}/api/v1/tasks", self.addr))
-                .headers(self.headers().await)
                 .json(&req)
                 .send()
                 .await?;
@@ -429,7 +384,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .get(format!("{}/api/v1/tasks/{}", self.addr, item_id))
-                .headers(self.headers().await)
                 .send()
                 .await?;
             self.parse_response(response).await
@@ -446,7 +400,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .post(format!("{}/api/v1/tasks", self.addr))
-                .headers(self.headers().await)
                 .json(&req)
                 .send()
                 .await?;
@@ -464,7 +417,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .put(format!("{}/api/v1/tasks/{}", self.addr, item_id))
-                .headers(self.headers().await)
                 .json(&req)
                 .send()
                 .await?;
@@ -482,7 +434,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .delete(format!("{}/api/v1/tasks/{}", self.addr, item_id))
-                .headers(self.headers().await)
                 .send()
                 .await?;
             self.parse_response(response).await
@@ -499,7 +450,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .get(format!("{}/api/v1/tasks/{}/history", self.addr, item_id))
-                .headers(self.headers().await)
                 .send()
                 .await?;
             self.parse_response(response).await
@@ -518,7 +468,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .get(format!("{}/api/v1/users", self.addr))
-                .headers(self.headers().await)
                 .json(&RequestLimitOffset { limit, offset })
                 .send()
                 .await?;
@@ -536,7 +485,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .get(format!("{}/api/v1/users/{}", self.addr, item_id))
-                .headers(self.headers().await)
                 .send()
                 .await?;
             self.parse_response(response).await
@@ -567,7 +515,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .post(format!("{}/api/v1/users", self.addr))
-                .headers(self.headers().await)
                 .multipart(form)
                 .send()
                 .await?;
@@ -611,7 +558,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .patch(format!("{}/api/v1/users/{}", self.addr, item_id))
-                .headers(self.headers().await)
                 .multipart(form)
                 .send()
                 .await?;
@@ -629,7 +575,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .delete(format!("{}/api/v1/users/{}", self.addr, item_id))
-                .headers(self.headers().await)
                 .send()
                 .await?;
             self.parse_response(response).await
@@ -654,7 +599,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .get(format!("{}/api/v1/tasks/{}/comments", self.addr, task_id))
-                .headers(self.headers().await)
                 .json(&RequestLimitOffset { limit, offset })
                 .send()
                 .await?;
@@ -677,7 +621,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .post(format!("{}/api/v1/tasks/{}/comments", self.addr, task_id))
-                .headers(self.headers().await)
                 .json(&req)
                 .send()
                 .await?;
@@ -695,7 +638,6 @@ impl<'a> Client<'a> {
             let response = self
                 .client
                 .delete(format!("{}/api/v1/tasks/comment/{}", self.addr, item_id))
-                .headers(self.headers().await)
                 .send()
                 .await?;
             self.parse_response(response).await

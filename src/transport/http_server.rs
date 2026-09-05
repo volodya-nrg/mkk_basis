@@ -11,6 +11,7 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::adapter::email::EmailSender;
@@ -61,6 +62,13 @@ where
         Ok(())
     }
     fn get_router(&self) -> Router {
+        let cors = CorsLayer::new()
+            // .allow_origin(Any)
+            // .allow_methods(Any)
+            // .allow_headers(Any)
+            .allow_credentials(true); // нужно для куки
+        let layer_auth =
+            axum::middleware::from_fn_with_state(self.use_case.clone(), middleware::auth::auth);
         let public = Router::new()
             .route("/", get(etc::Handlers::index))
             .route("/health", get(etc::Handlers::health))
@@ -69,7 +77,10 @@ where
             // auth
             .route("/api/v1/register", post(auth::Handlers::register))
             .route("/api/v1/login", post(auth::Handlers::login))
-            .route("/api/v1/logout", post(auth::Handlers::logout))
+            .route(
+                "/api/v1/logout",
+                post(auth::Handlers::logout).layer(layer_auth.clone()),
+            )
             .route(
                 "/api/v1/refresh_tokens",
                 post(auth::Handlers::refresh_tokens),
@@ -77,45 +88,62 @@ where
             // teams
             .route(
                 "/api/v1/teams",
-                get(teams::Handlers::list).post(teams::Handlers::create),
+                get(teams::Handlers::list)
+                    .post(teams::Handlers::create)
+                    .layer(layer_auth.clone()),
             )
             .route(
                 "/api/v1/teams/{id}",
                 get(teams::Handlers::one)
                     .put(teams::Handlers::update)
-                    .delete(teams::Handlers::delete),
+                    .delete(teams::Handlers::delete)
+                    .layer(layer_auth.clone()),
             )
-            .route("/api/v1/teams/{id}/invite", post(teams::Handlers::invite))
+            .route(
+                "/api/v1/teams/{id}/invite",
+                post(teams::Handlers::invite).layer(layer_auth.clone()),
+            )
             // tasks
             .route(
                 "/api/v1/tasks",
-                get(tasks::Handlers::list).post(tasks::Handlers::create),
+                get(tasks::Handlers::list)
+                    .post(tasks::Handlers::create)
+                    .layer(layer_auth.clone()),
             )
             .route(
                 "/api/v1/tasks/{id}",
                 get(tasks::Handlers::one)
                     .put(tasks::Handlers::update)
-                    .delete(tasks::Handlers::delete),
+                    .delete(tasks::Handlers::delete)
+                    .layer(layer_auth.clone()),
             )
-            .route("/api/v1/tasks/{id}/history", get(tasks::Handlers::history))
+            .route(
+                "/api/v1/tasks/{id}/history",
+                get(tasks::Handlers::history).layer(layer_auth.clone()),
+            )
             .route(
                 "/api/v1/tasks/{id}/comments",
-                get(task_comments::Handlers::list).post(task_comments::Handlers::create),
+                get(task_comments::Handlers::list)
+                    .post(task_comments::Handlers::create)
+                    .layer(layer_auth.clone()),
             )
             .route(
                 "/api/v1/tasks/comment/{id}",
-                delete(task_comments::Handlers::delete),
+                delete(task_comments::Handlers::delete).layer(layer_auth.clone()),
             )
             // users
             .route(
                 "/api/v1/users",
-                get(users::Handlers::list).post(users::Handlers::create),
+                get(users::Handlers::list)
+                    .post(users::Handlers::create)
+                    .layer(layer_auth.clone()),
             )
             .route(
                 "/api/v1/users/{id}",
                 get(users::Handlers::one)
                     .patch(users::Handlers::update)
-                    .delete(users::Handlers::delete),
+                    .delete(users::Handlers::delete)
+                    .layer(layer_auth.clone()),
             );
         let static_loc = Router::new()
             .nest_service("/js", ServeDir::new("./web/js"))
@@ -128,6 +156,7 @@ where
             .merge(api)
             .merge(static_loc)
             .route_layer(AxumMiddleware::from_fn(middleware::err::err))
+            .layer(cors)
             // .layer(tower_http::limit::RequestBodyLimitLayer::new(20 * 1024 * 1024)) // 20MB лимит. Если будет больше, то обработка multipart сервером выдаст ошибку.
             .fallback(etc::Handlers::page404)
             .with_state(self.use_case.clone())

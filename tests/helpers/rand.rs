@@ -12,7 +12,7 @@ use mkk_basis::adapter::db::postgres::tables::tasks::Status as TaskStatuses;
 use mkk_basis::adapter::db::postgres::tables::users::Role as UserRoles;
 use mkk_basis::adapter::helpers;
 use mkk_basis::transport::models::{
-    RequestLogin, RequestRefreshToken, RequestRegister, RequestTask, RequestTaskComment,
+    RequestLogin, RequestRegister, RequestTask, RequestTaskComment,
     RequestTeam, RequestTeamInvite, RequestUserCreate, RequestUserUpdate,
 };
 
@@ -99,10 +99,6 @@ pub fn request_user_update() -> RequestUserUpdate {
         avatar: None,
         is_remove_avatar: bool(),
     }
-}
-
-pub fn request_refresh_token() -> RequestRefreshToken {
-    RequestRefreshToken { token: str() }
 }
 
 pub fn request_task_comment() -> RequestTaskComment {

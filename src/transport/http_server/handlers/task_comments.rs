@@ -1,4 +1,4 @@
-use axum::Json;
+use axum::{Extension, Json};
 use axum::extract::Path;
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -9,10 +9,10 @@ use uuid::Uuid;
 
 use crate::adapter::email::EmailSender;
 use crate::transport::{
-    extractor::AuthenticatedUser,
     mapper,
     models::{RequestLimitOffset, RequestTaskComment, ResponseTaskCommentsList},
 };
+use crate::transport::models::AuthUser;
 use crate::usecase::UseCase;
 
 pub struct Handlers<ES> {
@@ -24,7 +24,8 @@ where
     ES: EmailSender,
 {
     pub async fn list(
-        _user: AuthenticatedUser<ES>,
+        // _user: AuthenticatedUser<ES>,
+        Extension(_user): Extension<AuthUser>,
         Path(task_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestLimitOffset>,
@@ -48,7 +49,8 @@ where
             )
     }
     pub async fn create(
-        user: AuthenticatedUser<ES>,
+        // user: AuthenticatedUser<ES>,
+        Extension(user): Extension<AuthUser>,
         Path(task_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestTaskComment>,
@@ -78,7 +80,8 @@ where
         )
     }
     pub async fn delete(
-        _user: AuthenticatedUser<ES>,
+        // _user: AuthenticatedUser<ES>,
+        Extension(_user): Extension<AuthUser>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
     ) -> impl IntoResponse {

@@ -1,4 +1,4 @@
-use axum::Json;
+use axum::{Extension, Json};
 use axum::extract::multipart::MultipartError;
 use axum::extract::{Multipart, Path, State};
 use axum::http::StatusCode;
@@ -13,10 +13,9 @@ use uuid::Uuid;
 use crate::adapter::{email::EmailSender, helpers};
 use crate::err_msg::ErrMsg;
 use crate::transport::{
-    extractor::AuthenticatedUser,
     mapper,
     models::{
-        RequestLimitOffset, RequestUserCreate, RequestUserUpdate, ResponseMsg, ResponseUsersList,
+        RequestLimitOffset, RequestUserCreate, RequestUserUpdate, ResponseMsg, ResponseUsersList, AuthUser,
     },
 };
 use crate::usecase::UseCase;
@@ -35,7 +34,8 @@ where
     ES: EmailSender,
 {
     pub async fn list(
-        _user: AuthenticatedUser<ES>,
+        // _user: AuthenticatedUser<ES>,
+        Extension(_user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestLimitOffset>,
     ) -> impl IntoResponse {
@@ -55,7 +55,8 @@ where
             )
     }
     pub async fn one(
-        _user: AuthenticatedUser<ES>,
+        //_user: AuthenticatedUser<ES>,
+        Extension(_user): Extension<AuthUser>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
     ) -> impl IntoResponse {
@@ -65,7 +66,8 @@ where
         )
     }
     pub async fn create(
-        _user: AuthenticatedUser<ES>,
+        //_user: AuthenticatedUser<ES>,
+        Extension(_user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         multipart: Multipart,
     ) -> impl IntoResponse {
@@ -112,7 +114,8 @@ where
         )
     }
     pub async fn update(
-        _user: AuthenticatedUser<ES>,
+        //_user: AuthenticatedUser<ES>,
+        Extension(_user): Extension<AuthUser>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
         multipart: Multipart,
@@ -159,7 +162,8 @@ where
         )
     }
     pub async fn delete(
-        _user: AuthenticatedUser<ES>,
+        //_user: AuthenticatedUser<ES>,
+        Extension(_user): Extension<AuthUser>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
     ) -> impl IntoResponse {

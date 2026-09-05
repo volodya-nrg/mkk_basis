@@ -202,16 +202,12 @@ where
             });
         }
 
-        let result = self.users_repo.by_email(email.clone()).await;
-        let user = match result {
+        let user = match self.users_repo.by_email(email.clone()).await {
             Ok(v) => v,
             Err(e) => {
+                // если пользователь не найден, то нужно перенаправлять его на страницу регистрации
                 if let RepositoryError::NotFoundRow = e {
-                    return Err(UseCaseError::ForTransport {
-                        status_code: StatusCode::BAD_REQUEST,
-                        public_err: ErrMsg::NotFoundUser.to_string(),
-                        internal_err: Some(format!("user send other email ({})", email)),
-                    });
+                    return Err(UseCaseError::UserNotExists);
                 }
                 return Err(UseCaseError::Common(e.to_string()));
             }

@@ -11,7 +11,6 @@ pub mod users;
 use axum::Json;
 use axum::response::{IntoResponse, Response};
 use http::StatusCode;
-use serde_json::json;
 use thiserror::Error as ThisError;
 
 use crate::adapter::{
@@ -20,6 +19,7 @@ use crate::adapter::{
     jwt::Jwt as JWTService,
 };
 use crate::err_msg::ErrMsg;
+use crate::transport::models::ResponseMsg;
 
 #[derive(Clone)] // из-за axum-state
 pub struct UseCase<ES> {
@@ -60,6 +60,8 @@ pub enum UseCaseError {
         public_err: String,
         internal_err: Option<String>,
     },
+    #[error("user not found")]
+    UserNotExists,
 }
 impl IntoResponse for UseCaseError {
     fn into_response(self) -> Response {
@@ -83,6 +85,10 @@ impl IntoResponse for UseCaseError {
                     internal_error_result = v;
                 }
             }
+            UseCaseError::UserNotExists => {
+                public_error_result = ErrMsg::NotFoundUser.to_string();
+                status_code_result = StatusCode::NOT_FOUND;
+            }
         }
 
         if !internal_error_result.is_empty() {
@@ -91,7 +97,9 @@ impl IntoResponse for UseCaseError {
 
         (
             status_code_result,
-            Json(json!({"message": public_error_result})),
+            Json(ResponseMsg {
+                msg: public_error_result,
+            }),
         )
             .into_response()
     }

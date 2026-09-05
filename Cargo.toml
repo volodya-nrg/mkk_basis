@@ -4,32 +4,33 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-uuid = { version = "1.24.0", features = ["v4", "serde"] }
-chrono = { version = "0.4.45", features = ["serde"] }
-sqlx = { version = "0.9.0", features = ["postgres", "chrono", "runtime-tokio", "macros", "uuid"] }
-serde = { version = "1.0.228", features = ["derive"] }
-config = "0.15.25"
-tokio = { version = "1.52.3", features = ["full"] }
-clap = { version = "4.6.1", features = ["derive"] }
-log = "0.4.33"
-axum = { version = "0.8.9", features = ["multipart"] }
-serde_json = "1.0.151"
-env_logger = "0.11.11"
-reqwest = { version = "0.13.4", features = ["form", "json", "multipart", "stream"] }
-tower-http = { version = "0.7.0", features = ["fs", "limit"] }
 argon2 = "0.6.0"
-email_address = "0.2.9"
-http = "1.5.0"
+axum-extra = { version = "0.12.6", features = ["cookie"] }
+axum-server = { version = "0.8.0", features = ["tls-rustls-no-provider"] }
+axum = { version = "0.8.9", features = ["multipart"] }
+chrono = { version = "0.4.45", features = ["serde"] }
+clap = { version = "4.6.1", features = ["derive"] }
+config = "0.15.25"
 ctor = "1.0.12"
-thiserror = "2.0.20"
+email_address = "0.2.9"
+env_logger = "0.11.11"
+http = "1.5.0"
+image = "0.25.10"
 jsonwebtoken = { version = "11", features = ["aws_lc_rs"] }
+lettre = "0.11.23"
+log = "0.4.33"
 rand = "0.10.2"
 rcgen = "0.14.9"
-axum-server = { version = "0.8.0", features = ["tls-rustls-no-provider"] }
-rustls = "0.23.43"
+reqwest = { version = "0.13.4", features = ["form", "json", "multipart", "stream", "cookies"] }
 rustls-pemfile = "2.2.0"
-lettre = "0.11.23"
-image = "0.25.10"
+rustls = "0.23.43"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.151"
+sqlx = { version = "0.9.0", features = ["postgres", "chrono", "runtime-tokio", "macros", "uuid"] }
 strum = "0.28.0"
 strum_macros = "0.28.0"
 testcontainers-modules = { version = "0.15.0", features = ["postgres"] }
+thiserror = "2.0.20"
+tokio = { version = "1.52.3", features = ["full"] }
+tower-http = { version = "0.7.0", features = ["fs", "limit", "cors"] }
+uuid = { version = "1.24.0", features = ["v4", "serde"] }

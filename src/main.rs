@@ -1,3 +1,5 @@
+extern crate core;
+
 mod adapter;
 mod consts;
 mod err_msg;
@@ -74,7 +76,11 @@ async fn run(config_filepath: &str) -> Result<(), String> {
         UseCase::new(
             cfg.addr,
             PostgresService::new(pool),
-            JWTService::new(private_key_bytes, 60 * 20, 60 * 60 * 24),
+            JWTService::new(
+                private_key_bytes,
+                consts::ACCESS_TOKEN_TTL_SEC,
+                consts::REFRESH_TOKEN_TTL_SEC,
+            ),
             EmailService::new(
                 cfg.email.host,
                 cfg.email.login,

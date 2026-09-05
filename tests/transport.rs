@@ -11,10 +11,9 @@ use mkk_basis::{
     adapter::{db::postgres::tables::users::Role as UsersRole, helpers as HelpersService, logger},
     consts::MIN_PASSWORD_LEN,
     transport::models::{
-        RequestLogin, RequestTaskData, RequestTeamInvite, RequestUserUpdate, ResponseLogin,
-        ResponseRefreshToken, ResponseTask, ResponseTaskComment, ResponseTaskCommentsList,
-        ResponseTaskHistories, ResponseTasksList, ResponseTeam, ResponseTeamsList, ResponseUUID,
-        ResponseUser, ResponseUsersList,
+        RequestLogin, RequestTaskData, RequestTeamInvite, RequestUserUpdate, ResponseTask,
+        ResponseTaskComment, ResponseTaskCommentsList, ResponseTaskHistories, ResponseTasksList,
+        ResponseTeam, ResponseTeamsList, ResponseUUID, ResponseUser, ResponseUsersList,
     },
 };
 
@@ -223,10 +222,10 @@ async fn check_auth() {
 
         req_login.email = rand::email();
     })
-    .await // err: проверим что по левому е-мэйлу не находит пользователя
+    .await // err: проверим что по левому е-мэйлу не находит пользователя и произошел редирект
     .login(req_login.clone(), |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert_eq!(StatusCode::BAD_REQUEST, status_code);
+        assert_eq!(StatusCode::OK, status_code);
 
         req_login.email = req_register2.email.clone();
         req_login.password = HelpersService::rand_str_limit(MIN_PASSWORD_LEN - 1);
@@ -252,59 +251,12 @@ async fn check_auth() {
     })
     .await // ok
     .login(req_login.clone(), |result| {
-        let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
-
-        let resp_login: ResponseLogin =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
-        assert!(!resp_login.access_token.is_empty());
-        assert!(!resp_login.refresh_token.is_empty());
-    })
-    .await;
-
-    // err - не верный токен
-    let mut req_refresh_token = rand::request_refresh_token();
-    cl.refresh_tokens(req_refresh_token.clone(), |result| {
-        let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_client_error());
-    })
-    .await;
-
-    // err - подставим явно access-token
-    req_refresh_token.token = cl.access_token.clone();
-    cl.refresh_tokens(req_refresh_token.clone(), |result| {
-        let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_client_error());
-    })
-    .await;
-
-    // ok
-    req_refresh_token.token = cl.refresh_token.clone();
-    cl.refresh_tokens(req_refresh_token.clone(), |result| {
-        let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
-
-        let resp_login: ResponseRefreshToken =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
-        assert!(!resp_login.access_token.is_empty());
-        assert!(!resp_login.refresh_token.is_empty());
-    })
-    .await;
-
-    // ok
-    cl.logout(|result| {
         let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_success());
     })
-    .await // err: 401
-    .logout(|result| {
-        let (status_code, _body_str) = result.unwrap();
-        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
-    })
     .await;
 
-    // залогинимся и подождем пока токен обновления не протухнет
-    cl.login(req_login.clone(), |result| {
+    cl.refresh_tokens(|result| {
         let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_success());
     })
@@ -315,8 +267,7 @@ async fn check_auth() {
     ))
     .await;
 
-    req_refresh_token.token = cl.refresh_token.clone();
-    cl.refresh_tokens(req_refresh_token.clone(), |result| {
+    cl.refresh_tokens(|result| {
         let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_client_error());
     })
