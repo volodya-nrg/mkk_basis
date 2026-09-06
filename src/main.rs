@@ -3,6 +3,7 @@ extern crate core;
 mod adapter;
 mod consts;
 mod err_msg;
+mod protos;
 mod transport;
 mod usecase;
 
@@ -28,6 +29,7 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
+    // let msg = protos::service::MyMessage::default();
     if let Err(e) = run(&Args::parse().config).await {
         log::error!("failed to run app: {e}");
         process::exit(1);
