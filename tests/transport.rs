@@ -11,9 +11,9 @@ use mkk_basis::{
     adapter::{db::postgres::tables::users::Role as UsersRole, helpers as HelpersService, logger},
     consts::MIN_PASSWORD_LEN,
     transport::models::{
-        RequestLogin, RequestTaskData, RequestTeamInvite, RequestUserUpdate, ResponseTask,
-        ResponseTaskComment, ResponseTaskCommentsList, ResponseTaskHistories, ResponseTasksList,
-        ResponseTeam, ResponseTeamsList, ResponseUUID, ResponseUser, ResponseUsersList,
+        RequestLogin, RequestTaskData, RequestTeamInvite, RequestUserUpdate, ResponseMsg,
+        ResponseUUID, Task, TaskComment, TaskCommentsList, TaskHistories, TasksList, Team,
+        TeamsList, User, UsersList,
     },
 };
 
@@ -50,7 +50,9 @@ async fn check_etc() {
     .health(|result| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
-        assert!(body_str.is_empty());
+
+        let resp: ResponseMsg = serde_json::from_str(body_str.as_str()).unwrap();
+        assert_eq!("ok", resp.msg);
     })
     .await
     .page404(|result| {
@@ -331,8 +333,7 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).unwrap();
         user_id = resp.uuid;
     })
     .await
@@ -347,14 +348,13 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp_team_actual: ResponseTeam =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp_team_actual: Team = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(user_id, resp_team_actual.created_by);
         team_id = resp_team_actual.team_id;
     })
     .await // err - нельзя создать дубликат
     .teams_create(req_team.clone(), |result| {
-        let (status_code, body_str) = result.unwrap();
+        let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_server_error());
     })
     .await // ok
@@ -362,8 +362,7 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTeamsList =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: TeamsList = serde_json::from_str(body_str.as_str()).unwrap();
         assert!(!resp.items.is_empty());
         assert!(resp.total > 0);
     })
@@ -372,8 +371,7 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTeamsList =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: TeamsList = serde_json::from_str(body_str.as_str()).unwrap();
         assert!(resp.items.is_empty());
         assert!(resp.total > 0);
     })
@@ -382,13 +380,12 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTeam =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: Team = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(team_id, resp.team_id)
     })
     .await // err
     .teams_one(Uuid::new_v4(), |result| {
-        let (status_code, body_str) = result.unwrap();
+        let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::NOT_FOUND, status_code);
 
         req_team.name = rand::str()
@@ -398,8 +395,7 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTeam =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: Team = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(req_team.name, resp.name)
     })
     .await // ok
@@ -427,8 +423,7 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).unwrap();
         admin_id = resp.uuid;
     })
     .await
@@ -436,8 +431,7 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).unwrap();
         owner_id = resp.uuid;
     })
     .await
@@ -445,8 +439,7 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).unwrap();
         other_id = resp.uuid;
     })
     .await;
@@ -478,8 +471,7 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTeam =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: Team = serde_json::from_str(body_str.as_str()).unwrap();
         team_id = resp.team_id;
     })
     .await
@@ -652,8 +644,7 @@ async fn check_tasks() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).unwrap();
         user_id1 = resp.uuid;
     })
     .await
@@ -661,8 +652,7 @@ async fn check_tasks() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).unwrap();
         user_id2 = resp.uuid;
     })
     .await;
@@ -677,8 +667,7 @@ async fn check_tasks() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp_ream_actual: ResponseTeam =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp_ream_actual: Team = serde_json::from_str(body_str.as_str()).unwrap();
         team_id = resp_ream_actual.team_id;
 
         req_task1.created_by = user_id1;
@@ -694,8 +683,7 @@ async fn check_tasks() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp_task: ResponseTask =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp_task: Task = serde_json::from_str(body_str.as_str()).unwrap();
         task_id = resp_task.task_id;
     })
     .await // err: с теми же данными
@@ -756,8 +744,7 @@ async fn check_tasks() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTasksList =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: TasksList = serde_json::from_str(body_str.as_str()).unwrap();
         assert!(!resp.items.is_empty());
         assert!(resp.total > 0);
 
@@ -769,8 +756,7 @@ async fn check_tasks() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTasksList =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: TasksList = serde_json::from_str(body_str.as_str()).unwrap();
         assert!(resp.items.is_empty());
         assert!(resp.total > 0);
 
@@ -783,8 +769,7 @@ async fn check_tasks() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTasksList =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: TasksList = serde_json::from_str(body_str.as_str()).unwrap();
         assert!(resp.items.is_empty());
         assert_eq!(0, resp.total);
     })
@@ -798,8 +783,7 @@ async fn check_tasks() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTask =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: Task = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(task_id, resp.task_id)
     })
     .await // ok: обновление происходит корректно, т.к. user_id явл. членом команды
@@ -807,8 +791,7 @@ async fn check_tasks() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTask =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: Task = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(req_task2.status, resp.status);
         assert_eq!(task_id, resp.task_id);
     })
@@ -827,8 +810,7 @@ async fn check_tasks() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTaskHistories =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: TaskHistories = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(3, resp.items.len());
     })
     .await;
@@ -881,8 +863,7 @@ async fn check_task_comments() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).unwrap();
         user_id = resp.uuid;
     })
     .await
@@ -895,8 +876,7 @@ async fn check_task_comments() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp_ream_actual: ResponseTeam =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp_ream_actual: Team = serde_json::from_str(body_str.as_str()).unwrap();
         team_id = resp_ream_actual.team_id;
 
         req_task.created_by = user_id;
@@ -908,8 +888,7 @@ async fn check_task_comments() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp_task: ResponseTask =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp_task: Task = serde_json::from_str(body_str.as_str()).unwrap();
         task_id = resp_task.task_id;
     })
     .await;
@@ -919,8 +898,7 @@ async fn check_task_comments() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTaskComment =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: TaskComment = serde_json::from_str(body_str.as_str()).unwrap();
 
         assert_ne!(Uuid::nil(), resp.task_comment_id);
         assert_eq!(task_id, resp.task_id);
@@ -934,8 +912,7 @@ async fn check_task_comments() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTaskComment =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: TaskComment = serde_json::from_str(body_str.as_str()).unwrap();
 
         assert_ne!(Uuid::nil(), resp.task_comment_id);
         assert_eq!(task_id, resp.task_id);
@@ -949,8 +926,7 @@ async fn check_task_comments() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTaskCommentsList =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: TaskCommentsList = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(2, resp.items.len());
         assert_eq!(2, resp.total);
     })
@@ -959,8 +935,7 @@ async fn check_task_comments() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTaskCommentsList =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: TaskCommentsList = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(2, resp.items.len());
         assert_eq!(2, resp.total);
     })
@@ -969,8 +944,7 @@ async fn check_task_comments() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTaskCommentsList =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: TaskCommentsList = serde_json::from_str(body_str.as_str()).unwrap();
         assert!(resp.items.is_empty());
         assert_eq!(2, resp.total);
     })
@@ -979,8 +953,7 @@ async fn check_task_comments() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTaskCommentsList =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: TaskCommentsList = serde_json::from_str(body_str.as_str()).unwrap();
         assert!(resp.items.is_empty());
         assert_eq!(0, resp.total);
     })
@@ -999,8 +972,7 @@ async fn check_task_comments() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTaskCommentsList =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: TaskCommentsList = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(1, resp.items.len());
         assert_eq!(1, resp.total);
     })
@@ -1014,8 +986,7 @@ async fn check_task_comments() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseTaskCommentsList =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: TaskCommentsList = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(0, resp.items.len());
         assert_eq!(0, resp.total);
     })
@@ -1074,8 +1045,7 @@ async fn check_users() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).unwrap();
         owner_id = resp.uuid;
     })
     .await
@@ -1105,8 +1075,7 @@ async fn check_users() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp_user_actual: ResponseUser =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp_user_actual: User = serde_json::from_str(body_str.as_str()).unwrap();
         // cравниваем частями, т.к. типы разные и где-то данных может не быть, а где-то быть
         assert_eq!(req_user_create.email, resp_user_actual.email);
         assert_eq!(req_user_create.name, resp_user_actual.name);
@@ -1135,8 +1104,7 @@ async fn check_users() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp_user_actual: ResponseUser =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp_user_actual: User = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(req_user_create.email, resp_user_actual.email); // !
         assert_eq!(req_user_update.name, resp_user_actual.name);
         assert!(resp_user_actual.role.is_none());
@@ -1147,8 +1115,7 @@ async fn check_users() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let list: ResponseUsersList =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let list: UsersList = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(list.items.len(), 0);
         assert!(list.total > 0);
     })
@@ -1157,8 +1124,7 @@ async fn check_users() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUsersList =
-            serde_json::from_str(body_str.as_str()).expect(consts::ERR_PARSE_JSON);
+        let resp: UsersList = serde_json::from_str(body_str.as_str()).unwrap();
         assert!(resp.items.len() > 0);
         assert!(resp.total > 0);
         assert!(

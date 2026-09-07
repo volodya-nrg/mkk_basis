@@ -4,7 +4,9 @@ use std::fmt::Formatter;
 use uuid::Uuid;
 
 use crate::adapter::db::{
-    errors::RepositoryError, models::User, postgres::table_basic::TableBasic,
+    errors::RepositoryError,
+    models::{List, User},
+    postgres::table_basic::TableBasic,
 };
 
 pub enum Role {
@@ -50,17 +52,7 @@ impl Users {
             },
         }
     }
-    fn get_valid_role(&self, role: Option<String>) -> Option<String> {
-        let role_loc = role.clone();
-        if let Some(v) = role
-            && v == Role::Null.to_string()
-        {
-            None
-        } else {
-            role_loc
-        }
-    }
-    pub async fn list(&self, limit: i32, offset: i32) -> Result<(Vec<User>, i64), RepositoryError> {
+    pub async fn list(&self, limit: i32, offset: i32) -> Result<List<User>, RepositoryError> {
         let mut common_builder = QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
             self.table_basic.fields.join(","),
@@ -97,7 +89,7 @@ impl Users {
             .await
             .map_err(RepositoryError::TransactionError)?;
 
-        Ok((items, total))
+        Ok(List(items, total))
     }
     pub async fn one(&self, item_id: Uuid) -> Result<User, RepositoryError> {
         let query = format!(
@@ -189,5 +181,15 @@ impl Users {
                     Err(RepositoryError::ExpectedOneRow(rows))
                 }
             })
+    }
+    fn get_valid_role(&self, role: Option<String>) -> Option<String> {
+        let role_loc = role.clone();
+        if let Some(v) = role
+            && v == Role::Null.to_string()
+        {
+            None
+        } else {
+            role_loc
+        }
     }
 }

@@ -23,17 +23,16 @@ impl Users {
             .list(limit, offset)
             .await
             .map_err(|e| e.into())
-            .map(|(items, total)| {
+            .map(|list| {
                 (
-                    items.into_iter().map(mapper::user_db_to_user_uc).collect(),
-                    total,
+                    list.0.into_iter().map(mapper::user_db_to_user_uc).collect(),
+                    list.1,
                 )
             })
     }
     pub async fn one(&self, item_id: Uuid) -> Result<User, UseCaseError> {
-        Ok(mapper::user_db_to_user_uc(
-            self.users_repo.one(item_id).await?, // тут срабатывает авто конвертация
-        ))
+        let user = self.users_repo.one(item_id).await?;
+        Ok(mapper::user_db_to_user_uc(user))
     }
     pub async fn create(&self, mut user: UserCreate) -> Result<Uuid, UseCaseError> {
         if user.email.is_empty() {
@@ -53,7 +52,8 @@ impl Users {
 
         user.password = self.create_password_hash(user.password)?;
 
-        self.users_repo
+        Ok(self
+            .users_repo
             .create(UserDB {
                 user_id: Default::default(),
                 email: user.email,
@@ -65,8 +65,7 @@ impl Users {
                 created_at: Default::default(),
                 updated_at: Default::default(),
             })
-            .await
-            .map_err(|e| e.into())
+            .await?)
     }
     pub async fn update(&self, user: UserUpdate) -> Result<(), UseCaseError> {
         let user_db = self.users_repo.one(user.user_id).await?;

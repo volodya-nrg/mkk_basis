@@ -91,13 +91,13 @@ pub struct RequestTaskComment {
 // ------------------------------------
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct ResponseTeamsList {
-    pub items: Vec<ResponseTeam>,
+pub struct TeamsList {
+    pub items: Vec<Team>,
     pub total: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct ResponseTeam {
+pub struct Team {
     pub team_id: Uuid,
     pub name: String,
     pub created_by: Uuid,
@@ -106,13 +106,13 @@ pub struct ResponseTeam {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct ResponseTasksList {
-    pub items: Vec<ResponseTask>,
+pub struct TasksList {
+    pub items: Vec<Task>,
     pub total: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct ResponseTask {
+pub struct Task {
     pub task_id: Uuid,
     pub name: String,
     pub description: Option<String>,
@@ -125,12 +125,12 @@ pub struct ResponseTask {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct ResponseTaskHistories {
-    pub items: Vec<ResponseTaskHistory>,
+pub struct TaskHistories {
+    pub items: Vec<TaskHistory>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct ResponseTaskHistory {
+pub struct TaskHistory {
     pub task_history_id: Uuid,
     pub task_id: Uuid,
     pub user_id: Uuid,
@@ -144,7 +144,7 @@ pub struct ResponseUUID {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct ResponseUser {
+pub struct User {
     pub user_id: Uuid,
     pub email: String,
     pub name: Option<String>,
@@ -155,13 +155,13 @@ pub struct ResponseUser {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct ResponseUsersList {
-    pub items: Vec<ResponseUser>,
+pub struct UsersList {
+    pub items: Vec<User>,
     pub total: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct ResponseTaskComment {
+pub struct TaskComment {
     pub task_comment_id: Uuid,
     pub task_id: Uuid,
     pub user_id: Uuid,
@@ -170,8 +170,8 @@ pub struct ResponseTaskComment {
     pub updated_at: DateTime<Utc>,
 }
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct ResponseTaskCommentsList {
-    pub items: Vec<ResponseTaskComment>,
+pub struct TaskCommentsList {
+    pub items: Vec<TaskComment>,
     pub total: u32,
 }
 #[derive(Debug, Serialize, Deserialize, PartialEq)]

@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::adapter::db::{
     errors::RepositoryError,
-    models::{Task, TaskData},
+    models::{List, Task, TaskData},
     postgres::table_basic::TableBasic,
 };
 
@@ -60,7 +60,7 @@ impl Tasks {
             },
         }
     }
-    pub async fn list(&self, data: TaskData) -> Result<(Vec<Task>, i64), RepositoryError> {
+    pub async fn list(&self, data: TaskData) -> Result<List<Task>, RepositoryError> {
         let mut query_common = format!(
             "SELECT {} FROM {}",
             self.table_basic.fields.join(","),
@@ -111,7 +111,7 @@ impl Tasks {
             .begin()
             .await
             .map_err(RepositoryError::TransactionError)?;
-        let count = prepare_count
+        let total = prepare_count
             .fetch_one(&mut *tx)
             .await
             .map_err(RepositoryError::FailedToCount)?;
@@ -139,7 +139,7 @@ impl Tasks {
             .await
             .map_err(RepositoryError::TransactionError)?;
 
-        Ok((items, count))
+        Ok(List(items, total))
     }
     pub async fn one(&self, item_id: Uuid) -> Result<Task, RepositoryError> {
         let query = format!(

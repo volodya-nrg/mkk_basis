@@ -65,7 +65,7 @@ pub enum UseCaseError {
 }
 impl IntoResponse for UseCaseError {
     fn into_response(self) -> Response {
-        let mut public_error_result = String::from("Server internal error");
+        let mut public_error_result = String::from("server internal error");
         let mut internal_error_result = String::new();
         let mut status_code_result = StatusCode::INTERNAL_SERVER_ERROR;
 

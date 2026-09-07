@@ -2,7 +2,9 @@ use sqlx::{Pool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
 
 use crate::adapter::db::{
-    errors::RepositoryError, models::Team, postgres::table_basic::TableBasic,
+    errors::RepositoryError,
+    models::{List, Team},
+    postgres::table_basic::TableBasic,
 };
 
 #[derive(Clone)] // из-за axum-state
@@ -27,7 +29,7 @@ impl Teams {
             },
         }
     }
-    pub async fn list(&self, limit: i32, offset: i32) -> Result<(Vec<Team>, i64), RepositoryError> {
+    pub async fn list(&self, limit: i32, offset: i32) -> Result<List<Team>, RepositoryError> {
         let mut common_builder = QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
             self.table_basic.fields.join(","),
@@ -65,7 +67,7 @@ impl Teams {
             .await
             .map_err(RepositoryError::TransactionError)?;
 
-        Ok((items, total))
+        Ok(List(items, total))
     }
     pub async fn one(&self, item_id: Uuid) -> Result<Team, RepositoryError> {
         let query = format!(

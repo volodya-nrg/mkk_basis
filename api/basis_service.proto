@@ -1,17 +1,178 @@
 syntax = "proto3";
 
-package mypackage;
+package mkk_basis_service.v1;
 
-service MyService {
-  rpc GetUser (GetUserRequest) returns (User);
+import "google/protobuf/empty.proto";
+import "google/protobuf/wrappers.proto";
+
+// services
+service AuthService {
+  rpc Register(RequestRegister) returns (ResponseUUID) {}
+  rpc RegisterConfirm(RequestRegisterConfirm) returns (google.protobuf.Empty) {}
+  rpc Login(RequestLogin) returns (google.protobuf.Empty) {}
+  rpc Logout(google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  rpc RefreshTokens(google.protobuf.Empty) returns (google.protobuf.Empty) {}
+}
+service EtcService {
+  rpc Health(google.protobuf.Empty) returns (ResponseMsg) {}
+}
+service TaskCommentsService {
+  rpc List(RequestLimitOffset) returns (TaskCommentsList) {}
+  rpc Create(RequestTaskComment) returns (TaskComment) {}
+  rpc Delete(RequestUUID) returns (google.protobuf.Empty) {}
+}
+service TaskService {
+  rpc List(RequestTaskData) returns (TasksList) {}
+  rpc One(RequestUUID) returns (Task) {}
+  rpc Create(RequestTask) returns (Task) {}
+  rpc Update(RequestTask) returns (Task) {}
+  rpc Delete(RequestUUID) returns (google.protobuf.Empty) {}
+  rpc History(RequestUUID) returns (TaskHistories) {}
+}
+service TeamsService {
+  rpc List(RequestLimitOffset) returns (TeamsList) {}
+  rpc One(RequestUUID) returns (Team) {}
+  rpc Create(RequestTeam) returns (Team) {}
+  rpc Update(RequestTeam) returns (Team) {}
+  rpc Delete(RequestUUID) returns (google.protobuf.Empty) {}
+  rpc Invite(RequestTeamInvite) returns (google.protobuf.Empty) {}
+}
+service UsersService {
+  rpc List(RequestLimitOffset) returns (UsersList) {}
+  rpc One(RequestUUID) returns (User) {}
+  rpc Create(RequestUserCreate) returns (User) {}
+  rpc Update(RequestUserUpdate) returns (User) {}
+  rpc Delete(RequestUUID) returns (google.protobuf.Empty) {}
 }
 
-message GetUserRequest {
-  int32 id = 1;
+// requests
+message RequestUUID {
+  string value = 1;
+}
+message RequestRegister {
+  string email = 1;
+  string password = 2;
+  string password_confirm = 3;
+  bool agreement = 4;
+  bool privacy_policy = 5;
+}
+message RequestRegisterConfirm {
+  string email = 1;
+  string code = 2;
+}
+message RequestLogin {
+  string email = 1;
+  string password = 2;
+}
+message RequestLimitOffset{
+  int32 limit = 1;
+  int32 offset = 2;
+}
+message RequestTaskComment{
+  string msg = 1;
+}
+message RequestTaskData{
+  int32 limit = 1;
+  int32 offset = 2;
+  string team_id = 3;
+  string assignee_id = 4;
+  string status = 5;
+}
+message RequestTask{
+  string name = 1;
+  string description = 2;
+  string created_by = 3;
+  string team_id = 4;
+  string assignee_id = 5;
+  string status = 6;
+}
+message RequestTeam{
+  string name = 1;
+}
+message RequestTeamInvite{
+  string user_id = 1;
+}
+message RequestUserCreate{
+  string email = 1;
+  string password = 2;
+  string name = 3;
+  string role = 4;
+  string avatar = 5;
+}
+message RequestUserUpdate{
+  string email = 1;
+  string password = 2;
+  string name = 3;
+  string role = 4;
+  string avatar = 5;
+  bool is_remove_avatar = 6;
 }
 
-message User {
-  int32 id = 1;
+// responses
+message ResponseUUID {
+  string value = 1;
+}
+message ResponseMsg {
+  string msg = 1;
+}
+message TaskCommentsList {
+  repeated TaskComment items = 1;
+  uint32 total = 2;
+}
+message TasksList {
+  repeated Task items = 1;
+  uint32 total = 2;
+}
+message TeamsList {
+  repeated Team items = 1;
+  uint32 total = 2;
+}
+message UsersList {
+  repeated User items = 1;
+  uint32 total = 2;
+}
+message TaskComment {
+  string task_comment_id = 1;
+  string task_id = 2;
+  string user_id = 3;
+  string msg = 4;
+  string created_at = 5;
+  string updated_at = 6;
+}
+message Task {
+  string task_id = 1;
   string name = 2;
-  string email = 3;
+  optional string description = 3;
+  string created_by = 4;
+  string team_id = 5;
+  optional string assignee_id = 6;
+  string status = 7;
+  string created_at = 8;
+  string updated_at = 9;
+}
+message TaskHistory {
+  string task_history_id = 1;
+  string task_id = 2;
+  string user_id = 3;
+  string msg = 4;
+  string created_at = 5;
+}
+message TaskHistories {
+  repeated TaskHistory items = 1;
+}
+message Team {
+  string team_id = 1;
+  string name = 2;
+  string created_by = 3;
+  string created_at = 4;
+  string updated_at = 5;
+}
+message User {
+  string user_id = 1;
+  string email = 2;
+  optional string name = 3;
+  optional string avatar = 4;
+  optional string role = 5;
+  string created_at = 6;
+  string updated_at = 7;
 }

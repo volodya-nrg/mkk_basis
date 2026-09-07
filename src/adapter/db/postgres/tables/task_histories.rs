@@ -2,7 +2,9 @@ use sqlx::{Pool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
 
 use crate::adapter::db::{
-    errors::RepositoryError, models::TaskHistory, postgres::table_basic::TableBasic,
+    errors::RepositoryError,
+    models::{List, TaskHistory},
+    postgres::table_basic::TableBasic,
 };
 
 #[derive(Clone)]
@@ -15,7 +17,6 @@ impl TaskHistories {
     pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
             pool,
-            // transactor,
             table_basic: TableBasic {
                 name: "task_histories".to_string(),
                 fields: vec![
@@ -33,7 +34,7 @@ impl TaskHistories {
         &self,
         limit: i32,
         offset: i32,
-    ) -> Result<(Vec<TaskHistory>, i64), RepositoryError> {
+    ) -> Result<List<TaskHistory>, RepositoryError> {
         let mut common_builder = QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
             self.table_basic.fields.join(","),
@@ -71,7 +72,7 @@ impl TaskHistories {
             .await
             .map_err(RepositoryError::TransactionError)?;
 
-        Ok((items, total))
+        Ok(List(items, total))
     }
     #[allow(dead_code)]
     pub async fn one(&self, item_id: Uuid) -> Result<TaskHistory, RepositoryError> {

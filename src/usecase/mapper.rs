@@ -81,6 +81,14 @@ pub fn team_member_uc_to_team_member_db(item: TeamMember) -> DBTeamMember {
     }
 }
 
+pub fn team_member_db_to_team_member_uc(item: DBTeamMember) -> TeamMember {
+    TeamMember {
+        team_id: item.team_id,
+        user_id: item.user_id,
+        created_at: item.created_at,
+    }
+}
+
 pub fn user_db_to_user_uc(item: DBUser) -> User {
     User {
         user_id: item.user_id,

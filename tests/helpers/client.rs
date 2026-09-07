@@ -1,6 +1,6 @@
 use http::StatusCode;
 use reqwest::{
-    Certificate, Client as ReqwestClient, Error as ReqwestError, Identity, Response, header,
+    Certificate, Client as ReqwestClient, Error as ReqwestError, Identity, Response,
     multipart::Form,
 };
 use std::time::Duration;

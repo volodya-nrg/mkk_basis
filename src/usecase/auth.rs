@@ -175,6 +175,7 @@ where
         }
 
         user.email_code = None;
+
         self.users_repo
             .update(user)
             .await
@@ -242,9 +243,6 @@ where
             .map_err(|e| UseCaseError::Common(e.to_string()))?;
 
         Ok((access_token, refresh_token))
-    }
-    pub async fn logout(&self) -> Result<(), UseCaseError> {
-        Ok(())
     }
     pub async fn refresh_tokens(&self, token: String) -> Result<(String, String), UseCaseError> {
         let claims = self

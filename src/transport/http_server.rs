@@ -79,7 +79,7 @@ where
             .route("/api/v1/login", post(auth::Handlers::login))
             .route(
                 "/api/v1/logout",
-                post(auth::Handlers::logout).layer(layer_auth.clone()),
+                post(auth::Handlers::logout).layer(layer_auth.clone()), // проверка на auth все равно стоит
             )
             .route(
                 "/api/v1/refresh_tokens",

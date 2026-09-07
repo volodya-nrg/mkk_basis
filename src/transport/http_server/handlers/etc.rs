@@ -1,5 +1,8 @@
+use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse};
+
+use crate::transport::models::ResponseMsg;
 
 pub struct Handlers {}
 
@@ -7,7 +10,15 @@ impl Handlers {
     pub async fn index() -> impl IntoResponse {
         Html(include_str!("../../../../web/index.html"))
     }
-    pub async fn health() -> impl IntoResponse {}
+    pub async fn health() -> impl IntoResponse {
+        (
+            StatusCode::OK,
+            Json(ResponseMsg {
+                msg: "ok".to_string(),
+            }),
+        )
+            .into_response()
+    }
     pub async fn page404() -> impl IntoResponse {
         (
             StatusCode::NOT_FOUND,

@@ -1,8 +1,8 @@
-use axum::{Extension, Json};
 use axum::extract::multipart::MultipartError;
 use axum::extract::{Multipart, Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
+use axum::{Extension, Json};
 use chrono::Utc;
 use std::collections::HashMap;
 use std::fs::File;
@@ -15,7 +15,7 @@ use crate::err_msg::ErrMsg;
 use crate::transport::{
     mapper,
     models::{
-        RequestLimitOffset, RequestUserCreate, RequestUserUpdate, ResponseMsg, ResponseUsersList, AuthUser,
+        AuthUser, RequestLimitOffset, RequestUserCreate, RequestUserUpdate, ResponseMsg, UsersList,
     },
 };
 use crate::usecase::UseCase;
@@ -34,7 +34,6 @@ where
     ES: EmailSender,
 {
     pub async fn list(
-        // _user: AuthenticatedUser<ES>,
         Extension(_user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestLimitOffset>,
@@ -46,7 +45,7 @@ where
             .map_or_else(
                 |e| e.into_response(),
                 |(items, total)| {
-                    let resp = ResponseUsersList {
+                    let resp = UsersList {
                         items: items.into_iter().map(mapper::user_uc_to_user_tr).collect(),
                         total: total as u32,
                     };
@@ -55,7 +54,6 @@ where
             )
     }
     pub async fn one(
-        //_user: AuthenticatedUser<ES>,
         Extension(_user): Extension<AuthUser>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
@@ -66,7 +64,6 @@ where
         )
     }
     pub async fn create(
-        //_user: AuthenticatedUser<ES>,
         Extension(_user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         multipart: Multipart,
@@ -114,7 +111,6 @@ where
         )
     }
     pub async fn update(
-        //_user: AuthenticatedUser<ES>,
         Extension(_user): Extension<AuthUser>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
@@ -162,7 +158,6 @@ where
         )
     }
     pub async fn delete(
-        //_user: AuthenticatedUser<ES>,
         Extension(_user): Extension<AuthUser>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,

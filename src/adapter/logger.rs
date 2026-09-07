@@ -24,7 +24,7 @@ pub enum LogError {
 impl fmt::Display for LogError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            LogError::Common(s) => write!(f, "{}", s),
+            LogError::Common(s) => write!(f, "{s}"),
         }
     }
 }

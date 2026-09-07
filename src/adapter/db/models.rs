@@ -71,3 +71,6 @@ pub struct TaskData {
     pub assignee_id: Option<Uuid>,
     pub status: Option<String>,
 }
+
+// List - пусть будет struct-tuple
+pub struct List<T>(pub Vec<T>, pub i64);

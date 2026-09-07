@@ -60,9 +60,6 @@ gen_tls_certs:
 
 .PHONY: gen_proto
 gen_proto: # на прямую не вызывать, через Докер только
-	#$(eval GEN_PATH=./api/generated)
-	#rm -rf $(GEN_PATH)
-	#mkdir -p $(GEN_PATH)
 	protoc \
 		--proto_path=. \
 		--rust_out=./src/protos \

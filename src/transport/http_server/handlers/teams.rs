@@ -1,18 +1,17 @@
-use axum::{Extension, Json};
 use axum::extract::Path;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use serde_json::json;
+use axum::{Extension, Json};
 use std::marker::PhantomData;
 use uuid::Uuid;
 
 use crate::adapter::email::EmailSender;
+use crate::transport::models::AuthUser;
 use crate::transport::{
     mapper,
-    models::{RequestLimitOffset, RequestTeam, RequestTeamInvite, ResponseTeamsList},
+    models::{RequestLimitOffset, RequestTeam, RequestTeamInvite, TeamsList},
 };
-use crate::transport::models::AuthUser;
 use crate::usecase::UseCase;
 
 pub struct Handlers<ES> {
@@ -24,7 +23,6 @@ where
     ES: EmailSender,
 {
     pub async fn list(
-        // _user: AuthenticatedUser<ES>,
         Extension(_user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestLimitOffset>,
@@ -36,30 +34,25 @@ where
             .map_or_else(
                 |e| e.into_response(),
                 |(items, total)| {
-                    let resp = ResponseTeamsList {
+                    let resp = TeamsList {
                         items: items.into_iter().map(mapper::team_uc_to_team_tr).collect(),
                         total: total as u32,
                     };
-                    (StatusCode::OK, Json(json!(resp))).into_response()
+                    (StatusCode::OK, Json(resp)).into_response()
                 },
             )
     }
     pub async fn one(
-        // _user: AuthenticatedUser<ES>,
         Extension(_user): Extension<AuthUser>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
     ) -> impl IntoResponse {
         use_case.teams.one(item_id).await.map_or_else(
             |e| e.into_response(),
-            |v| {
-                let resp = mapper::team_uc_to_team_tr(v);
-                (StatusCode::OK, Json(json!(resp))).into_response()
-            },
+            |v| (StatusCode::OK, Json(mapper::team_uc_to_team_tr(v))).into_response(),
         )
     }
     pub async fn create(
-        // user: AuthenticatedUser<ES>,
         Extension(user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestTeam>,
@@ -74,11 +67,10 @@ where
 
         use_case.teams.one(new_uuid).await.map_or_else(
             |e| e.into_response(),
-            |v| (StatusCode::OK, Json(json!(mapper::team_uc_to_team_tr(v)))).into_response(),
+            |v| (StatusCode::OK, Json(mapper::team_uc_to_team_tr(v))).into_response(),
         )
     }
     pub async fn update(
-        // _user: AuthenticatedUser<ES>,
         Extension(_user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         Path(item_id): Path<Uuid>,
@@ -93,11 +85,10 @@ where
 
         use_case.teams.one(item_id).await.map_or_else(
             |e| e.into_response(),
-            |v| (StatusCode::OK, Json(json!(mapper::team_uc_to_team_tr(v)))).into_response(),
+            |v| (StatusCode::OK, Json(mapper::team_uc_to_team_tr(v))).into_response(),
         )
     }
     pub async fn delete(
-        // _user: AuthenticatedUser<ES>,
         Extension(_user): Extension<AuthUser>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
@@ -109,7 +100,6 @@ where
             .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())
     }
     pub async fn invite(
-        // user: AuthenticatedUser<ES>,
         Extension(user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         Path(team_id): Path<Uuid>,

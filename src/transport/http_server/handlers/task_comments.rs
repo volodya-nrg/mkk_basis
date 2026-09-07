@@ -1,18 +1,17 @@
-use axum::{Extension, Json};
 use axum::extract::Path;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use serde_json::json;
+use axum::{Extension, Json};
 use std::marker::PhantomData;
 use uuid::Uuid;
 
 use crate::adapter::email::EmailSender;
+use crate::transport::models::AuthUser;
 use crate::transport::{
     mapper,
-    models::{RequestLimitOffset, RequestTaskComment, ResponseTaskCommentsList},
+    models::{RequestLimitOffset, RequestTaskComment, TaskCommentsList},
 };
-use crate::transport::models::AuthUser;
 use crate::usecase::UseCase;
 
 pub struct Handlers<ES> {
@@ -37,19 +36,18 @@ where
             .map_or_else(
                 |e| e.into_response(),
                 |(items, total)| {
-                    let resp = ResponseTaskCommentsList {
+                    let resp = TaskCommentsList {
                         items: items
                             .into_iter()
                             .map(mapper::task_comment_uc_to_task_comment_tr)
                             .collect(),
                         total: total as u32,
                     };
-                    (StatusCode::OK, Json(json!(resp))).into_response()
+                    (StatusCode::OK, Json(resp)).into_response()
                 },
             )
     }
     pub async fn create(
-        // user: AuthenticatedUser<ES>,
         Extension(user): Extension<AuthUser>,
         Path(task_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
@@ -73,14 +71,13 @@ where
             |v| {
                 (
                     StatusCode::OK,
-                    Json(json!(mapper::task_comment_uc_to_task_comment_tr(v))),
+                    Json(mapper::task_comment_uc_to_task_comment_tr(v)),
                 )
                     .into_response()
             },
         )
     }
     pub async fn delete(
-        // _user: AuthenticatedUser<ES>,
         Extension(_user): Extension<AuthUser>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,

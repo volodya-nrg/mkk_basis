@@ -3,7 +3,7 @@ extern crate core;
 mod adapter;
 mod consts;
 mod err_msg;
-mod protos;
+// mod protos;
 mod transport;
 mod usecase;
 
@@ -29,14 +29,13 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
-    // let msg = protos::service::MyMessage::default();
-    if let Err(e) = run(&Args::parse().config).await {
+    if let Err(e) = run(Args::parse().config).await {
         log::error!("failed to run app: {e}");
         process::exit(1);
     }
 }
 
-async fn run(config_filepath: &str) -> Result<(), String> {
+async fn run(config_filepath: String) -> Result<(), String> {
     let cfg = Config::new(config_filepath).map_err(|e| {
         let str = format!("failed to create new config: {e}");
         eprint!("{}", str);

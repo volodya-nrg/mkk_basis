@@ -13,7 +13,7 @@ use crate::{
 
 use super::{
     UseCaseError, mapper,
-    models::{Task, TaskData, TaskHistory},
+    models::{Task, TaskData, TaskHistory, TeamMember},
 };
 
 #[derive(Clone)] // из-за axum-state
@@ -36,15 +36,16 @@ impl Tasks {
         }
     }
     pub async fn list(&self, data: TaskData) -> Result<(Vec<Task>, i64), UseCaseError> {
-        let (items, total) = self
-            .tasks_repo
+        self.tasks_repo
             .list(mapper::task_data_uc_to_task_data_db(data))
             .await
-            .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))?;
-        Ok((
-            items.into_iter().map(mapper::task_db_to_task_uc).collect(),
-            total,
-        ))
+            .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))
+            .map(|list| {
+                (
+                    list.0.into_iter().map(mapper::task_db_to_task_uc).collect(),
+                    list.1,
+                )
+            })
     }
     pub async fn one(&self, item_id: Uuid) -> Result<Task, UseCaseError> {
         let task_db = self.tasks_repo.one(item_id).await.map_err(|e| match e {
@@ -59,8 +60,8 @@ impl Tasks {
     }
     // создать задачу может только член команды
     pub async fn create(&self, task: Task, user_id: Uuid) -> Result<Uuid, UseCaseError> {
-        self.check_access_for_team_member_only(task.team_id, user_id)
-            .await?;
+        self.get_team_member(task.team_id, user_id).await?;
+
         // TODO tx
         let new_task_uuid = self
             .tasks_repo
@@ -79,13 +80,13 @@ impl Tasks {
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to create task_history: {e}")))?;
         // TODO \tx
+
         Ok(new_task_uuid)
     }
     // изменить задачу может только член команды
     pub async fn update(&self, task: Task, user_id: Uuid) -> Result<(), UseCaseError> {
         // обновить задачу может только член команды
-        self.check_access_for_team_member_only(task.team_id, user_id)
-            .await?;
+        self.get_team_member(task.team_id, user_id).await?;
 
         let task_id = task.task_id;
 
@@ -121,8 +122,8 @@ impl Tasks {
             other => UseCaseError::Common(other.to_string()),
         })?;
         let mut task = mapper::task_db_to_task_uc(task_db);
-        self.check_access_for_team_member_only(task.team_id, user_id)
-            .await?;
+
+        self.get_team_member(task.team_id, user_id).await?;
 
         task.status = TaskStatus::Cancelled.to_string();
         // TODO tx
@@ -147,21 +148,21 @@ impl Tasks {
         Ok(())
     }
     pub async fn get_history(&self, item_id: Uuid) -> Result<Vec<TaskHistory>, UseCaseError> {
-        let items = self
+        Ok(self
             .task_histories_repo
             .by_task_id(item_id)
             .await
-            .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))?;
-        Ok(items
+            .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))?
             .into_iter()
             .map(mapper::task_history_db_to_task_history_uc)
             .collect())
     }
-    async fn check_access_for_team_member_only(
+    // get_team_member - если есть, то значит член команды
+    async fn get_team_member(
         &self,
         team_id: Uuid,
         user_id: Uuid,
-    ) -> Result<(), UseCaseError> {
+    ) -> Result<TeamMember, UseCaseError> {
         self.team_members_repo
             .one(team_id, user_id)
             .await
@@ -172,7 +173,7 @@ impl Tasks {
                     internal_err: None,
                 },
                 other => UseCaseError::Common(other.to_string()),
-            })?;
-        Ok(())
+            })
+            .map(mapper::team_member_db_to_team_member_uc)
     }
 }

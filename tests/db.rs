@@ -77,14 +77,14 @@ async fn check_users() {
     );
 
     // ok: проверим что список не пустой
-    let (items, total) = ctx.db.tbl_users.list(-1, -1).await.unwrap();
-    assert!(!items.is_empty());
-    assert!(total > 0);
+    let mut list = ctx.db.tbl_users.list(-1, -1).await.unwrap();
+    assert!(!list.0.is_empty());
+    assert!(list.1 > 0);
 
     // ok: проверим пустой результат, но общее кол-во есть
-    let (items, total) = ctx.db.tbl_users.list(0, 0).await.unwrap();
-    assert!(items.is_empty());
-    assert!(total > 0);
+    list = ctx.db.tbl_users.list(0, 0).await.unwrap();
+    assert!(list.0.is_empty());
+    assert!(list.1 > 0);
 
     // err: изменим не понятно у кого
     assert!(ctx.db.tbl_users.update(rand::user()).await.is_err());
@@ -220,14 +220,14 @@ async fn check_teams() {
     assert_eq!(team_expected, team_actual);
 
     // ok: проверим что список не пустой
-    let (items, total) = ctx.db.tbl_teams.list(-1, -1).await.unwrap();
-    assert!(!items.is_empty());
-    assert!(total > 0);
+    let mut list = ctx.db.tbl_teams.list(-1, -1).await.unwrap();
+    assert!(!list.0.is_empty());
+    assert!(list.1 > 0);
 
     // ok: проверим пустой результат, но общее кол-во есть
-    let (items, total) = ctx.db.tbl_teams.list(0, 0).await.unwrap();
-    assert!(items.is_empty());
-    assert!(total > 0);
+    list = ctx.db.tbl_teams.list(0, 0).await.unwrap();
+    assert!(list.0.is_empty());
+    assert!(list.1 > 0);
 
     // err: изменим неизвестного
     assert!(ctx.db.tbl_teams.update(rand::team()).await.is_err());
@@ -458,62 +458,62 @@ async fn check_tasks() {
     task_data.offset = -1;
 
     // ok: проверим что список не пустой
-    let (mut items, mut total) = ctx.db.tbl_tasks.list(task_data.clone()).await.unwrap();
-    assert!(!items.is_empty());
-    assert!(total > 0);
+    let mut list = ctx.db.tbl_tasks.list(task_data.clone()).await.unwrap();
+    assert!(!list.0.is_empty());
+    assert!(list.1 > 0);
 
     // ok: проверим пустой результат
     task_data.limit = 0;
     task_data.offset = 0;
-    (items, total) = ctx.db.tbl_tasks.list(task_data.clone()).await.unwrap();
-    assert!(items.is_empty());
-    assert!(total > 0); // список пустой, но общее кол-во есть
+    list = ctx.db.tbl_tasks.list(task_data.clone()).await.unwrap();
+    assert!(list.0.is_empty());
+    assert!(list.1 > 0); // список пустой, но общее кол-во есть
 
     // проверим фильтрацию списка
     // - список пустой, т.к. не известный team_id
     task_data.limit = -1;
     task_data.offset = -1;
     task_data.team_id = Some(Uuid::new_v4());
-    (items, total) = ctx.db.tbl_tasks.list(task_data.clone()).await.unwrap();
-    assert!(items.is_empty());
-    assert_eq!(0, total);
+    list = ctx.db.tbl_tasks.list(task_data.clone()).await.unwrap();
+    assert!(list.0.is_empty());
+    assert_eq!(0, list.1);
 
     // - список не пустой, т.к. известный team_id
     task_data.team_id = Some(team_id);
-    (items, total) = ctx.db.tbl_tasks.list(task_data.clone()).await.unwrap();
-    assert!(!items.is_empty());
-    assert_eq!(1, total);
+    list = ctx.db.tbl_tasks.list(task_data.clone()).await.unwrap();
+    assert!(!list.0.is_empty());
+    assert_eq!(1, list.1);
 
     // - список пустой, т.к. известный team_id и не известный assignee_id
     task_data.assignee_id = Some(Uuid::new_v4());
-    (items, total) = ctx.db.tbl_tasks.list(task_data.clone()).await.unwrap();
-    assert!(items.is_empty());
-    assert_eq!(0, total);
+    list = ctx.db.tbl_tasks.list(task_data.clone()).await.unwrap();
+    assert!(list.0.is_empty());
+    assert_eq!(0, list.1);
 
     // - список не пустой, т.к. известный team_id и известный assignee_id
     task_data.assignee_id = Some(user_id2);
-    (items, total) = ctx.db.tbl_tasks.list(task_data.clone()).await.unwrap();
-    assert!(!items.is_empty());
-    assert_eq!(1, total);
+    list = ctx.db.tbl_tasks.list(task_data.clone()).await.unwrap();
+    assert!(!list.0.is_empty());
+    assert_eq!(1, list.1);
 
     // - список пустой, т.к. известный team_id, assignee_id и не тот статус
     task_data.status = Some(TaskStatus::Cancelled.to_string());
-    (items, total) = ctx.db.tbl_tasks.list(task_data.clone()).await.unwrap();
-    assert!(items.is_empty());
-    assert_eq!(0, total);
+    list = ctx.db.tbl_tasks.list(task_data.clone()).await.unwrap();
+    assert!(list.0.is_empty());
+    assert_eq!(0, list.1);
 
     // - список не пустой, т.к. известный team_id, assignee_id и верный статус
     task_data.status = Some(TaskStatus::Start.to_string());
-    (items, total) = ctx.db.tbl_tasks.list(task_data.clone()).await.unwrap();
-    assert!(!items.is_empty());
-    assert_eq!(1, total);
+    list = ctx.db.tbl_tasks.list(task_data.clone()).await.unwrap();
+    assert!(!list.0.is_empty());
+    assert_eq!(1, list.1);
 
     // - список пустой, т.к. известный team_id, assignee_id и верный статус, но лимит 0
     task_data.limit = 0;
     task_data.status = Some(TaskStatus::Start.to_string());
-    (items, total) = ctx.db.tbl_tasks.list(task_data).await.unwrap();
-    assert!(items.is_empty());
-    assert_eq!(1, total);
+    list = ctx.db.tbl_tasks.list(task_data).await.unwrap();
+    assert!(list.0.is_empty());
+    assert_eq!(1, list.1);
 
     // err: изменим неизвестного
     assert!(ctx.db.tbl_tasks.update(rand::task()).await.is_err());
@@ -636,24 +636,14 @@ async fn check_task_histories() {
     assert_eq!(task_history_expected, task_history_actual);
 
     // ok: проверим что список не пустой
-    let (items, total) = ctx
-        .db
-        .tbl_task_histories
-        .list(-1, -1)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    assert!(!items.is_empty());
-    assert!(total > 0);
+    let mut list = ctx.db.tbl_task_histories.list(-1, -1).await.unwrap();
+    assert!(!list.0.is_empty());
+    assert!(list.1 > 0);
 
     // ok: проверим пустой результат
-    let (items, total) = ctx
-        .db
-        .tbl_task_histories
-        .list(0, 0)
-        .await
-        .unwrap_or_else(|e| panic!("{:?}", e));
-    assert!(items.is_empty());
-    assert!(total > 0); // список пустой, но общее кол-во есть
+    list = ctx.db.tbl_task_histories.list(0, 0).await.unwrap();
+    assert!(list.0.is_empty());
+    assert!(list.1 > 0); // список пустой, но общее кол-во есть
 
     // получим список относительно task_id
     let items = ctx.db.tbl_task_histories.by_task_id(task_id).await.unwrap();
@@ -790,19 +780,19 @@ async fn check_task_comments() {
     assert_eq!(task_comment_expected, task_comment_actual);
 
     // ok: проверим что список не пустой
-    let (items, total) = ctx
+    let mut list = ctx
         .db
         .tbl_task_comments
         .list(task_id1, -1, -1)
         .await
         .unwrap();
-    assert!(!items.is_empty());
-    assert!(total > 0);
+    assert!(!list.0.is_empty());
+    assert!(list.1 > 0);
 
     // ok: проверим пустой результат
-    let (items, total) = ctx.db.tbl_task_comments.list(task_id1, 0, 0).await.unwrap();
-    assert!(items.is_empty());
-    assert!(total > 0); // список пустой, но общее кол-во есть
+    list = ctx.db.tbl_task_comments.list(task_id1, 0, 0).await.unwrap();
+    assert!(list.0.is_empty());
+    assert!(list.1 > 0); // список пустой, но общее кол-во есть
 
     // err: изменим неизвестного
     assert!(

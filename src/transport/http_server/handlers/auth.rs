@@ -1,15 +1,13 @@
+use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{AppendHeaders, IntoResponse, Redirect};
-use axum::{Extension, Json};
 use axum_extra::extract::cookie::CookieJar;
 use http::header;
-use serde_json::json;
 use std::marker::PhantomData;
 
 use crate::adapter::email::EmailSender;
 use crate::consts;
-use crate::transport::models::AuthUser;
 use crate::transport::models::{
     RequestLogin, RequestRegister, RequestRegisterConfirm, ResponseUUID,
 };
@@ -39,9 +37,7 @@ where
             .await
             .map_or_else(
                 |e| e.into_response(),
-                |new_uuid| {
-                    (StatusCode::OK, Json(json!(ResponseUUID { uuid: new_uuid }))).into_response()
-                },
+                |new_uuid| (StatusCode::OK, Json(ResponseUUID { uuid: new_uuid })).into_response(),
             )
     }
     pub async fn register_confirm(
@@ -81,14 +77,7 @@ where
         )
             .into_response()
     }
-    pub async fn logout(
-        jar: CookieJar,
-        Extension(_user): Extension<AuthUser>,
-        State(use_case): State<UseCase<ES>>,
-    ) -> impl IntoResponse {
-        if let Err(e) = use_case.auth.logout().await {
-            return e.into_response();
-        };
+    pub async fn logout(jar: CookieJar, State(_use_case): State<UseCase<ES>>) -> impl IntoResponse {
         let jar = jar
             .remove(consts::ACCESS_TOKEN_NAME)
             .remove(consts::REFRESH_TOKEN_NAME);

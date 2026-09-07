@@ -2,7 +2,9 @@ use sqlx::{Pool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
 
 use crate::adapter::db::{
-    errors::RepositoryError, models::TaskComment, postgres::table_basic::TableBasic,
+    errors::RepositoryError,
+    models::{List, TaskComment},
+    postgres::table_basic::TableBasic,
 };
 
 #[derive(Clone)]
@@ -33,7 +35,7 @@ impl TaskComments {
         task_id: Uuid,
         limit: i32,
         offset: i32,
-    ) -> Result<(Vec<TaskComment>, i64), RepositoryError> {
+    ) -> Result<List<TaskComment>, RepositoryError> {
         let mut common_builder = QueryBuilder::new(format!(
             "SELECT {} FROM {} WHERE task_id=",
             self.table_basic.fields.join(","),
@@ -77,7 +79,7 @@ impl TaskComments {
             .await
             .map_err(RepositoryError::TransactionError)?;
 
-        Ok((items, total))
+        Ok(List(items, total))
     }
     pub async fn one(&self, item_id: Uuid) -> Result<TaskComment, RepositoryError> {
         let query = format!(

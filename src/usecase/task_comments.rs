@@ -25,18 +25,19 @@ impl TaskComments {
         limit: i32,
         offset: i32,
     ) -> Result<(Vec<TaskComment>, i64), UseCaseError> {
-        let (items, total) = self
-            .task_comments_repo
+        self.task_comments_repo
             .list(task_id, limit, offset)
             .await
-            .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))?;
-        Ok((
-            items
-                .into_iter()
-                .map(mapper::task_comment_db_to_task_comment_uc)
-                .collect(),
-            total,
-        ))
+            .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))
+            .map(|list| {
+                (
+                    list.0
+                        .into_iter()
+                        .map(mapper::task_comment_db_to_task_comment_uc)
+                        .collect(),
+                    list.1,
+                )
+            })
     }
     // one - нужно чтоб отдать через create
     pub async fn one(&self, item_id: Uuid) -> Result<TaskComment, UseCaseError> {
@@ -55,18 +56,15 @@ impl TaskComments {
         Ok(mapper::task_comment_db_to_task_comment_uc(task_comment_db))
     }
     pub async fn create(&self, task_comment: TaskComment) -> Result<Uuid, UseCaseError> {
-        let new_uuid = self
-            .task_comments_repo
+        self.task_comments_repo
             .create(mapper::task_comment_uc_to_task_comment_db(task_comment))
             .await
-            .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))?;
-        Ok(new_uuid)
+            .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))
     }
     pub async fn delete(&self, item_id: Uuid) -> Result<(), UseCaseError> {
         self.task_comments_repo
             .delete(item_id)
             .await
-            .map_err(|e| UseCaseError::Common(format!("failed to delete: {e}")))?;
-        Ok(())
+            .map_err(|e| UseCaseError::Common(format!("failed to delete: {e}")))
     }
 }

@@ -1,14 +1,15 @@
-use axum::{Json, extract::Path, extract::State, http::StatusCode, response::IntoResponse, Extension};
-use serde_json::json;
+use axum::{
+    Extension, Json, extract::Path, extract::State, http::StatusCode, response::IntoResponse,
+};
 use std::marker::PhantomData;
 use uuid::Uuid;
 
 use crate::adapter::email::EmailSender;
+use crate::transport::models::AuthUser;
 use crate::transport::{
     mapper,
-    models::{RequestTask, RequestTaskData, ResponseTaskHistories, ResponseTasksList},
+    models::{RequestTask, RequestTaskData, TaskHistories, TasksList},
 };
-use crate::transport::models::AuthUser;
 use crate::usecase::UseCase;
 
 pub struct Handlers<ES> {
@@ -20,7 +21,6 @@ where
     ES: EmailSender,
 {
     pub async fn list(
-        // _user: AuthenticatedUser<ES>,
         Extension(_user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestTaskData>,
@@ -32,27 +32,25 @@ where
             .map_or_else(
                 |e| e.into_response(),
                 |(items, total)| {
-                    let resp = ResponseTasksList {
+                    let resp = TasksList {
                         items: items.into_iter().map(mapper::task_uc_to_task_tr).collect(),
                         total: total as u32,
                     };
-                    (StatusCode::OK, Json(json!(resp))).into_response()
+                    (StatusCode::OK, Json(resp)).into_response()
                 },
             )
     }
     pub async fn one(
-        // _user: AuthenticatedUser<ES>,
         Extension(_user): Extension<AuthUser>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
     ) -> impl IntoResponse {
         use_case.tasks.one(item_id).await.map_or_else(
             |e| e.into_response(),
-            |v| (StatusCode::OK, Json(json!(mapper::task_uc_to_task_tr(v)))).into_response(),
+            |v| (StatusCode::OK, Json(mapper::task_uc_to_task_tr(v))).into_response(),
         )
     }
     pub async fn create(
-        // user: AuthenticatedUser<ES>,
         Extension(user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestTask>,
@@ -68,11 +66,10 @@ where
 
         use_case.tasks.one(new_uuid).await.map_or_else(
             |e| e.into_response(),
-            |v| (StatusCode::OK, Json(json!(mapper::task_uc_to_task_tr(v)))).into_response(),
+            |v| (StatusCode::OK, Json(mapper::task_uc_to_task_tr(v))).into_response(),
         )
     }
     pub async fn update(
-        // user: AuthenticatedUser<ES>,
         Extension(user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         Path(task_id): Path<Uuid>,
@@ -87,11 +84,10 @@ where
 
         use_case.tasks.one(task_id).await.map_or_else(
             |e| e.into_response(),
-            |v| (StatusCode::OK, Json(json!(mapper::task_uc_to_task_tr(v)))).into_response(),
+            |v| (StatusCode::OK, Json(mapper::task_uc_to_task_tr(v))).into_response(),
         )
     }
     pub async fn delete(
-        // user: AuthenticatedUser<ES>,
         Extension(user): Extension<AuthUser>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
@@ -103,7 +99,6 @@ where
             .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())
     }
     pub async fn history(
-        //_user: AuthenticatedUser<ES>,
         Extension(_user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         Path(task_id): Path<Uuid>,
@@ -111,13 +106,13 @@ where
         use_case.tasks.get_history(task_id).await.map_or_else(
             |e| e.into_response(),
             |v| {
-                let resp = ResponseTaskHistories {
+                let resp = TaskHistories {
                     items: v
                         .into_iter()
                         .map(mapper::task_history_uc_to_task_history_tr)
                         .collect(),
                 };
-                (StatusCode::OK, Json(json!(resp))).into_response()
+                (StatusCode::OK, Json(resp)).into_response()
             },
         )
     }

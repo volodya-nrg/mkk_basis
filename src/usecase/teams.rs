@@ -30,15 +30,16 @@ impl Teams {
         }
     }
     pub async fn list(&self, limit: i32, offset: i32) -> Result<(Vec<Team>, i64), UseCaseError> {
-        let (items, total) = self
-            .teams_repo
+        self.teams_repo
             .list(limit, offset)
             .await
-            .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))?;
-        Ok((
-            items.into_iter().map(mapper::team_db_to_team_uc).collect(),
-            total,
-        ))
+            .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))
+            .map(|list| {
+                (
+                    list.0.into_iter().map(mapper::team_db_to_team_uc).collect(),
+                    list.1,
+                )
+            })
     }
     pub async fn one(&self, item_id: Uuid) -> Result<Team, UseCaseError> {
         let team_db = self.teams_repo.one(item_id).await.map_err(|e| match e {
@@ -52,26 +53,22 @@ impl Teams {
         Ok(mapper::team_db_to_team_uc(team_db))
     }
     pub async fn create(&self, team: Team) -> Result<Uuid, UseCaseError> {
-        let new_uuid = self
-            .teams_repo
+        self.teams_repo
             .create(mapper::team_uc_to_team_db(team))
             .await
-            .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))?;
-        Ok(new_uuid)
+            .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))
     }
     pub async fn update(&self, team: Team) -> Result<(), UseCaseError> {
         self.teams_repo
             .update(mapper::team_uc_to_team_db(team))
             .await
-            .map_err(|e| UseCaseError::Common(format!("failed to update: {e}")))?;
-        Ok(())
+            .map_err(|e| UseCaseError::Common(format!("failed to update: {e}")))
     }
     pub async fn delete(&self, item_id: Uuid) -> Result<(), UseCaseError> {
         self.teams_repo
             .delete(item_id)
             .await
-            .map_err(|e| UseCaseError::Common(format!("failed to delete: {e}")))?;
-        Ok(())
+            .map_err(|e| UseCaseError::Common(format!("failed to delete: {e}")))
     }
     // пригласить может только owner или admin
     pub async fn invite(
@@ -113,7 +110,6 @@ impl Teams {
                 created_at: Default::default(),
             }))
             .await
-            .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))?;
-        Ok(())
+            .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))
     }
 }

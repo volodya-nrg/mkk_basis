@@ -56,9 +56,9 @@ pub struct Email {
 }
 
 impl Config {
-    pub fn new(filepath: &str) -> Result<Self, ConfigError> {
+    pub fn new(filepath: String) -> Result<Self, ConfigError> {
         ConfigExternal::builder()
-            .add_source(File::new(filepath, FileFormat::Yaml))
+            .add_source(File::new(filepath.as_str(), FileFormat::Yaml))
             .build()
             .map_err(|e| ConfigError::Common(format!("failed to build: {e}")))?
             .try_deserialize()
