@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use chrono::Utc;
 use image::{ImageError, ImageFormat, Rgb, RgbImage};
 use rand::{Rng, RngExt};
@@ -24,7 +26,6 @@ pub fn private_key(len: usize) -> Vec<u8> {
 pub fn str() -> String {
     helpers::rand_str_limit(20)
 }
-
 pub fn email() -> String {
     format!(
         "{}@{}.{}",
@@ -116,7 +117,6 @@ pub fn request_user_update() -> RequestUserUpdate {
 pub fn request_task_comment() -> RequestTaskComment {
     RequestTaskComment { msg: str() }
 }
-
 pub fn user() -> User {
     User {
         user_id: Uuid::new_v4(),
@@ -182,7 +182,6 @@ pub fn task_comment() -> TaskComment {
         updated_at: Default::default(),
     }
 }
-
 pub fn create_image(ext: &str) -> Result<PathBuf, ImageError> {
     const SIDE: u32 = 1024;
     let format = match ext {
@@ -220,7 +219,6 @@ pub fn create_image(ext: &str) -> Result<PathBuf, ImageError> {
 
     Ok(filepath)
 }
-
 fn get_random_task_status() -> String {
     let statuses = [
         TaskStatuses::Start,
@@ -230,7 +228,6 @@ fn get_random_task_status() -> String {
     ];
     statuses[int_range(0, statuses.len() - 1)].to_string()
 }
-
 fn get_random_user_role() -> String {
     let statuses = [UserRoles::Admin, UserRoles::Moder, UserRoles::Null];
     statuses[int_range(0, statuses.len() - 1)].to_string()
@@ -246,6 +243,7 @@ mod tests {
     #[test]
     fn check_random_via_os_thread() {
         const LIMIT: usize = 100;
+
         let (tx, rx) = mpsc::channel();
         // let (tx, rx) = mpsc::sync_channel(10);
         let mut handles = Vec::with_capacity(LIMIT);
@@ -254,37 +252,48 @@ mod tests {
             let tx_clone = tx.clone();
             handles.push(std::thread::spawn(move || tx_clone.send(str()).unwrap()))
         }
+
         drop(tx); // закрываем оригинальный отправитель
+
         // Ждем завершения всех потоков. При буферизированном нужно наоборот, чтоб освобождать буфер.
         for handle in handles {
             handle.join().unwrap(); // ждем завершения конкретного потока
         }
+
         let mut rcv: Vec<String> = (0..LIMIT).map(|_| "".to_string()).collect(); // обязательно нужно создать данные
+
         // считываем данные. rx.iter().collect::<Vec<String>>()
         for (i, v) in rx.iter().enumerate() {
             rcv[i] = v;
         }
+
         assert_eq!(LIMIT, rcv.len())
     }
 
     #[tokio::test]
     async fn check_random_via_tokio_thread() {
         const LIMIT: usize = 100;
+
         // let (tx, mut rx) = TokioMPSC::channel(32);
         let (tx, mut rx) = TokioMPSC::unbounded_channel();
         let mut handles = Vec::with_capacity(LIMIT);
+
         for _ in 0..LIMIT {
             let tx_clone = tx.clone();
             let handle = task::spawn(async move { tx_clone.send(str()).unwrap() });
             handles.push(handle);
         }
+
         drop(tx);
+
         let mut rcv: Vec<String> = (0..LIMIT).map(|_| "".to_string()).collect(); // обязательно нужно создать данные
         let mut i = 0;
+
         while let Some(v) = rx.recv().await {
             rcv[i] = v;
-            i = i + 1;
+            i += 1;
         }
+
         for handle in handles {
             handle.await.unwrap()
         }

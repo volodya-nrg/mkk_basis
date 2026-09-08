@@ -453,9 +453,11 @@ async fn check_tasks() {
     task_expected.updated_at = task_actual.updated_at; // подменим на валидное явно
     assert_eq!(task_expected, task_actual);
 
-    let mut task_data = TaskData::default();
-    task_data.limit = -1;
-    task_data.offset = -1;
+    let mut task_data = TaskData {
+        limit: -1,
+        offset: -1,
+        ..Default::default()
+    };
 
     // ok: проверим что список не пустой
     let mut list = ctx.db.tbl_tasks.list(task_data.clone()).await.unwrap();

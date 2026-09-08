@@ -452,8 +452,10 @@ async fn check_teams() {
     .await;
 
     // дадим права админу
-    let mut admin = RequestUserUpdate::default();
-    admin.role = Some(UsersRole::Admin.to_string());
+    let admin = RequestUserUpdate {
+        role: Some(UsersRole::Admin.to_string()),
+        ..Default::default()
+    };
 
     cl.users_update(admin_id.clone(), admin, |result| {
         let (status_code, _body_str) = result.unwrap();
@@ -632,9 +634,11 @@ async fn check_tasks() {
         email: req_register2.email.clone(),
         password: req_register2.password.clone(),
     };
-    let mut reg_list = RequestTaskData::default();
-    reg_list.limit = -1;
-    reg_list.offset = -1;
+    let mut reg_list = RequestTaskData {
+        limit: -1,
+        offset: -1,
+        ..Default::default()
+    };
 
     // проверим на 401
     cl.tasks_list(reg_list.clone(), |result| {
@@ -1143,10 +1147,12 @@ async fn check_users() {
     .await;
 
     // ok: обновим успешно
-    let mut req_user_update = RequestUserUpdate::default();
-    req_user_update.name = Some(rand::str());
-    req_user_update.role = Some(UsersRole::Null.to_string());
-    req_user_update.is_remove_avatar = true;
+    let req_user_update = RequestUserUpdate {
+        name: Some(rand::str()),
+        role: Some(UsersRole::Null.to_string()),
+        is_remove_avatar: true,
+        ..Default::default()
+    };
 
     cl.users_update(user_id.clone(), req_user_update.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
@@ -1173,7 +1179,7 @@ async fn check_users() {
         assert!(status_code.is_success());
 
         let resp: UsersList = serde_json::from_str(body_str.as_str()).unwrap();
-        assert!(resp.items.len() > 0);
+        assert!(!resp.items.is_empty());
         assert!(resp.total > 0);
         assert!(
             resp.items

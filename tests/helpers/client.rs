@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use http::StatusCode;
 use reqwest::{
     Certificate, Client as ReqwestClient, Error as ReqwestError, Identity, Response,
@@ -37,9 +39,7 @@ impl<'a> Client<'a> {
         // key - доказательство владения crt
 
         let ca = Certificate::from_pem(ca.as_bytes()).unwrap();
-        let identity =
-            Identity::from_pem(format!("{}{}", crt.to_string(), key.to_string()).as_bytes())
-                .unwrap();
+        let identity = Identity::from_pem(format!("{}{}", crt, key).as_bytes()).unwrap();
 
         Self {
             addr: addr.to_string(),
@@ -65,10 +65,10 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self.client.get(&self.addr).send().await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
         cb(result);
         self
@@ -77,14 +77,14 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .get(format!("{}/health", self.addr))
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
         cb(result);
         self
@@ -93,14 +93,14 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .get(format!("{}/{}", self.addr, rand::str()))
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
         cb(result);
         self
@@ -112,14 +112,14 @@ impl<'a> Client<'a> {
         let url_filepath = url_filepath
             .strip_prefix('/')
             .unwrap_or(url_filepath.as_str());
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .get(format!("{}/{}", self.addr, url_filepath))
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
         cb(result);
         self
@@ -130,7 +130,7 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .post(format!("{}/api/v1/register", self.addr))
@@ -138,7 +138,7 @@ impl<'a> Client<'a> {
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
 
         if is_full {
@@ -179,14 +179,14 @@ impl<'a> Client<'a> {
         if let Some(v) = code {
             query_items.push(format!("code={}", v));
         }
-        if query_items.len() > 0 {
+        if !query_items.is_empty() {
             address = address + "?" + &query_items.join("&").to_string();
         }
 
-        let result = (|| async {
+        let result = async {
             let response = self.client.get(address).send().await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
 
         cb(result);
@@ -196,7 +196,7 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .post(format!("{}/api/v1/login", self.addr))
@@ -209,7 +209,7 @@ impl<'a> Client<'a> {
                 log::debug!("new cookie: {}", value);
             }
             self.parse_response(response).await
-        })()
+        }
         .await;
 
         cb(result);
@@ -219,14 +219,14 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .post(format!("{}/api/v1/logout", self.addr))
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
 
         cb(result);
@@ -236,14 +236,14 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .post(format!("{}/api/v1/refresh_tokens", self.addr))
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
 
         cb(result);
@@ -255,7 +255,7 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .get(format!("{}/api/v1/teams", self.addr))
@@ -263,7 +263,7 @@ impl<'a> Client<'a> {
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
         cb(result);
         self
@@ -272,14 +272,14 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .get(format!("{}/api/v1/teams/{}", self.addr, uuid))
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
         cb(result);
         self
@@ -288,7 +288,7 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .post(format!("{}/api/v1/teams", self.addr))
@@ -296,8 +296,9 @@ impl<'a> Client<'a> {
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
+
         cb(result);
         self
     }
@@ -310,7 +311,7 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .put(format!("{}/api/v1/teams/{}", self.addr, item_id))
@@ -318,8 +319,9 @@ impl<'a> Client<'a> {
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
+
         cb(result);
         self
     }
@@ -327,15 +329,16 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .delete(format!("{}/api/v1/teams/{}", self.addr, item_id))
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
+
         cb(result);
         self
     }
@@ -348,7 +351,7 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .post(format!("{}/api/v1/teams/{}/invite", self.addr, item_id))
@@ -356,8 +359,9 @@ impl<'a> Client<'a> {
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
+
         cb(result);
         self
     }
@@ -367,7 +371,7 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .get(format!("{}/api/v1/tasks", self.addr))
@@ -375,8 +379,9 @@ impl<'a> Client<'a> {
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
+
         cb(result);
         self
     }
@@ -384,15 +389,16 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .get(format!("{}/api/v1/tasks/{}", self.addr, item_id))
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
+
         cb(result);
         self
     }
@@ -400,7 +406,7 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .post(format!("{}/api/v1/tasks", self.addr))
@@ -408,8 +414,9 @@ impl<'a> Client<'a> {
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
+
         cb(result);
         self
     }
@@ -422,7 +429,7 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .put(format!("{}/api/v1/tasks/{}", self.addr, item_id))
@@ -430,8 +437,9 @@ impl<'a> Client<'a> {
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
+
         cb(result);
         self
     }
@@ -439,15 +447,16 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .delete(format!("{}/api/v1/tasks/{}", self.addr, item_id))
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
+
         cb(result);
         self
     }
@@ -455,15 +464,16 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .get(format!("{}/api/v1/tasks/{}/history", self.addr, item_id))
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
+
         cb(result);
         self
     }
@@ -473,7 +483,7 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .get(format!("{}/api/v1/users", self.addr))
@@ -481,8 +491,9 @@ impl<'a> Client<'a> {
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
+
         cb(result);
         self
     }
@@ -490,15 +501,16 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .get(format!("{}/api/v1/users/{}", self.addr, item_id))
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
+
         cb(result);
         self
     }
@@ -520,7 +532,7 @@ impl<'a> Client<'a> {
             form = form.file("avatar", v).await.unwrap();
         }
 
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .post(format!("{}/api/v1/users", self.addr))
@@ -528,8 +540,9 @@ impl<'a> Client<'a> {
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
+
         cb(result);
         self
     }
@@ -563,7 +576,7 @@ impl<'a> Client<'a> {
             form = form.text("is_remove_avatar", "true");
         }
 
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .patch(format!("{}/api/v1/users/{}", self.addr, item_id))
@@ -571,8 +584,9 @@ impl<'a> Client<'a> {
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
+
         cb(result);
         self
     }
@@ -580,15 +594,16 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .delete(format!("{}/api/v1/users/{}", self.addr, item_id))
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
+
         cb(result);
         self
     }
@@ -604,7 +619,7 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .get(format!("{}/api/v1/tasks/{}/comments", self.addr, task_id))
@@ -612,8 +627,9 @@ impl<'a> Client<'a> {
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
+
         cb(result);
         self
     }
@@ -626,7 +642,7 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .post(format!("{}/api/v1/tasks/{}/comments", self.addr, task_id))
@@ -634,8 +650,9 @@ impl<'a> Client<'a> {
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
+
         cb(result);
         self
     }
@@ -643,15 +660,16 @@ impl<'a> Client<'a> {
     where
         F: FnMut(StatusCodeBodyError),
     {
-        let result = (|| async {
+        let result = async {
             let response = self
                 .client
                 .delete(format!("{}/api/v1/tasks/comment/{}", self.addr, item_id))
                 .send()
                 .await?;
             self.parse_response(response).await
-        })()
+        }
         .await;
+
         cb(result);
         self
     }

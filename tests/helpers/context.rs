@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use chrono::{DateTime, Local};
 use sqlx::postgres::PgPoolOptions;
 use std::net::TcpListener;
