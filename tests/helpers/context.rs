@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use chrono::{DateTime, Local};
-use sqlx::postgres::PgPoolOptions;
+use sqlx::{Pool, Postgres};
 use std::net::TcpListener;
 use std::process::Command;
 use std::time::Duration;
@@ -43,14 +43,15 @@ impl Context {
             .start()
             .await
             .unwrap();
-        let connection_string = format!(
-            "postgres://postgres:postgres@localhost:{}/postgres",
-            consts::DB_PORT
-        );
-        let pool = PgPoolOptions::new()
-            .connect(connection_string.as_str())
-            .await
-            .unwrap();
+        let pool = Pool::<Postgres>::connect(
+            format!(
+                "postgres://postgres:postgres@localhost:{}/postgres",
+                consts::DB_PORT
+            )
+            .as_str(),
+        )
+        .await
+        .unwrap();
 
         sqlx::migrate!("./migrations").run(&pool).await.unwrap();
 
