@@ -12,7 +12,7 @@ use mkk_basis::{
     consts::MIN_PASSWORD_LEN,
     transport::models::{
         RequestLogin, RequestTaskData, RequestTeamInvite, RequestUserUpdate, ResponseMsg,
-        ResponseUUID, Task, TaskComment, TaskCommentsList, TaskHistories, TasksList, Team,
+        ResponseUuid, Task, TaskComment, TaskCommentsList, TaskHistories, TasksList, Team,
         TeamsList, User, UsersList,
     },
 };
@@ -287,10 +287,10 @@ async fn check_teams() {
         &ctx.db,
     );
 
-    let mut user_id = Uuid::nil();
+    let mut user_id = String::new();
     let mut req_team = rand::request_team();
     let req_register = rand::request_register();
-    let mut team_id = Uuid::nil();
+    let mut team_id = String::new();
     let req_login = RequestLogin {
         email: req_register.email.clone(),
         password: req_register.password.clone(),
@@ -302,7 +302,7 @@ async fn check_teams() {
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await
-    .teams_one(Uuid::new_v4(), |result| {
+    .teams_one(Uuid::new_v4().to_string(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
@@ -312,20 +312,24 @@ async fn check_teams() {
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await
-    .teams_update(Uuid::new_v4(), rand::request_team(), |result| {
+    .teams_update(Uuid::new_v4().to_string(), rand::request_team(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await
-    .teams_delete(Uuid::new_v4(), |result| {
+    .teams_delete(Uuid::new_v4().to_string(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await
-    .teams_invite(Uuid::new_v4(), rand::request_team_invite(), |result| {
-        let (status_code, _body_str) = result.unwrap();
-        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
-    })
+    .teams_invite(
+        Uuid::new_v4().to_string(),
+        rand::request_team_invite(),
+        |result| {
+            let (status_code, _body_str) = result.unwrap();
+            assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+        },
+    )
     .await;
 
     // создадим пользователя и аутентифицируемся
@@ -333,8 +337,8 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).unwrap();
-        user_id = resp.uuid;
+        let resp: ResponseUuid = serde_json::from_str(body_str.as_str()).unwrap();
+        user_id = resp.value;
     })
     .await
     .login(req_login, |result| {
@@ -376,7 +380,7 @@ async fn check_teams() {
         assert!(resp.total > 0);
     })
     .await // ok
-    .teams_one(team_id, |result| {
+    .teams_one(team_id.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
@@ -384,14 +388,14 @@ async fn check_teams() {
         assert_eq!(team_id, resp.team_id)
     })
     .await // err
-    .teams_one(Uuid::new_v4(), |result| {
+    .teams_one(Uuid::new_v4().to_string(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::NOT_FOUND, status_code);
 
         req_team.name = rand::str()
     })
     .await // ok - обновим имя и проверим его
-    .teams_update(team_id, req_team.clone(), |result| {
+    .teams_update(team_id.clone(), req_team.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
@@ -399,7 +403,7 @@ async fn check_teams() {
         assert_eq!(req_team.name, resp.name)
     })
     .await // ok
-    .teams_delete(team_id, |result| {
+    .teams_delete(team_id.clone(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_success());
     })
@@ -411,9 +415,9 @@ async fn check_teams() {
     .await;
 
     // проверим приглашения
-    let mut admin_id = Uuid::nil();
-    let mut owner_id = Uuid::nil();
-    let mut other_id = Uuid::nil();
+    let mut admin_id = String::new();
+    let mut owner_id = String::new();
+    let mut other_id = String::new();
     let req_register_admin = rand::request_register();
     let req_register_owner = rand::request_register();
     let req_register_other = rand::request_register();
@@ -423,24 +427,27 @@ async fn check_teams() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).unwrap();
-        admin_id = resp.uuid;
+        admin_id = serde_json::from_str::<ResponseUuid>(body_str.as_str())
+            .unwrap()
+            .value;
     })
     .await
     .register(req_register_owner.clone(), true, |result| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).unwrap();
-        owner_id = resp.uuid;
+        owner_id = serde_json::from_str::<ResponseUuid>(body_str.as_str())
+            .unwrap()
+            .value;
     })
     .await
     .register(req_register_other.clone(), true, |result| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).unwrap();
-        other_id = resp.uuid;
+        other_id = serde_json::from_str::<ResponseUuid>(body_str.as_str())
+            .unwrap()
+            .value;
     })
     .await;
 
@@ -448,14 +455,14 @@ async fn check_teams() {
     let mut admin = RequestUserUpdate::default();
     admin.role = Some(UsersRole::Admin.to_string());
 
-    cl.users_update(admin_id, admin, |result| {
+    cl.users_update(admin_id.clone(), admin, |result| {
         let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_success());
     })
     .await;
 
     // зайдем под owner и создадим команду
-    team_id = Uuid::nil();
+    team_id = String::new();
     cl.login(
         RequestLogin {
             email: req_register_owner.email.clone(),
@@ -494,10 +501,16 @@ async fn check_teams() {
         },
     )
     .await
-    .teams_invite(team_id, RequestTeamInvite { user_id: owner_id }, |result| {
-        let (status_code, _body_str) = result.unwrap();
-        assert_eq!(StatusCode::FORBIDDEN, status_code);
-    })
+    .teams_invite(
+        team_id.clone(),
+        RequestTeamInvite {
+            user_id: owner_id.clone(),
+        },
+        |result| {
+            let (status_code, _body_str) = result.unwrap();
+            assert_eq!(StatusCode::FORBIDDEN, status_code);
+        },
+    )
     .await
     .logout(|result| {
         let (status_code, _body_str) = result.unwrap();
@@ -517,10 +530,16 @@ async fn check_teams() {
         },
     )
     .await
-    .teams_invite(team_id, RequestTeamInvite { user_id: admin_id }, |result| {
-        let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
-    })
+    .teams_invite(
+        team_id.clone(),
+        RequestTeamInvite {
+            user_id: admin_id.clone(),
+        },
+        |result| {
+            let (status_code, _body_str) = result.unwrap();
+            assert!(status_code.is_success());
+        },
+    )
     .await
     .logout(|result| {
         let (status_code, _body_str) = result.unwrap();
@@ -540,10 +559,14 @@ async fn check_teams() {
         },
     )
     .await
-    .teams_invite(team_id, RequestTeamInvite { user_id: other_id }, |result| {
-        let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
-    })
+    .teams_invite(
+        team_id.clone(),
+        RequestTeamInvite { user_id: other_id },
+        |result| {
+            let (status_code, _body_str) = result.unwrap();
+            assert!(status_code.is_success());
+        },
+    )
     .await // выйдем
     .logout(|result| {
         let (status_code, _body_str) = result.unwrap();
@@ -563,10 +586,16 @@ async fn check_teams() {
         },
     )
     .await
-    .teams_invite(team_id, RequestTeamInvite { user_id: owner_id }, |result| {
-        let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_server_error());
-    })
+    .teams_invite(
+        team_id.clone(),
+        RequestTeamInvite {
+            user_id: owner_id.clone(),
+        },
+        |result| {
+            let (status_code, _body_str) = result.unwrap();
+            assert!(status_code.is_server_error());
+        },
+    )
     .await
     .logout(|result| {
         let (status_code, _body_str) = result.unwrap();
@@ -586,10 +615,10 @@ async fn check_tasks() {
         &ctx.db,
     );
 
-    let mut user_id1 = Uuid::nil();
-    let mut user_id2 = Uuid::nil();
-    let mut team_id = Uuid::nil();
-    let mut task_id = Uuid::nil();
+    let mut user_id1 = String::new();
+    let mut user_id2 = String::new();
+    let mut team_id = String::new();
+    let mut task_id = String::new();
     let req_register1 = rand::request_register();
     let req_register2 = rand::request_register();
     let req_team = rand::request_team();
@@ -618,22 +647,22 @@ async fn check_tasks() {
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await
-    .tasks_one(Uuid::new_v4(), |result| {
+    .tasks_one(Uuid::new_v4().to_string(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await
-    .tasks_update(Uuid::new_v4(), rand::request_task(), |result| {
+    .tasks_update(Uuid::new_v4().to_string(), rand::request_task(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await
-    .tasks_delete(Uuid::new_v4(), |result| {
+    .tasks_delete(Uuid::new_v4().to_string(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await
-    .tasks_history(Uuid::new_v4(), |result| {
+    .tasks_history(Uuid::new_v4().to_string(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
@@ -644,16 +673,18 @@ async fn check_tasks() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).unwrap();
-        user_id1 = resp.uuid;
+        user_id1 = serde_json::from_str::<ResponseUuid>(body_str.as_str())
+            .unwrap()
+            .value;
     })
     .await
     .register(req_register2, true, |result| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).unwrap();
-        user_id2 = resp.uuid;
+        user_id2 = serde_json::from_str::<ResponseUuid>(body_str.as_str())
+            .unwrap()
+            .value;
     })
     .await;
 
@@ -670,21 +701,22 @@ async fn check_tasks() {
         let resp_ream_actual: Team = serde_json::from_str(body_str.as_str()).unwrap();
         team_id = resp_ream_actual.team_id;
 
-        req_task1.created_by = user_id1;
-        req_task1.team_id = team_id;
+        req_task1.created_by = user_id1.clone();
+        req_task1.team_id = team_id.clone();
         req_task1.assignee_id = None;
 
-        req_task2.created_by = user_id1;
-        req_task2.team_id = team_id;
-        req_task2.assignee_id = Some(user_id1);
+        req_task2.created_by = user_id1.clone();
+        req_task2.team_id = team_id.clone();
+        req_task2.assignee_id = Some(user_id1.clone());
     })
     .await
     .tasks_create(req_task1.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp_task: Task = serde_json::from_str(body_str.as_str()).unwrap();
-        task_id = resp_task.task_id;
+        task_id = serde_json::from_str::<Task>(body_str.as_str())
+            .unwrap()
+            .task_id;
     })
     .await // err: с теми же данными
     .tasks_create(req_task1.clone(), |result| {
@@ -714,12 +746,12 @@ async fn check_tasks() {
         assert_eq!(StatusCode::FORBIDDEN, status_code);
     })
     .await // err - нету прав
-    .tasks_update(task_id, req_task3.clone(), |result| {
+    .tasks_update(task_id.clone(), req_task3.clone(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::FORBIDDEN, status_code);
     })
     .await
-    .tasks_delete(task_id, |result| {
+    .tasks_delete(task_id.clone(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::FORBIDDEN, status_code);
     })
@@ -762,7 +794,7 @@ async fn check_tasks() {
 
         reg_list.limit = -1;
         reg_list.offset = -1;
-        reg_list.team_id = Some(Uuid::new_v4());
+        reg_list.team_id = Some(Uuid::new_v4().to_string());
     })
     .await // ok: применим фильтрацию
     .tasks_list(reg_list.clone(), |result| {
@@ -774,12 +806,12 @@ async fn check_tasks() {
         assert_eq!(0, resp.total);
     })
     .await // err
-    .tasks_one(Uuid::new_v4(), |result| {
+    .tasks_one(Uuid::new_v4().to_string(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::NOT_FOUND, status_code);
     })
     .await // ok
-    .tasks_one(task_id, |result| {
+    .tasks_one(task_id.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
@@ -787,7 +819,7 @@ async fn check_tasks() {
         assert_eq!(task_id, resp.task_id)
     })
     .await // ok: обновление происходит корректно, т.к. user_id явл. членом команды
-    .tasks_update(task_id, req_task2.clone(), |result| {
+    .tasks_update(task_id.clone(), req_task2.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
@@ -796,12 +828,12 @@ async fn check_tasks() {
         assert_eq!(task_id, resp.task_id);
     })
     .await // err - удалим не известное
-    .tasks_delete(Uuid::new_v4(), |result| {
+    .tasks_delete(Uuid::new_v4().to_string(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::NOT_FOUND, status_code);
     })
     .await // ok - член группы может удалить задачу (статус canceled)
-    .tasks_delete(task_id, |result| {
+    .tasks_delete(task_id.clone(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_success());
     })
@@ -827,9 +859,9 @@ async fn check_task_comments() {
         &ctx.db,
     );
 
-    let mut user_id = Uuid::nil();
-    let mut team_id = Uuid::nil();
-    let mut task_id = Uuid::nil();
+    let mut user_id = String::new();
+    let mut team_id = String::new();
+    let mut task_id = String::new();
     let req_register = rand::request_register();
     let req_team = rand::request_team();
     let mut req_task = rand::request_task();
@@ -838,21 +870,25 @@ async fn check_task_comments() {
         email: req_register.email.clone(),
         password: req_register.password.clone(),
     };
-    let mut task_comment_id1 = Uuid::nil();
-    let mut task_comment_id2 = Uuid::nil();
+    let mut task_comment_id1 = String::new();
+    let mut task_comment_id2 = String::new();
 
     // проверим на 401
-    cl.task_comments_list(Uuid::new_v4(), -1, -1, |result| {
+    cl.task_comments_list(Uuid::new_v4().to_string(), -1, -1, |result| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await
-    .task_comments_create(Uuid::new_v4(), rand::request_task_comment(), |result| {
-        let (status_code, _body_str) = result.unwrap();
-        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
-    })
+    .task_comments_create(
+        Uuid::new_v4().to_string(),
+        rand::request_task_comment(),
+        |result| {
+            let (status_code, _body_str) = result.unwrap();
+            assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+        },
+    )
     .await
-    .task_comments_delete(Uuid::new_v4(), |result| {
+    .task_comments_delete(Uuid::new_v4().to_string(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
@@ -863,8 +899,9 @@ async fn check_task_comments() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).unwrap();
-        user_id = resp.uuid;
+        user_id = serde_json::from_str::<ResponseUuid>(body_str.as_str())
+            .unwrap()
+            .value;
     })
     .await
     .login(req_login, |result| {
@@ -876,11 +913,12 @@ async fn check_task_comments() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp_ream_actual: Team = serde_json::from_str(body_str.as_str()).unwrap();
-        team_id = resp_ream_actual.team_id;
+        team_id = serde_json::from_str::<Team>(body_str.as_str())
+            .unwrap()
+            .team_id;
 
-        req_task.created_by = user_id;
-        req_task.team_id = team_id;
+        req_task.created_by = user_id.clone();
+        req_task.team_id = team_id.clone();
         req_task.assignee_id = None;
     })
     .await
@@ -888,19 +926,20 @@ async fn check_task_comments() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp_task: Task = serde_json::from_str(body_str.as_str()).unwrap();
-        task_id = resp_task.task_id;
+        task_id = serde_json::from_str::<Task>(body_str.as_str())
+            .unwrap()
+            .task_id;
     })
     .await;
 
     // ok
-    cl.task_comments_create(task_id, req_task_comment.clone(), |result| {
+    cl.task_comments_create(task_id.clone(), req_task_comment.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
         let resp: TaskComment = serde_json::from_str(body_str.as_str()).unwrap();
 
-        assert_ne!(Uuid::nil(), resp.task_comment_id);
+        assert!(!resp.task_comment_id.is_empty());
         assert_eq!(task_id, resp.task_id);
         assert_eq!(user_id, resp.user_id);
         assert_eq!(req_task_comment.msg, resp.msg);
@@ -908,13 +947,13 @@ async fn check_task_comments() {
         task_comment_id1 = resp.task_comment_id;
     })
     .await // ok - с теми же данными
-    .task_comments_create(task_id, req_task_comment.clone(), |result| {
+    .task_comments_create(task_id.clone(), req_task_comment.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
         let resp: TaskComment = serde_json::from_str(body_str.as_str()).unwrap();
 
-        assert_ne!(Uuid::nil(), resp.task_comment_id);
+        assert!(!resp.task_comment_id.is_empty());
         assert_eq!(task_id, resp.task_id);
         assert_eq!(user_id, resp.user_id);
         assert_eq!(req_task_comment.msg, resp.msg);
@@ -922,7 +961,7 @@ async fn check_task_comments() {
         task_comment_id2 = resp.task_comment_id;
     })
     .await // ok
-    .task_comments_list(task_id, 100, 0, |result| {
+    .task_comments_list(task_id.clone(), 100, 0, |result| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
@@ -931,7 +970,7 @@ async fn check_task_comments() {
         assert_eq!(2, resp.total);
     })
     .await // ok
-    .task_comments_list(task_id, -1, -1, |result| {
+    .task_comments_list(task_id.clone(), -1, -1, |result| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
@@ -940,7 +979,7 @@ async fn check_task_comments() {
         assert_eq!(2, resp.total);
     })
     .await // ok
-    .task_comments_list(task_id, 0, 0, |result| {
+    .task_comments_list(task_id.clone(), 0, 0, |result| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
@@ -949,7 +988,7 @@ async fn check_task_comments() {
         assert_eq!(2, resp.total);
     })
     .await // ok: с другим task_id
-    .task_comments_list(Uuid::new_v4(), 100, 0, |result| {
+    .task_comments_list(Uuid::new_v4().to_string(), 100, 0, |result| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
@@ -958,7 +997,7 @@ async fn check_task_comments() {
         assert_eq!(0, resp.total);
     })
     .await // err
-    .task_comments_delete(Uuid::new_v4(), |result| {
+    .task_comments_delete(Uuid::new_v4().to_string(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_server_error());
     })
@@ -968,7 +1007,7 @@ async fn check_task_comments() {
         assert!(status_code.is_success());
     })
     .await // ok
-    .task_comments_list(task_id, 100, 0, |result| {
+    .task_comments_list(task_id.clone(), 100, 0, |result| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
@@ -1004,8 +1043,8 @@ async fn check_users() {
         &ctx.db,
     );
 
-    let mut owner_id = Uuid::nil();
-    let mut user_id = Uuid::nil();
+    let mut owner_id = String::new();
+    let mut user_id = String::new();
     let req_register = rand::request_register();
     let mut req_user_create = rand::request_user_create();
     let image_path = rand::create_image("jpg").unwrap();
@@ -1029,12 +1068,16 @@ async fn check_users() {
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await
-    .users_update(Uuid::new_v4(), rand::request_user_update(), |result| {
-        let (status_code, _body_str) = result.unwrap();
-        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
-    })
+    .users_update(
+        Uuid::new_v4().to_string(),
+        rand::request_user_update(),
+        |result| {
+            let (status_code, _body_str) = result.unwrap();
+            assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+        },
+    )
     .await
-    .users_delete(Uuid::new_v4(), |result| {
+    .users_delete(Uuid::new_v4().to_string(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
@@ -1045,8 +1088,9 @@ async fn check_users() {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
-        let resp: ResponseUUID = serde_json::from_str(body_str.as_str()).unwrap();
-        owner_id = resp.uuid;
+        owner_id = serde_json::from_str::<ResponseUuid>(body_str.as_str())
+            .unwrap()
+            .value;
     })
     .await
     .login(req_login, |result| {
@@ -1056,20 +1100,24 @@ async fn check_users() {
     .await;
 
     // err: пользователя нет
-    cl.users_one(Uuid::new_v4(), |result| {
+    cl.users_one(Uuid::new_v4().to_string(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::NOT_FOUND, status_code);
     })
     .await // err: такого пользователя нет
-    .users_delete(Uuid::new_v4(), |result| {
+    .users_delete(Uuid::new_v4().to_string(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::NOT_FOUND, status_code);
     })
     .await // err: такого пользователя нет
-    .users_update(Uuid::new_v4(), rand::request_user_update(), |result| {
-        let (status_code, _body_str) = result.unwrap();
-        assert_eq!(StatusCode::NOT_FOUND, status_code);
-    })
+    .users_update(
+        Uuid::new_v4().to_string(),
+        rand::request_user_update(),
+        |result| {
+            let (status_code, _body_str) = result.unwrap();
+            assert_eq!(StatusCode::NOT_FOUND, status_code);
+        },
+    )
     .await // ok
     .users_create(req_user_create.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
@@ -1088,7 +1136,7 @@ async fn check_users() {
         user_id = resp_user_actual.user_id;
     })
     .await // ok
-    .users_one(user_id, |result| {
+    .users_one(user_id.clone(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_success());
     })
@@ -1100,7 +1148,7 @@ async fn check_users() {
     req_user_update.role = Some(UsersRole::Null.to_string());
     req_user_update.is_remove_avatar = true;
 
-    cl.users_update(user_id, req_user_update.clone(), |result| {
+    cl.users_update(user_id.clone(), req_user_update.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
         assert!(status_code.is_success());
 
@@ -1135,7 +1183,7 @@ async fn check_users() {
         );
     })
     .await // ок: удалим успешно
-    .users_delete(user_id, |result| {
+    .users_delete(user_id.clone(), |result| {
         let (status_code, _body_str) = result.unwrap();
         assert!(status_code.is_success());
     })

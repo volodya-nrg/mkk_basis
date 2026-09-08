@@ -8,6 +8,10 @@ CONFIGS_PATH=./data
 echo_version:
 	@echo commit:$(GIT_COMMIT)
 
+.PHONY: rust_version
+rust_version:
+	@rustc --version
+
 .PHONY: install_deps
 install_deps:
 	cargo install sqlx-cli
@@ -58,14 +62,6 @@ gen_tls_certs:
 		done; \
 	done
 
-.PHONY: gen_proto
-gen_proto: # на прямую не вызывать, через Докер только
-	protoc \
-		--proto_path=. \
-		--rust_out=./src/protos \
-		--rust_opt="experimental-codegen=enabled,kernel=upb" \
-		./api/basis_service.proto
-
 .PHONY: check_version_certs
 check_version_certs:
 	openssl x509 -in ./data/server.crt -text -noout | grep "Version"
@@ -90,18 +86,6 @@ cargo_reload:
 cargo_check:
 	cargo check
 
-.PHONY: rust_version
-rust_version:
-	@rustc --version
-
 .PHONY: lint
 lint:
 	cargo clippy # "--tests" - включая тесты
-
-.PHONY: gen_all
-gen_all: \
-	gen_proto
-
-.PHONY: gen_docker
-gen_docker:
-	cd scripts && bash ./gen_docker.sh

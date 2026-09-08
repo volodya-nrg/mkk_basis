@@ -9,7 +9,7 @@ use std::marker::PhantomData;
 use crate::adapter::email::EmailSender;
 use crate::consts;
 use crate::transport::models::{
-    RequestLogin, RequestRegister, RequestRegisterConfirm, ResponseUUID,
+    RequestLogin, RequestRegister, RequestRegisterConfirm, ResponseUuid,
 };
 use crate::usecase::{UseCase, UseCaseError};
 
@@ -37,7 +37,15 @@ where
             .await
             .map_or_else(
                 |e| e.into_response(),
-                |new_uuid| (StatusCode::OK, Json(ResponseUUID { uuid: new_uuid })).into_response(),
+                |new_uuid| {
+                    (
+                        StatusCode::OK,
+                        Json(ResponseUuid {
+                            value: new_uuid.to_string(),
+                        }),
+                    )
+                        .into_response()
+                },
             )
     }
     pub async fn register_confirm(
@@ -46,10 +54,7 @@ where
     ) -> impl IntoResponse {
         use_case
             .auth
-            .register_confirm(
-                query.email.unwrap_or_default(),
-                query.code.unwrap_or_default(),
-            )
+            .register_confirm(query.email, query.code)
             .await
             .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())
     }

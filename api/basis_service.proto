@@ -74,16 +74,16 @@ message RequestTaskComment{
 message RequestTaskData{
   int32 limit = 1;
   int32 offset = 2;
-  string team_id = 3;
-  string assignee_id = 4;
-  string status = 5;
+  optional string team_id = 3;
+  optional string assignee_id = 4;
+  optional string status = 5;
 }
 message RequestTask{
   string name = 1;
-  string description = 2;
+  optional string description = 2;
   string created_by = 3;
   string team_id = 4;
-  string assignee_id = 5;
+  optional string assignee_id = 5;
   string status = 6;
 }
 message RequestTeam{
@@ -92,19 +92,21 @@ message RequestTeam{
 message RequestTeamInvite{
   string user_id = 1;
 }
+// RequestUserCreate - optional нужен тут
 message RequestUserCreate{
   string email = 1;
   string password = 2;
-  string name = 3;
-  string role = 4;
-  string avatar = 5;
+  optional string name = 3;
+  optional string role = 4;
+  optional string avatar = 5;
 }
+// RequestUserUpdate - optional нужен тут
 message RequestUserUpdate{
-  string email = 1;
-  string password = 2;
-  string name = 3;
-  string role = 4;
-  string avatar = 5;
+  optional string email = 1;
+  optional string password = 2;
+  optional string name = 3;
+  optional string role = 4;
+  optional string avatar = 5;
   bool is_remove_avatar = 6;
 }
 

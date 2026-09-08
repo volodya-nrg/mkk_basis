@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 use uuid::Uuid;
 
 use crate::adapter::email::EmailSender;
-use crate::transport::models::AuthUser;
+use crate::transport::models::{AuthUser, ResponseMsg};
 use crate::transport::{
     mapper,
     models::{RequestLimitOffset, RequestTeam, RequestTeamInvite, TeamsList},
@@ -105,9 +105,20 @@ where
         Path(team_id): Path<Uuid>,
         Json(payload): Json<RequestTeamInvite>,
     ) -> impl IntoResponse {
+        let user_id = match Uuid::parse_str(payload.user_id.as_str()) {
+            Ok(v) => v,
+            Err(e) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(ResponseMsg { msg: e.to_string() }),
+                )
+                    .into_response();
+            }
+        };
+
         use_case
             .teams
-            .invite(user.user_id, user.role, team_id, payload.user_id)
+            .invite(user.user_id, user.role, team_id, user_id)
             .await
             .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())
     }

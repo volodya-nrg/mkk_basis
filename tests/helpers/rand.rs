@@ -12,8 +12,8 @@ use mkk_basis::adapter::db::postgres::tables::tasks::Status as TaskStatuses;
 use mkk_basis::adapter::db::postgres::tables::users::Role as UserRoles;
 use mkk_basis::adapter::helpers;
 use mkk_basis::transport::models::{
-    RequestLogin, RequestRegister, RequestTask, RequestTaskComment,
-    RequestTeam, RequestTeamInvite, RequestUserCreate, RequestUserUpdate,
+    RequestLogin, RequestRegister, RequestTask, RequestTaskComment, RequestTeam, RequestTeamInvite,
+    RequestUserCreate, RequestUserUpdate,
 };
 
 pub fn private_key(len: usize) -> Vec<u8> {
@@ -65,7 +65,7 @@ pub fn request_team() -> RequestTeam {
 
 pub fn request_team_invite() -> RequestTeamInvite {
     RequestTeamInvite {
-        user_id: Uuid::new_v4(),
+        user_id: Uuid::new_v4().to_string(),
     }
 }
 
@@ -73,9 +73,13 @@ pub fn request_task() -> RequestTask {
     RequestTask {
         name: str(),
         description: if bool() { Some(str()) } else { None },
-        created_by: Uuid::new_v4(),
-        team_id: Uuid::new_v4(),
-        assignee_id: if bool() { Some(Uuid::new_v4()) } else { None },
+        created_by: Uuid::new_v4().to_string(),
+        team_id: Uuid::new_v4().to_string(),
+        assignee_id: if bool() {
+            Some(Uuid::new_v4().to_string())
+        } else {
+            None
+        },
         status: get_random_task_status(),
     }
 }
@@ -85,7 +89,11 @@ pub fn request_user_create() -> RequestUserCreate {
         email: email(),
         password: str(),
         name: if bool() { Some(str()) } else { None },
-        role: if bool() { Some(get_random_user_role()) } else { None },
+        role: if bool() {
+            Some(get_random_user_role())
+        } else {
+            None
+        },
         avatar: None,
     }
 }
@@ -95,7 +103,11 @@ pub fn request_user_update() -> RequestUserUpdate {
         email: if bool() { Some(email()) } else { None },
         password: if bool() { Some(str()) } else { None },
         name: if bool() { Some(str()) } else { None },
-        role: if bool() { Some(get_random_user_role()) } else { None },
+        role: if bool() {
+            Some(get_random_user_role())
+        } else {
+            None
+        },
         avatar: None,
         is_remove_avatar: bool(),
     }

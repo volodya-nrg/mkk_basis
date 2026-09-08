@@ -24,6 +24,7 @@ pub struct UserCreate {
     pub avatar: Option<String>,
 }
 
+#[derive(Default)]
 pub struct UserUpdate {
     pub user_id: Uuid,
     pub email: Option<String>,

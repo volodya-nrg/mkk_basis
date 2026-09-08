@@ -4,7 +4,6 @@ use reqwest::{
     multipart::Form,
 };
 use std::time::Duration;
-use uuid::Uuid;
 
 use mkk_basis::adapter::db::postgres::Postgres as PostgresService;
 use mkk_basis::transport::models::{
@@ -269,7 +268,7 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn teams_one<F>(&mut self, uuid: Uuid, mut cb: F) -> &mut Self
+    pub async fn teams_one<F>(&mut self, uuid: String, mut cb: F) -> &mut Self
     where
         F: FnMut(StatusCodeBodyError),
     {
@@ -302,7 +301,12 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn teams_update<F>(&mut self, item_id: Uuid, req: RequestTeam, mut cb: F) -> &mut Self
+    pub async fn teams_update<F>(
+        &mut self,
+        item_id: String,
+        req: RequestTeam,
+        mut cb: F,
+    ) -> &mut Self
     where
         F: FnMut(StatusCodeBodyError),
     {
@@ -319,7 +323,7 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn teams_delete<F>(&mut self, item_id: Uuid, mut cb: F) -> &mut Self
+    pub async fn teams_delete<F>(&mut self, item_id: String, mut cb: F) -> &mut Self
     where
         F: FnMut(StatusCodeBodyError),
     {
@@ -337,7 +341,7 @@ impl<'a> Client<'a> {
     }
     pub async fn teams_invite<F>(
         &mut self,
-        item_id: Uuid,
+        item_id: String,
         req: RequestTeamInvite,
         mut cb: F,
     ) -> &mut Self
@@ -376,7 +380,7 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn tasks_one<F>(&mut self, item_id: Uuid, mut cb: F) -> &mut Self
+    pub async fn tasks_one<F>(&mut self, item_id: String, mut cb: F) -> &mut Self
     where
         F: FnMut(StatusCodeBodyError),
     {
@@ -409,7 +413,12 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn tasks_update<F>(&mut self, item_id: Uuid, req: RequestTask, mut cb: F) -> &mut Self
+    pub async fn tasks_update<F>(
+        &mut self,
+        item_id: String,
+        req: RequestTask,
+        mut cb: F,
+    ) -> &mut Self
     where
         F: FnMut(StatusCodeBodyError),
     {
@@ -426,7 +435,7 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn tasks_delete<F>(&mut self, item_id: Uuid, mut cb: F) -> &mut Self
+    pub async fn tasks_delete<F>(&mut self, item_id: String, mut cb: F) -> &mut Self
     where
         F: FnMut(StatusCodeBodyError),
     {
@@ -442,7 +451,7 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn tasks_history<F>(&mut self, item_id: Uuid, mut cb: F) -> &mut Self
+    pub async fn tasks_history<F>(&mut self, item_id: String, mut cb: F) -> &mut Self
     where
         F: FnMut(StatusCodeBodyError),
     {
@@ -477,7 +486,7 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn users_one<F>(&mut self, item_id: Uuid, mut cb: F) -> &mut Self
+    pub async fn users_one<F>(&mut self, item_id: String, mut cb: F) -> &mut Self
     where
         F: FnMut(StatusCodeBodyError),
     {
@@ -526,7 +535,7 @@ impl<'a> Client<'a> {
     }
     pub async fn users_update<F>(
         &mut self,
-        item_id: Uuid,
+        item_id: String,
         req: RequestUserUpdate,
         mut cb: F,
     ) -> &mut Self
@@ -567,7 +576,7 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn users_delete<F>(&mut self, item_id: Uuid, mut cb: F) -> &mut Self
+    pub async fn users_delete<F>(&mut self, item_id: String, mut cb: F) -> &mut Self
     where
         F: FnMut(StatusCodeBodyError),
     {
@@ -587,7 +596,7 @@ impl<'a> Client<'a> {
     // task comments
     pub async fn task_comments_list<F>(
         &mut self,
-        task_id: Uuid,
+        task_id: String,
         limit: i32,
         offset: i32,
         mut cb: F,
@@ -610,7 +619,7 @@ impl<'a> Client<'a> {
     }
     pub async fn task_comments_create<F>(
         &mut self,
-        task_id: Uuid,
+        task_id: String,
         req: RequestTaskComment,
         mut cb: F,
     ) -> &mut Self
@@ -630,7 +639,7 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn task_comments_delete<F>(&mut self, item_id: Uuid, mut cb: F) -> &mut Self
+    pub async fn task_comments_delete<F>(&mut self, item_id: String, mut cb: F) -> &mut Self
     where
         F: FnMut(StatusCodeBodyError),
     {
