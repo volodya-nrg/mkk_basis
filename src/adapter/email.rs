@@ -9,7 +9,16 @@ use std::time::Duration;
 // EmailSender. Трейт для подмены (прод, тест). Сразу добавим ограничения
 // (Clone + Send + Sync + 'static), чтоб их не добавлять потом везде. "'static" - для Router.
 pub trait EmailSender: Clone + Send + Sync + 'static {
-    fn send(&self, to: String, subject: String, body: String) -> Result<(), EmailError>;
+    // send - пусть с тестах показывает в логах что якобы отправился е-мэйл.
+    fn send(&self, to: String, subject: String, body: String) -> Result<(), EmailError> {
+        log::debug!(
+            "emulate send email. to: {}; subject: {}; body: {}",
+            to,
+            subject,
+            body
+        );
+        Ok(())
+    }
 }
 
 #[derive(Debug)]

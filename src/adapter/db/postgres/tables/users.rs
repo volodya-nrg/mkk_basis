@@ -1,6 +1,5 @@
 use sqlx::{Pool, Postgres, QueryBuilder, Row};
 use std::fmt;
-use std::fmt::Formatter;
 use uuid::Uuid;
 
 use crate::adapter::db::{
@@ -16,7 +15,7 @@ pub enum Role {
     Null, // при обновлении пользователя нужно иметь возможность выставить как-то в NULL
 }
 impl fmt::Display for Role {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
             Role::Admin => "admin",
             Role::Moder => "moder",
