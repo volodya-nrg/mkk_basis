@@ -28,15 +28,14 @@ impl fmt::Display for Role {
 
 #[derive(Clone)]
 pub struct Users {
-    pool: Pool<Postgres>,
     table_basic: TableBasic,
 }
 
 impl Users {
     pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
-            pool,
             table_basic: TableBasic {
+                pool,
                 name: "users".to_string(),
                 fields: vec![
                     "user_id".to_string(),
@@ -58,8 +57,6 @@ impl Users {
             self.table_basic.fields.join(","),
             self.table_basic.name,
         ));
-        let mut count_builder =
-            QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.table_basic.name));
 
         if limit > -1 {
             common_builder.push(" LIMIT ");
@@ -71,6 +68,7 @@ impl Users {
         }
 
         let mut tx = self
+            .table_basic
             .pool
             .begin()
             .await
@@ -80,11 +78,8 @@ impl Users {
             .fetch_all(&mut *tx)
             .await
             .map_err(RepositoryError::FailedToQuery)?;
-        let total = count_builder
-            .build_query_scalar()
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(RepositoryError::FailedToCount)?;
+        let total = self.table_basic.count(&mut tx, None, vec![]).await?;
+
         tx.commit()
             .await
             .map_err(RepositoryError::TransactionError)?;
@@ -100,7 +95,7 @@ impl Users {
         QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(&self.pool)
+            .fetch_optional(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToQuery)?
             .ok_or(RepositoryError::NotFoundRow)
@@ -114,7 +109,7 @@ impl Users {
         QueryBuilder::new(query)
             .build_query_as()
             .bind(email)
-            .fetch_optional(&self.pool)
+            .fetch_optional(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToQuery)?
             .ok_or(RepositoryError::NotFoundRow)
@@ -133,7 +128,7 @@ impl Users {
             .bind(item.email_code)
             .bind(item.avatar)
             .bind(self.get_valid_role(item.role))
-            .fetch_one(&self.pool)
+            .fetch_one(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToInsert)?
             .try_get(0)
@@ -153,7 +148,7 @@ impl Users {
             .bind(item.avatar)
             .bind(self.get_valid_role(item.role))
             .bind(item.user_id)
-            .execute(&self.pool)
+            .execute(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToUpdate)
             .and_then(|result| {
@@ -170,7 +165,7 @@ impl Users {
         QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(&self.pool)
+            .execute(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToDelete)
             .and_then(|result| {

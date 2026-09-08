@@ -7,15 +7,14 @@ use crate::adapter::db::{
 
 #[derive(Clone)]
 pub struct TeamMembers {
-    pool: Pool<Postgres>,
     table_basic: TableBasic,
 }
 
 impl TeamMembers {
     pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
-            pool,
             table_basic: TableBasic {
+                pool,
                 name: "team_members".to_string(),
                 fields: vec![
                     "team_id".to_string(),
@@ -33,7 +32,7 @@ impl TeamMembers {
             self.table_basic.name,
         ))
         .build_query_as()
-        .fetch_all(&self.pool)
+        .fetch_all(&self.table_basic.pool)
         .await
         .map_err(RepositoryError::FailedToQuery)
     }
@@ -47,7 +46,7 @@ impl TeamMembers {
             .build_query_as()
             .bind(team_id)
             .bind(user_id)
-            .fetch_optional(&self.pool)
+            .fetch_optional(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToQuery)?
             .ok_or(RepositoryError::NotFoundRow)
@@ -61,7 +60,7 @@ impl TeamMembers {
             .build()
             .bind(item.team_id)
             .bind(item.user_id)
-            .execute(&self.pool)
+            .execute(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToInsert)
             .map(|_| ())
@@ -76,7 +75,7 @@ impl TeamMembers {
             .build()
             .bind(team_id)
             .bind(user_id)
-            .execute(&self.pool)
+            .execute(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToDelete)
             .and_then(|result| {

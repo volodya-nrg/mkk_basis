@@ -9,15 +9,14 @@ use crate::adapter::db::{
 
 #[derive(Clone)] // из-за axum-state
 pub struct Teams {
-    pool: Pool<Postgres>,
     table_basic: TableBasic,
 }
 
 impl Teams {
     pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
-            pool,
             table_basic: TableBasic {
+                pool,
                 name: "teams".to_string(),
                 fields: vec![
                     "team_id".to_string(),
@@ -35,8 +34,6 @@ impl Teams {
             self.table_basic.fields.join(","),
             self.table_basic.name,
         ));
-        let mut count_builder =
-            QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.table_basic.name));
 
         if limit > -1 {
             common_builder.push(" LIMIT ");
@@ -48,6 +45,7 @@ impl Teams {
         }
 
         let mut tx = self
+            .table_basic
             .pool
             .begin()
             .await
@@ -57,11 +55,7 @@ impl Teams {
             .fetch_all(&mut *tx)
             .await
             .map_err(RepositoryError::FailedToQuery)?;
-        let total = count_builder
-            .build_query_scalar()
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(RepositoryError::FailedToCount)?;
+        let total = self.table_basic.count(&mut tx, None, vec![]).await?;
 
         tx.commit()
             .await
@@ -78,7 +72,7 @@ impl Teams {
         QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(&self.pool)
+            .fetch_optional(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToQuery)?
             .ok_or(RepositoryError::NotFoundRow)
@@ -92,7 +86,7 @@ impl Teams {
             .build()
             .bind(item.name)
             .bind(item.created_by)
-            .fetch_one(&self.pool)
+            .fetch_one(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToInsert)?
             .try_get(0)
@@ -107,7 +101,7 @@ impl Teams {
             .build()
             .bind(item.name)
             .bind(item.team_id)
-            .execute(&self.pool)
+            .execute(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToUpdate)
             .and_then(|result| {
@@ -124,7 +118,7 @@ impl Teams {
         QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(&self.pool)
+            .execute(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToDelete)
             .and_then(|result| {

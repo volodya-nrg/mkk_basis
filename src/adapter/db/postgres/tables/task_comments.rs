@@ -1,4 +1,4 @@
-use sqlx::{Pool, Postgres, QueryBuilder, Row};
+use sqlx::{AssertSqlSafe, Pool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
 
 use crate::adapter::db::{
@@ -9,15 +9,14 @@ use crate::adapter::db::{
 
 #[derive(Clone)]
 pub struct TaskComments {
-    pool: Pool<Postgres>,
     table_basic: TableBasic,
 }
 
 impl TaskComments {
     pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
-            pool,
             table_basic: TableBasic {
+                pool,
                 name: "task_comments".to_string(),
                 fields: vec![
                     "task_comment_id".to_string(),
@@ -36,44 +35,62 @@ impl TaskComments {
         limit: i32,
         offset: i32,
     ) -> Result<List<TaskComment>, RepositoryError> {
-        let mut common_builder = QueryBuilder::new(format!(
-            "SELECT {} FROM {} WHERE task_id=",
+        let mut query_common = format!(
+            "SELECT {} FROM {}",
             self.table_basic.fields.join(","),
             self.table_basic.name,
-        ));
-        let mut count_builder = QueryBuilder::new(format!(
-            "SELECT COUNT(*) FROM {} WHERE task_id=$1",
-            self.table_basic.name
+        );
+        let mut query_count = format!("SELECT COUNT(*) as count FROM {}", self.table_basic.name);
+        let mut params: Vec<(String, String)> = vec![];
+
+        params.push((
+            format!("task_id=${}::uuid", params.len() + 1),
+            task_id.to_string(),
         ));
 
-        common_builder.push_bind(task_id);
-        common_builder.push(" ORDER BY created_at DESC");
+        if !params.is_empty() {
+            let fields = params
+                .iter()
+                .map(|(k, _)| k.to_string())
+                .collect::<Vec<String>>()
+                .join(" AND ");
 
-        if limit > -1 {
-            common_builder.push(" LIMIT ");
-            common_builder.push_bind(limit);
-        }
-        if offset > -1 {
-            common_builder.push(" OFFSET ");
-            common_builder.push_bind(offset);
+            let where_str = format!(" WHERE {}", fields);
+            query_common += where_str.as_str();
+            query_count += where_str.as_str();
         }
 
         let mut tx = self
+            .table_basic
             .pool
             .begin()
             .await
             .map_err(RepositoryError::TransactionError)?;
-        let items: Vec<TaskComment> = common_builder
-            .build_query_as()
+        let total = self
+            .table_basic
+            .count(&mut tx, Some(query_count), params.clone())
+            .await?;
+
+        query_common.push_str(" ORDER BY created_at DESC");
+
+        if limit > -1 {
+            query_common += format!(" LIMIT ${}::bigint", params.len() + 1).as_str();
+            params.push(("".to_string(), limit.to_string()));
+        }
+        if offset > -1 {
+            query_common += format!(" OFFSET ${}::bigint", params.len() + 1).as_str();
+            params.push(("".to_string(), offset.to_string()));
+        }
+
+        let mut prepare_common = sqlx::query_as::<_, TaskComment>(AssertSqlSafe(query_common));
+        for (_, v) in params.iter() {
+            prepare_common = prepare_common.bind(v);
+        }
+
+        let items = prepare_common
             .fetch_all(&mut *tx)
             .await
             .map_err(RepositoryError::FailedToQuery)?;
-        let total = count_builder
-            .build_query_scalar()
-            .bind(task_id)
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(RepositoryError::FailedToCount)?;
 
         tx.commit()
             .await
@@ -90,7 +107,7 @@ impl TaskComments {
         QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(&self.pool)
+            .fetch_optional(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToQuery)?
             .ok_or(RepositoryError::NotFoundRow)
@@ -105,7 +122,7 @@ impl TaskComments {
             .bind(item.task_id)
             .bind(item.user_id)
             .bind(item.msg)
-            .fetch_one(&self.pool)
+            .fetch_one(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToInsert)?
             .try_get(0)
@@ -123,7 +140,7 @@ impl TaskComments {
             .bind(item.user_id)
             .bind(item.msg)
             .bind(item.task_comment_id)
-            .execute(&self.pool)
+            .execute(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToUpdate)
             .and_then(|result| {
@@ -143,7 +160,7 @@ impl TaskComments {
         QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(&self.pool)
+            .execute(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToDelete)
             .and_then(|result| {

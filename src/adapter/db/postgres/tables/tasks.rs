@@ -37,14 +37,13 @@ impl fmt::Display for Status {
 
 #[derive(Clone)]
 pub struct Tasks {
-    pool: Pool<Postgres>,
     table_basic: TableBasic,
 }
 impl Tasks {
     pub fn new(pool: Pool<Postgres>) -> Self {
         Self {
-            pool,
             table_basic: TableBasic {
+                pool,
                 name: "tasks".to_string(),
                 fields: vec![
                     "task_id".to_string(),
@@ -101,20 +100,18 @@ impl Tasks {
             query_count += where_str.as_str();
         }
 
-        let mut prepare_count = sqlx::query_scalar(AssertSqlSafe(query_count));
-        for (_, v) in params.iter() {
-            prepare_count = prepare_count.bind(v);
-        }
-
         let mut tx = self
+            .table_basic
             .pool
             .begin()
             .await
             .map_err(RepositoryError::TransactionError)?;
-        let total = prepare_count
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(RepositoryError::FailedToCount)?;
+        let total = self
+            .table_basic
+            .count(&mut tx, Some(query_count), params.clone())
+            .await?;
+
+        query_common.push_str(" ORDER BY created_at DESC");
 
         if data.limit > -1 {
             query_common += format!(" LIMIT ${}::bigint", params.len() + 1).as_str();
@@ -150,7 +147,7 @@ impl Tasks {
         QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(&self.pool)
+            .fetch_optional(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToQuery)?
             .ok_or(RepositoryError::NotFoundRow)
@@ -168,7 +165,7 @@ impl Tasks {
             .bind(item.team_id)
             .bind(item.assignee_id)
             .bind(item.status)
-            .fetch_one(&self.pool)
+            .fetch_one(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToInsert)?
             .try_get(0)
@@ -188,7 +185,7 @@ impl Tasks {
             .bind(item.assignee_id)
             .bind(item.status)
             .bind(item.task_id)
-            .execute(&self.pool)
+            .execute(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToUpdate)
             .and_then(|result| {
@@ -206,7 +203,7 @@ impl Tasks {
         QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(&self.pool)
+            .execute(&self.table_basic.pool)
             .await
             .map_err(RepositoryError::FailedToDelete)
             .and_then(|result| {
