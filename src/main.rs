@@ -1,5 +1,3 @@
-extern crate core;
-
 mod adapter;
 mod consts;
 mod err_msg;
@@ -14,6 +12,7 @@ use std::fs;
 use std::process;
 use std::time::Duration;
 
+use crate::adapter::db::postgres::transactor::Transactor;
 use adapter::{
     config::Config, db::postgres::Postgres as PostgresService, email::Email as EmailService,
     jwt::Jwt as JWTService, logger,
@@ -72,11 +71,12 @@ async fn run(config_filepath: String) -> Result<(), String> {
         .connect(&cfg.postgres.dsn)
         .await
         .map_err(|e| format!("failed to connect on DB: {e}"))?;
+    let transactor = Transactor::new(pool.clone());
     let http_server = HTTPServer::new(
         cfg.http_server.address.clone(),
         UseCase::new(
             cfg.addr,
-            PostgresService::new(pool),
+            PostgresService::new(pool, transactor.clone()),
             JWTService::new(
                 private_key_bytes,
                 consts::ACCESS_TOKEN_TTL_SEC,
@@ -90,6 +90,7 @@ async fn run(config_filepath: String) -> Result<(), String> {
                 cfg.email.from_name,
                 Duration::from_secs(3),
             ),
+            transactor,
         ),
         tls_config_for_server.clone(),
     );

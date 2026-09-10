@@ -36,6 +36,8 @@ tower-http = { version = "0.7.0", features = ["fs", "limit", "cors"] }
 uuid = { version = "1.24.0", features = ["v4", "serde"] }
 protobuf = "4.36.1-release"
 prost = "0.14"
+futures = "0.3.34"
+async-trait = "0.1.92"
 
 [build-dependencies]
 prost-build = "0.14.4"

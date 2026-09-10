@@ -1,11 +1,13 @@
 use http::StatusCode;
 use uuid::Uuid;
 
+use super::{UseCaseError, helpers};
+use crate::adapter::db::postgres::transactor::TransactionError;
 use crate::{
     adapter::{
         db::{
             errors::RepositoryError, models::User as UserDB,
-            postgres::tables::users::Users as DBUsers,
+            postgres::tables::users::Users as DBUsers, postgres::transactor::Transactor,
         },
         email::EmailSender,
         helpers as HelpersService,
@@ -15,14 +17,13 @@ use crate::{
     err_msg::ErrMsg,
 };
 
-use super::{UseCaseError, helpers};
-
 #[derive(Clone)] // из-за axum-state
 pub struct Auth<ES> {
     addr: String,
     users_repo: DBUsers,
-    pub jwt_service: JWTService, // публичен для экстрактора
+    pub jwt_service: JWTService, // публичен для экстрактора или middleware
     email_sender: ES,
+    transactor: Transactor,
 }
 
 impl<ES> Auth<ES>
@@ -34,12 +35,14 @@ where
         users_repo: DBUsers,
         jwt_service: JWTService,
         email_sender: ES,
+        transactor: Transactor,
     ) -> Self {
         Self {
             addr,
             users_repo,
             jwt_service,
             email_sender,
+            transactor,
         }
     }
     pub async fn register(
@@ -96,29 +99,33 @@ where
         let email_subject = format!("Confirm email from {}", self.addr);
         let email_message = format!("Confirm email: <a href=\"{}\">{}</a>", link, link);
 
-        // TODO tx
-        let result = self
-            .users_repo
-            .create(UserDB {
-                user_id: Default::default(),
-                email: email.clone(),
-                password: password_hash.to_string(),
-                name: None,
-                email_code: Some(code.clone()),
-                avatar: None,
-                role: None,
-                created_at: Default::default(),
-                updated_at: Default::default(),
+        self.transactor
+            .execute(async |tx| {
+                let result = self
+                    .users_repo
+                    .create(UserDB {
+                        user_id: Default::default(),
+                        email: email.clone(),
+                        password: password_hash.to_string(),
+                        name: None,
+                        email_code: Some(code.clone()),
+                        avatar: None,
+                        role: None,
+                        created_at: Default::default(),
+                        updated_at: Default::default(),
+                    })
+                    .await
+                    .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))?;
+                self.email_sender
+                    .send(email, email_subject.to_string(), email_message.to_string())
+                    .map_err(|e| UseCaseError::Common(format!("failed to send email: {e}")))?;
+                Ok(result)
             })
             .await
-            .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))?;
-
-        self.email_sender
-            .send(email, email_subject.to_string(), email_message.to_string())
-            .map_err(|e| UseCaseError::Common(format!("failed to send email: {e}")))?;
-        // TODO \tx
-
-        Ok(result)
+            .map_err(|e| match e {
+                TransactionError::Database(sqlx_err) => UseCaseError::Common(sqlx_err.to_string()),
+                TransactionError::Operation(use_case_err) => use_case_err,
+            })
     }
     pub async fn register_confirm(
         &self,

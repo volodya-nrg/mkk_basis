@@ -13,13 +13,13 @@ use testcontainers_modules::{
 };
 use tokio::time::sleep;
 
+use super::{certs, consts, mocks::EmailServiceMock, rand};
+use mkk_basis::adapter::db::postgres::transactor::Transactor;
 use mkk_basis::{
     adapter::{db::postgres::Postgres as PostgresService, jwt::Jwt as JWTService},
     transport::{self, http_server::HTTPServer},
     usecase::UseCase,
 };
-
-use super::{certs, consts, mocks::EmailServiceMock, rand};
 
 pub struct Context {
     pub http_addr: String,
@@ -61,7 +61,8 @@ impl Context {
             .unwrap();
         let addr_str = addr_socket.to_string();
         let http_addr = format!("https://{}", addr_str); // явно используем https
-        let pg_service = PostgresService::new(pool.clone());
+        let transactor = Transactor::new(pool.clone());
+        let pg_service = PostgresService::new(pool.clone(), transactor.clone());
         let use_case = UseCase::new(
             "http://localhost.loc".to_string(),
             pg_service.clone(),
@@ -71,6 +72,7 @@ impl Context {
                 consts::REFRESH_TOKEN_TTL_SEC,
             ),
             EmailServiceMock {},
+            transactor,
         );
         let certs = certs::gen_certs().unwrap(); // создадим серты
         // эта штука нужна что определения крипто-провайдера в тесте

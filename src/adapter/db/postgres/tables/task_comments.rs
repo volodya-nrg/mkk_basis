@@ -1,33 +1,36 @@
 use sqlx::{AssertSqlSafe, Pool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
 
+use crate::adapter::db::traits::NameAndFields;
 use crate::adapter::db::{
     errors::RepositoryError,
     models::{List, TaskComment},
-    postgres::table_basic::TableBasic,
+    postgres::transactor::{TransactionError, Transactor},
 };
 
 #[derive(Clone)]
 pub struct TaskComments {
-    table_basic: TableBasic,
+    pool: Pool<Postgres>,
+    transactor: Transactor,
 }
-
+impl NameAndFields for TaskComments {
+    fn get_name(&self) -> &str {
+        "task_comments"
+    }
+    fn get_fields(&self) -> &[&str] {
+        &[
+            "task_comment_id",
+            "task_id",
+            "user_id",
+            "msg",
+            "created_at",
+            "updated_at",
+        ]
+    }
+}
 impl TaskComments {
-    pub fn new(pool: Pool<Postgres>) -> Self {
-        Self {
-            table_basic: TableBasic {
-                pool,
-                name: "task_comments".to_string(),
-                fields: vec![
-                    "task_comment_id".to_string(),
-                    "task_id".to_string(),
-                    "user_id".to_string(),
-                    "msg".to_string(),
-                    "created_at".to_string(),
-                    "updated_at".to_string(),
-                ],
-            },
-        }
+    pub fn new(pool: Pool<Postgres>, transactor: Transactor) -> Self {
+        Self { pool, transactor }
     }
     pub async fn list(
         &self,
@@ -37,10 +40,10 @@ impl TaskComments {
     ) -> Result<List<TaskComment>, RepositoryError> {
         let mut query_common = format!(
             "SELECT {} FROM {}",
-            self.table_basic.fields.join(","),
-            self.table_basic.name,
+            self.get_fields().join(","),
+            self.get_name(),
         );
-        let mut query_count = format!("SELECT COUNT(*) as count FROM {}", self.table_basic.name);
+        let mut query_count = format!("SELECT COUNT(*) as count FROM {}", self.get_name());
         let mut params: Vec<(String, String)> = vec![];
 
         params.push((
@@ -60,16 +63,11 @@ impl TaskComments {
             query_count += where_str.as_str();
         }
 
-        let mut tx = self
-            .table_basic
-            .pool
-            .begin()
-            .await
-            .map_err(RepositoryError::TransactionError)?;
-        let total = self
-            .table_basic
-            .count(&mut tx, Some(query_count), params.clone())
-            .await?;
+        let mut prepare_count = sqlx::query_scalar(AssertSqlSafe(query_count));
+        let params_copy = params.clone();
+        for (_, v) in params_copy.iter() {
+            prepare_count = prepare_count.bind(v);
+        }
 
         query_common.push_str(" ORDER BY created_at DESC");
 
@@ -87,27 +85,35 @@ impl TaskComments {
             prepare_common = prepare_common.bind(v);
         }
 
-        let items = prepare_common
-            .fetch_all(&mut *tx)
-            .await
-            .map_err(RepositoryError::FailedToQuery)?;
+        self.transactor
+            .execute(async |tx| {
+                let items = prepare_common
+                    .fetch_all(tx.as_mut())
+                    .await
+                    .map_err(RepositoryError::FailedToQuery)?;
+                let total = prepare_count
+                    .fetch_one(tx.as_mut())
+                    .await
+                    .map_err(RepositoryError::FailedToCount)?;
 
-        tx.commit()
+                Ok(List(items, total))
+            })
             .await
-            .map_err(RepositoryError::TransactionError)?;
-
-        Ok(List(items, total))
+            .map_err(|e| match e {
+                TransactionError::Database(sqlx_err) => RepositoryError::Common(sqlx_err),
+                TransactionError::Operation(repo_err) => repo_err,
+            })
     }
     pub async fn one(&self, item_id: Uuid) -> Result<TaskComment, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE task_comment_id=$1",
-            self.table_basic.fields.join(","),
-            self.table_basic.name,
+            self.get_fields().join(","),
+            self.get_name(),
         );
         QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(&self.table_basic.pool)
+            .fetch_optional(&self.pool)
             .await
             .map_err(RepositoryError::FailedToQuery)?
             .ok_or(RepositoryError::NotFoundRow)
@@ -115,14 +121,14 @@ impl TaskComments {
     pub async fn create(&self, item: TaskComment) -> Result<Uuid, RepositoryError> {
         let query = format!(
             "INSERT INTO {} (task_id, user_id, msg) VALUES ($1,$2,$3) RETURNING task_comment_id",
-            self.table_basic.name,
+            self.get_name(),
         );
         QueryBuilder::new(query)
             .build()
             .bind(item.task_id)
             .bind(item.user_id)
             .bind(item.msg)
-            .fetch_one(&self.table_basic.pool)
+            .fetch_one(&self.pool)
             .await
             .map_err(RepositoryError::FailedToInsert)?
             .try_get(0)
@@ -132,7 +138,7 @@ impl TaskComments {
     pub async fn update(&self, item: TaskComment) -> Result<(), RepositoryError> {
         let query = format!(
             "UPDATE {} SET task_id=$1, user_id=$2, msg=$3 WHERE task_comment_id=$4",
-            self.table_basic.name,
+            self.get_name(),
         );
         QueryBuilder::new(query)
             .build()
@@ -140,7 +146,7 @@ impl TaskComments {
             .bind(item.user_id)
             .bind(item.msg)
             .bind(item.task_comment_id)
-            .execute(&self.table_basic.pool)
+            .execute(&self.pool)
             .await
             .map_err(RepositoryError::FailedToUpdate)
             .and_then(|result| {
@@ -153,14 +159,11 @@ impl TaskComments {
             })
     }
     pub async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError> {
-        let query = format!(
-            "DELETE FROM {} WHERE task_comment_id=$1",
-            self.table_basic.name
-        );
+        let query = format!("DELETE FROM {} WHERE task_comment_id=$1", self.get_name());
         QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(&self.table_basic.pool)
+            .execute(&self.pool)
             .await
             .map_err(RepositoryError::FailedToDelete)
             .and_then(|result| {

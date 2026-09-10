@@ -5,7 +5,8 @@ use uuid::Uuid;
 use crate::adapter::db::{
     errors::RepositoryError,
     models::{List, User},
-    postgres::table_basic::TableBasic,
+    postgres::transactor::{TransactionError, Transactor},
+    traits::NameAndFields,
 };
 
 pub enum Role {
@@ -27,35 +28,39 @@ impl fmt::Display for Role {
 
 #[derive(Clone)]
 pub struct Users {
-    table_basic: TableBasic,
+    pool: Pool<Postgres>,
+    transactor: Transactor,
 }
-
+impl NameAndFields for Users {
+    fn get_name(&self) -> &str {
+        "users"
+    }
+    fn get_fields(&self) -> &[&str] {
+        &[
+            "user_id",
+            "email",
+            "password",
+            "name",
+            "email_code",
+            "avatar",
+            "role::text as role",
+            "created_at",
+            "updated_at",
+        ]
+    }
+}
 impl Users {
-    pub fn new(pool: Pool<Postgres>) -> Self {
-        Self {
-            table_basic: TableBasic {
-                pool,
-                name: "users".to_string(),
-                fields: vec![
-                    "user_id".to_string(),
-                    "email".to_string(),
-                    "password".to_string(),
-                    "name".to_string(),
-                    "email_code".to_string(),
-                    "avatar".to_string(),
-                    "role::text as role".to_string(),
-                    "created_at".to_string(),
-                    "updated_at".to_string(),
-                ],
-            },
-        }
+    pub fn new(pool: Pool<Postgres>, transactor: Transactor) -> Self {
+        Self { pool, transactor }
     }
     pub async fn list(&self, limit: i32, offset: i32) -> Result<List<User>, RepositoryError> {
         let mut common_builder = QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
-            self.table_basic.fields.join(","),
-            self.table_basic.name,
+            self.get_fields().join(","),
+            self.get_name(),
         ));
+        let mut count_builder =
+            QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.get_name()));
 
         if limit > -1 {
             common_builder.push(" LIMIT ");
@@ -66,35 +71,37 @@ impl Users {
             common_builder.push_bind(offset);
         }
 
-        let mut tx = self
-            .table_basic
-            .pool
-            .begin()
-            .await
-            .map_err(RepositoryError::TransactionError)?;
-        let items: Vec<User> = common_builder
-            .build_query_as()
-            .fetch_all(&mut *tx)
-            .await
-            .map_err(RepositoryError::FailedToQuery)?;
-        let total = self.table_basic.count(&mut tx, None, vec![]).await?;
+        self.transactor
+            .execute(async |tx| {
+                let items: Vec<User> = common_builder
+                    .build_query_as()
+                    .fetch_all(tx.as_mut())
+                    .await
+                    .map_err(RepositoryError::FailedToQuery)?;
+                let total = count_builder
+                    .build_query_scalar()
+                    .fetch_one(tx.as_mut())
+                    .await
+                    .map_err(RepositoryError::FailedToCount)?;
 
-        tx.commit()
+                Ok(List(items, total))
+            })
             .await
-            .map_err(RepositoryError::TransactionError)?;
-
-        Ok(List(items, total))
+            .map_err(|e| match e {
+                TransactionError::Database(sqlx_err) => RepositoryError::Common(sqlx_err),
+                TransactionError::Operation(repo_err) => repo_err,
+            })
     }
     pub async fn one(&self, item_id: Uuid) -> Result<User, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE user_id=$1",
-            self.table_basic.fields.join(","),
-            self.table_basic.name,
+            self.get_fields().join(","),
+            self.get_name(),
         );
         QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(&self.table_basic.pool)
+            .fetch_optional(&self.pool)
             .await
             .map_err(RepositoryError::FailedToQuery)?
             .ok_or(RepositoryError::NotFoundRow)
@@ -102,13 +109,13 @@ impl Users {
     pub async fn by_email(&self, email: String) -> Result<User, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE email=$1",
-            self.table_basic.fields.join(","),
-            self.table_basic.name,
+            self.get_fields().join(","),
+            self.get_name(),
         );
         QueryBuilder::new(query)
             .build_query_as()
             .bind(email)
-            .fetch_optional(&self.table_basic.pool)
+            .fetch_optional(&self.pool)
             .await
             .map_err(RepositoryError::FailedToQuery)?
             .ok_or(RepositoryError::NotFoundRow)
@@ -116,7 +123,7 @@ impl Users {
     pub async fn create(&self, item: User) -> Result<Uuid, RepositoryError> {
         let query = format!(
             "INSERT INTO {} (email, password, name, email_code, avatar, role) VALUES ($1,$2,$3,$4,$5,$6::user_role_enum) RETURNING user_id",
-            self.table_basic.name,
+            self.get_name(),
         );
 
         QueryBuilder::new(query)
@@ -127,7 +134,7 @@ impl Users {
             .bind(item.email_code)
             .bind(item.avatar)
             .bind(self.get_valid_role(item.role))
-            .fetch_one(&self.table_basic.pool)
+            .fetch_one(&self.pool)
             .await
             .map_err(RepositoryError::FailedToInsert)?
             .try_get(0)
@@ -136,7 +143,7 @@ impl Users {
     pub async fn update(&self, item: User) -> Result<(), RepositoryError> {
         let query = format!(
             "UPDATE {} SET email=$1, password=$2, name=$3, email_code=$4, avatar=$5, role=$6::user_role_enum WHERE user_id=$7",
-            self.table_basic.name,
+            self.get_name(),
         );
         QueryBuilder::new(query)
             .build()
@@ -147,7 +154,7 @@ impl Users {
             .bind(item.avatar)
             .bind(self.get_valid_role(item.role))
             .bind(item.user_id)
-            .execute(&self.table_basic.pool)
+            .execute(&self.pool)
             .await
             .map_err(RepositoryError::FailedToUpdate)
             .and_then(|result| {
@@ -160,11 +167,11 @@ impl Users {
             })
     }
     pub async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError> {
-        let query = format!("DELETE FROM {} WHERE user_id=$1", self.table_basic.name);
+        let query = format!("DELETE FROM {} WHERE user_id=$1", self.get_name());
         QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(&self.table_basic.pool)
+            .execute(&self.pool)
             .await
             .map_err(RepositoryError::FailedToDelete)
             .and_then(|result| {

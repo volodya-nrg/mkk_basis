@@ -1,6 +1,4 @@
-use thiserror::Error as ThisError;
-
-#[derive(ThisError, Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum RepositoryError {
     #[error("failed to query: {0}")]
     FailedToQuery(sqlx::Error),
@@ -12,13 +10,11 @@ pub enum RepositoryError {
     FailedToUpdate(sqlx::Error),
     #[error("failed to delete: {0}")]
     FailedToDelete(sqlx::Error),
+    #[error("{0}")]
+    Common(sqlx::Error),
 
-    #[error("failed to tx: {0}")]
-    TransactionError(sqlx::Error),
     #[error("not found row")]
     NotFoundRow,
     #[error("expected one row, but has {0}")]
     ExpectedOneRow(u64),
-    #[error("{0}")]
-    Common(sqlx::Error),
 }

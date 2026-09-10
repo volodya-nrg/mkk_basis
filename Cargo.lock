@@ -2518,6 +2518,7 @@ name = "mkk_basis"
 version = "0.1.0"
 dependencies = [
  "argon2",
+ "async-trait",
  "axum",
  "axum-extra",
  "axum-server",
@@ -2527,6 +2528,7 @@ dependencies = [
  "ctor",
  "email_address",
  "env_logger",
+ "futures",
  "http",
  "image",
  "jsonwebtoken",

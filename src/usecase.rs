@@ -14,7 +14,7 @@ use http::StatusCode;
 use thiserror::Error as ThisError;
 
 use crate::adapter::{
-    db::{errors::RepositoryError, postgres::Postgres},
+    db::{errors::RepositoryError, postgres::Postgres, postgres::transactor::Transactor},
     email::EmailSender,
     jwt::Jwt as JWTService,
 };
@@ -34,9 +34,21 @@ impl<ES> UseCase<ES>
 where
     ES: EmailSender,
 {
-    pub fn new(addr: String, db: Postgres, jwt_service: JWTService, email_sender: ES) -> Self {
+    pub fn new(
+        addr: String,
+        db: Postgres,
+        jwt_service: JWTService,
+        email_sender: ES,
+        transactor: Transactor,
+    ) -> Self {
         Self {
-            auth: auth::Auth::new(addr, db.tbl_users.clone(), jwt_service, email_sender),
+            auth: auth::Auth::new(
+                addr,
+                db.tbl_users.clone(),
+                jwt_service,
+                email_sender,
+                transactor,
+            ),
             teams: teams::Teams::new(db.tbl_teams, db.tbl_team_members.clone()),
             tasks: tasks::Tasks::new(db.tbl_tasks, db.tbl_task_histories, db.tbl_team_members),
             task_comments: task_comments::TaskComments::new(db.tbl_task_comments),
