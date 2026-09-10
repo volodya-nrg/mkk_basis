@@ -38,13 +38,10 @@ where
             .map_or_else(
                 |e| e.into_response(),
                 |new_uuid| {
-                    (
-                        StatusCode::OK,
-                        Json(ResponseUuid {
-                            value: new_uuid.to_string(),
-                        }),
-                    )
-                        .into_response()
+                    Json(ResponseUuid {
+                        value: new_uuid.to_string(),
+                    })
+                    .into_response()
                 },
             )
     }
@@ -56,7 +53,10 @@ where
             .auth
             .register_confirm(query.email, query.code)
             .await
-            .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())
+            .map_or_else(
+                |e| e.into_response(),
+                |_| StatusCode::NO_CONTENT.into_response(),
+            )
     }
     pub async fn login(
         State(use_case): State<UseCase<ES>>,
@@ -74,7 +74,7 @@ where
         };
 
         (
-            StatusCode::OK,
+            StatusCode::NO_CONTENT,
             AppendHeaders([
                 (header::SET_COOKIE, new_cookie_for_access(access_token)),
                 (header::SET_COOKIE, new_cookie_for_refresh(refresh_token)),
@@ -86,7 +86,7 @@ where
         let jar = jar
             .remove(consts::ACCESS_TOKEN_NAME)
             .remove(consts::REFRESH_TOKEN_NAME);
-        jar.into_response()
+        (StatusCode::NO_CONTENT, jar).into_response()
     }
     pub async fn refresh_tokens(
         jar: CookieJar,
@@ -110,7 +110,7 @@ where
         };
 
         (
-            StatusCode::OK,
+            StatusCode::NO_CONTENT,
             AppendHeaders([
                 (header::SET_COOKIE, new_cookie_for_access(access_token)),
                 (header::SET_COOKIE, new_cookie_for_refresh(refresh_token)),

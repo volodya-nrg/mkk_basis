@@ -34,11 +34,11 @@ where
             .map_or_else(
                 |e| e.into_response(),
                 |(items, total)| {
-                    let resp = TeamsList {
+                    Json(TeamsList {
                         items: items.into_iter().map(mapper::team_uc_to_team_tr).collect(),
                         total: total as u32,
-                    };
-                    (StatusCode::OK, Json(resp)).into_response()
+                    })
+                    .into_response()
                 },
             )
     }
@@ -49,7 +49,7 @@ where
     ) -> impl IntoResponse {
         use_case.teams.one(item_id).await.map_or_else(
             |e| e.into_response(),
-            |v| (StatusCode::OK, Json(mapper::team_uc_to_team_tr(v))).into_response(),
+            |v| Json(mapper::team_uc_to_team_tr(v)).into_response(),
         )
     }
     pub async fn create(
@@ -67,7 +67,7 @@ where
 
         use_case.teams.one(new_uuid).await.map_or_else(
             |e| e.into_response(),
-            |v| (StatusCode::OK, Json(mapper::team_uc_to_team_tr(v))).into_response(),
+            |v| (StatusCode::CREATED, Json(mapper::team_uc_to_team_tr(v))).into_response(),
         )
     }
     pub async fn update(
@@ -85,7 +85,7 @@ where
 
         use_case.teams.one(item_id).await.map_or_else(
             |e| e.into_response(),
-            |v| (StatusCode::OK, Json(mapper::team_uc_to_team_tr(v))).into_response(),
+            |v| Json(mapper::team_uc_to_team_tr(v)).into_response(),
         )
     }
     pub async fn delete(
@@ -97,7 +97,7 @@ where
             .teams
             .delete(item_id)
             .await
-            .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())
+            .map_err(|e| e.into_response())
     }
     pub async fn invite(
         Extension(user): Extension<AuthUser>,
@@ -120,6 +120,7 @@ where
             .teams
             .invite(user.user_id, user.role, team_id, user_id)
             .await
+            //.map_err(|e| e.into_response())
             .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())
     }
 }

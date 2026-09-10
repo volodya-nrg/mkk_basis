@@ -1,11 +1,11 @@
 use sqlx::{AssertSqlSafe, Pool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
 
-use crate::adapter::db::traits::NameAndFields;
 use crate::adapter::db::{
     errors::RepositoryError,
     models::{List, TaskComment},
     postgres::transactor::{TransactionError, Transactor},
+    traits::NameAndFields,
 };
 
 #[derive(Clone)]
@@ -54,7 +54,7 @@ impl TaskComments {
         if !params.is_empty() {
             let fields = params
                 .iter()
-                .map(|(k, _)| k.to_string())
+                .map(|(field_name, _)| field_name.to_string())
                 .collect::<Vec<String>>()
                 .join(" AND ");
 

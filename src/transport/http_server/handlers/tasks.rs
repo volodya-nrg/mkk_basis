@@ -39,11 +39,11 @@ where
         use_case.tasks.list(request_task_data).await.map_or_else(
             |e| e.into_response(),
             |(items, total)| {
-                let resp = TasksList {
+                Json(TasksList {
                     items: items.into_iter().map(mapper::task_uc_to_task_tr).collect(),
                     total: total as u32,
-                };
-                (StatusCode::OK, Json(resp)).into_response()
+                })
+                .into_response()
             },
         )
     }
@@ -54,7 +54,7 @@ where
     ) -> impl IntoResponse {
         use_case.tasks.one(item_id).await.map_or_else(
             |e| e.into_response(),
-            |v| (StatusCode::OK, Json(mapper::task_uc_to_task_tr(v))).into_response(),
+            |v| Json(mapper::task_uc_to_task_tr(v)).into_response(),
         )
     }
     pub async fn create(
@@ -80,7 +80,7 @@ where
 
         use_case.tasks.one(new_uuid).await.map_or_else(
             |e| e.into_response(),
-            |v| (StatusCode::OK, Json(mapper::task_uc_to_task_tr(v))).into_response(),
+            |v| (StatusCode::CREATED, Json(mapper::task_uc_to_task_tr(v))).into_response(),
         )
     }
     pub async fn update(
@@ -108,7 +108,7 @@ where
 
         use_case.tasks.one(task_id).await.map_or_else(
             |e| e.into_response(),
-            |v| (StatusCode::OK, Json(mapper::task_uc_to_task_tr(v))).into_response(),
+            |v| Json(mapper::task_uc_to_task_tr(v)).into_response(),
         )
     }
     pub async fn delete(
@@ -120,7 +120,7 @@ where
             .tasks
             .delete(item_id, user.user_id)
             .await
-            .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())
+            .map_err(|e| e.into_response())
     }
     pub async fn history(
         Extension(_user): Extension<AuthUser>,
@@ -130,13 +130,13 @@ where
         use_case.tasks.get_history(task_id).await.map_or_else(
             |e| e.into_response(),
             |v| {
-                let resp = TaskHistories {
+                Json(TaskHistories {
                     items: v
                         .into_iter()
                         .map(mapper::task_history_uc_to_task_history_tr)
                         .collect(),
-                };
-                (StatusCode::OK, Json(resp)).into_response()
+                })
+                .into_response()
             },
         )
     }

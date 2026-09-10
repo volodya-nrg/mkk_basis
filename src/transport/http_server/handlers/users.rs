@@ -45,11 +45,11 @@ where
             .map_or_else(
                 |e| e.into_response(),
                 |(items, total)| {
-                    let resp = UsersList {
+                    Json(UsersList {
                         items: items.into_iter().map(mapper::user_uc_to_user_tr).collect(),
                         total: total as u32,
-                    };
-                    (StatusCode::OK, Json(resp)).into_response()
+                    })
+                    .into_response()
                 },
             )
     }
@@ -60,7 +60,7 @@ where
     ) -> impl IntoResponse {
         use_case.users.one(item_id).await.map_or_else(
             |e| e.into_response(),
-            |v| (StatusCode::OK, Json(mapper::user_uc_to_user_tr(v))).into_response(),
+            |v| Json(mapper::user_uc_to_user_tr(v)).into_response(),
         )
     }
     pub async fn create(
@@ -107,7 +107,7 @@ where
 
         use_case.users.one(new_uuid).await.map_or_else(
             |e| e.into_response(),
-            |v| (StatusCode::OK, Json(mapper::user_uc_to_user_tr(v))).into_response(),
+            |v| (StatusCode::CREATED, Json(mapper::user_uc_to_user_tr(v))).into_response(),
         )
     }
     pub async fn update(
@@ -154,7 +154,7 @@ where
 
         use_case.users.one(item_id).await.map_or_else(
             |e| e.into_response(),
-            |v| (StatusCode::OK, Json(mapper::user_uc_to_user_tr(v))).into_response(),
+            |v| Json(mapper::user_uc_to_user_tr(v)).into_response(),
         )
     }
     pub async fn delete(
@@ -166,7 +166,7 @@ where
             .users
             .delete(item_id)
             .await
-            .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())
+            .map_err(|e| e.into_response())
     }
 }
 

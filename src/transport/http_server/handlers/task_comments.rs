@@ -36,14 +36,14 @@ where
             .map_or_else(
                 |e| e.into_response(),
                 |(items, total)| {
-                    let resp = TaskCommentsList {
+                    Json(TaskCommentsList {
                         items: items
-                            .into_iter()
+                            .into_iter() // перебор по значениям
                             .map(mapper::task_comment_uc_to_task_comment_tr)
                             .collect(),
                         total: total as u32,
-                    };
-                    (StatusCode::OK, Json(resp)).into_response()
+                    })
+                    .into_response()
                 },
             )
     }
@@ -70,7 +70,7 @@ where
             |e| e.into_response(),
             |v| {
                 (
-                    StatusCode::OK,
+                    StatusCode::CREATED,
                     Json(mapper::task_comment_uc_to_task_comment_tr(v)),
                 )
                     .into_response()
@@ -82,10 +82,9 @@ where
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
     ) -> impl IntoResponse {
-        use_case
-            .task_comments
-            .delete(item_id)
-            .await
-            .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())
+        use_case.task_comments.delete(item_id).await.map_or_else(
+            |e| e.into_response(),
+            |_| StatusCode::NO_CONTENT.into_response(),
+        )
     }
 }

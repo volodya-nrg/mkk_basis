@@ -1,11 +1,11 @@
 use sqlx::{Pool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
 
-use crate::adapter::db::traits::NameAndFields;
 use crate::adapter::db::{
     errors::RepositoryError,
     models::{List, TaskHistory},
     postgres::transactor::{TransactionError, Transactor},
+    traits::NameAndFields,
 };
 
 #[derive(Clone)]

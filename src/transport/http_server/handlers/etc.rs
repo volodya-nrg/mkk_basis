@@ -11,13 +11,9 @@ impl Handlers {
         Html(include_str!("../../../../web/index.html"))
     }
     pub async fn health() -> impl IntoResponse {
-        (
-            StatusCode::OK,
-            Json(ResponseMsg {
-                msg: "ok".to_string(),
-            }),
-        )
-            .into_response()
+        Json(ResponseMsg {
+            msg: "ok".to_string(),
+        })
     }
     pub async fn page404() -> impl IntoResponse {
         (

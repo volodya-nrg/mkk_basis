@@ -95,7 +95,7 @@ impl Tasks {
         if !params.is_empty() {
             let fields = params
                 .iter()
-                .map(|(k, _)| k.to_string())
+                .map(|(field_name, _)| field_name.to_string())
                 .collect::<Vec<String>>()
                 .join(" AND ");
 

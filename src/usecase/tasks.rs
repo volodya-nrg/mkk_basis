@@ -153,7 +153,7 @@ impl Tasks {
             .by_task_id(item_id)
             .await
             .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))?
-            .into_iter()
+            .into_iter()// по значениям
             .map(mapper::task_history_db_to_task_history_uc)
             .collect())
     }
