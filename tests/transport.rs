@@ -33,23 +33,25 @@ async fn get_context() -> &'static Context {
 #[tokio::test]
 async fn check_etc() {
     let ctx = get_context().await;
+    let mut db_conn = ctx.transactor.conn().await.unwrap();
     let mut cl = Client::new(
         ctx.http_addr.to_string(),
         ctx.ca.to_string(),
         ctx.crt.to_string(),
         ctx.key.to_string(),
         &ctx.db,
+        &mut db_conn,
     );
 
     cl.index(|result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
         assert!(!body_str.is_empty());
     })
     .await
     .health(|result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp: ResponseMsg = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!("ok", resp.msg);
@@ -63,13 +65,13 @@ async fn check_etc() {
     .await
     .get_file("/robots.txt".to_string(), |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
         assert!(!body_str.is_empty());
     })
     .await
     .get_file("/sitemap.xml".to_string(), |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
         assert!(!body_str.is_empty());
     })
     .await;
@@ -78,12 +80,14 @@ async fn check_etc() {
 #[tokio::test]
 async fn check_auth() {
     let ctx = get_context().await;
+    let mut db_conn = ctx.transactor.conn().await.unwrap();
     let mut cl = Client::new(
         ctx.http_addr.to_string(),
         ctx.ca.to_string(),
         ctx.crt.to_string(),
         ctx.key.to_string(),
         &ctx.db,
+        &mut db_conn,
     );
 
     let wrong_email = "abc".to_string();
@@ -141,34 +145,34 @@ async fn check_auth() {
     .await // ok
     .register(req_register2.clone(), false, |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
     })
     .await;
 
     // err: - не хватает е-мэйла
     cl.register_confirm(None, None, |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_client_error());
+        assert_eq!(StatusCode::BAD_REQUEST, status_code);
     })
     .await // err - не хватает code
     .register_confirm(Some(rand::email()), None, |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_client_error());
+        assert_eq!(StatusCode::BAD_REQUEST, status_code);
     })
     .await // err - не валидный е-мэйл
     .register_confirm(Some(rand::str()), Some(rand::str()), |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_client_error());
+        assert_eq!(StatusCode::BAD_REQUEST, status_code);
     })
     .await // err - пользователь не найден
     .register_confirm(Some(rand::email()), Some(rand::str()), |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_client_error());
+        assert_eq!(StatusCode::NOT_FOUND, status_code);
     })
     .await // запросим проверенного пользователя
     .register_confirm(Some(req_register1.email), Some(rand::str()), |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_client_error());
+        assert_eq!(StatusCode::BAD_REQUEST, status_code);
     })
     .await // не верный код
     .register_confirm(
@@ -176,7 +180,7 @@ async fn check_auth() {
         Some(rand::str()),
         |result| {
             let (status_code, _body_str) = result.unwrap();
-            assert!(status_code.is_client_error());
+            assert_eq!(StatusCode::BAD_REQUEST, status_code);
         },
     )
     .await;
@@ -198,7 +202,10 @@ async fn check_auth() {
     let email_code = cl
         .pg_service
         .tbl_users
-        .by_email(req_register2.email.clone())
+        .by_email(
+            ctx.transactor.conn().await.unwrap().as_mut(),
+            req_register2.email.clone(),
+        )
         .await
         .unwrap()
         .email_code
@@ -210,7 +217,7 @@ async fn check_auth() {
         Some(email_code),
         |result| {
             let (status_code, _body_str) = result.unwrap();
-            assert!(status_code.is_success());
+            assert_eq!(StatusCode::NO_CONTENT, status_code);
         },
     )
     .await;
@@ -254,13 +261,13 @@ async fn check_auth() {
     .await // ok
     .login(req_login.clone(), |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await;
 
     cl.refresh_tokens(|result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await;
 
@@ -271,7 +278,7 @@ async fn check_auth() {
 
     cl.refresh_tokens(|result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_client_error());
+        assert_eq!(StatusCode::BAD_REQUEST, status_code);
     })
     .await;
 }
@@ -279,12 +286,14 @@ async fn check_auth() {
 #[tokio::test]
 async fn check_teams() {
     let ctx = get_context().await;
+    let mut db_conn = ctx.transactor.conn().await.unwrap();
     let mut cl = Client::new(
         ctx.http_addr.to_string(),
         ctx.ca.to_string(),
         ctx.crt.to_string(),
         ctx.key.to_string(),
         &ctx.db,
+        &mut db_conn,
     );
 
     let mut user_id = String::new();
@@ -335,7 +344,7 @@ async fn check_teams() {
     // создадим пользователя и аутентифицируемся
     cl.register(req_register, true, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp: ResponseUuid = serde_json::from_str(body_str.as_str()).unwrap();
         user_id = resp.value;
@@ -343,14 +352,14 @@ async fn check_teams() {
     .await
     .login(req_login, |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await;
 
     // ok. Создатель user_id, т.к. он создал, он является участником группы.
     cl.teams_create(req_team.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::CREATED, status_code);
 
         let resp_team_actual: Team = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(user_id, resp_team_actual.created_by);
@@ -359,12 +368,12 @@ async fn check_teams() {
     .await // err - нельзя создать дубликат
     .teams_create(req_team.clone(), |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_server_error());
+        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status_code);
     })
     .await // ok
     .teams_list(100, 0, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp: TeamsList = serde_json::from_str(body_str.as_str()).unwrap();
         assert!(!resp.items.is_empty());
@@ -373,7 +382,7 @@ async fn check_teams() {
     .await // ok
     .teams_list(0, 0, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp: TeamsList = serde_json::from_str(body_str.as_str()).unwrap();
         assert!(resp.items.is_empty());
@@ -382,7 +391,7 @@ async fn check_teams() {
     .await // ok
     .teams_one(team_id.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp: Team = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(team_id, resp.team_id)
@@ -397,7 +406,7 @@ async fn check_teams() {
     .await // ok - обновим имя и проверим его
     .teams_update(team_id.clone(), req_team.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp: Team = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(req_team.name, resp.name)
@@ -405,7 +414,7 @@ async fn check_teams() {
     .await // ok
     .teams_delete(team_id.clone(), |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await
     .teams_one(team_id, |result| {
@@ -425,7 +434,7 @@ async fn check_teams() {
     // создадим admin, owner, other
     cl.register(req_register_admin.clone(), true, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         admin_id = serde_json::from_str::<ResponseUuid>(body_str.as_str())
             .unwrap()
@@ -434,7 +443,7 @@ async fn check_teams() {
     .await
     .register(req_register_owner.clone(), true, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         owner_id = serde_json::from_str::<ResponseUuid>(body_str.as_str())
             .unwrap()
@@ -443,7 +452,7 @@ async fn check_teams() {
     .await
     .register(req_register_other.clone(), true, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         other_id = serde_json::from_str::<ResponseUuid>(body_str.as_str())
             .unwrap()
@@ -459,7 +468,7 @@ async fn check_teams() {
 
     cl.users_update(admin_id.clone(), admin, |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
     })
     .await;
 
@@ -472,13 +481,13 @@ async fn check_teams() {
         },
         |result| {
             let (status_code, _body_str) = result.unwrap();
-            assert!(status_code.is_success());
+            assert_eq!(StatusCode::NO_CONTENT, status_code);
         },
     )
     .await // owner стал частью команды
     .teams_create(rand::request_team(), |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::CREATED, status_code);
 
         let resp: Team = serde_json::from_str(body_str.as_str()).unwrap();
         team_id = resp.team_id;
@@ -486,7 +495,7 @@ async fn check_teams() {
     .await
     .logout(|result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await;
 
@@ -499,7 +508,7 @@ async fn check_teams() {
         },
         |result| {
             let (status_code, _body_str) = result.unwrap();
-            assert!(status_code.is_success());
+            assert_eq!(StatusCode::NO_CONTENT, status_code);
         },
     )
     .await
@@ -516,7 +525,7 @@ async fn check_teams() {
     .await
     .logout(|result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await;
 
@@ -528,7 +537,7 @@ async fn check_teams() {
         },
         |result| {
             let (status_code, _body_str) = result.unwrap();
-            assert!(status_code.is_success());
+            assert_eq!(StatusCode::NO_CONTENT, status_code);
         },
     )
     .await
@@ -539,13 +548,13 @@ async fn check_teams() {
         },
         |result| {
             let (status_code, _body_str) = result.unwrap();
-            assert!(status_code.is_success());
+            assert_eq!(StatusCode::OK, status_code);
         },
     )
     .await
     .logout(|result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await;
 
@@ -557,7 +566,7 @@ async fn check_teams() {
         },
         |result| {
             let (status_code, _body_str) = result.unwrap();
-            assert!(status_code.is_success());
+            assert_eq!(StatusCode::NO_CONTENT, status_code);
         },
     )
     .await
@@ -566,13 +575,13 @@ async fn check_teams() {
         RequestTeamInvite { user_id: other_id },
         |result| {
             let (status_code, _body_str) = result.unwrap();
-            assert!(status_code.is_success());
+            assert_eq!(StatusCode::OK, status_code);
         },
     )
     .await // выйдем
     .logout(|result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await;
 
@@ -584,7 +593,7 @@ async fn check_teams() {
         },
         |result| {
             let (status_code, _body_str) = result.unwrap();
-            assert!(status_code.is_success());
+            assert_eq!(StatusCode::NO_CONTENT, status_code);
         },
     )
     .await
@@ -595,13 +604,13 @@ async fn check_teams() {
         },
         |result| {
             let (status_code, _body_str) = result.unwrap();
-            assert!(status_code.is_server_error());
+            assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status_code);
         },
     )
     .await
     .logout(|result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await;
 }
@@ -609,12 +618,14 @@ async fn check_teams() {
 #[tokio::test]
 async fn check_tasks() {
     let ctx = get_context().await;
+    let mut db_conn = ctx.transactor.conn().await.unwrap();
     let mut cl = Client::new(
         ctx.http_addr.to_string(),
         ctx.ca.to_string(),
         ctx.crt.to_string(),
         ctx.key.to_string(),
         &ctx.db,
+        &mut db_conn,
     );
 
     let mut user_id1 = String::new();
@@ -675,7 +686,7 @@ async fn check_tasks() {
     // создадим пользователей
     cl.register(req_register1, true, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         user_id1 = serde_json::from_str::<ResponseUuid>(body_str.as_str())
             .unwrap()
@@ -684,7 +695,7 @@ async fn check_tasks() {
     .await
     .register(req_register2, true, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         user_id2 = serde_json::from_str::<ResponseUuid>(body_str.as_str())
             .unwrap()
@@ -695,12 +706,12 @@ async fn check_tasks() {
     // залогинимся, создадим команду из под user_id1, создадим задачу
     cl.login(req_login1.clone(), |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await // ok: user_id1 стал членом команды
     .teams_create(req_team, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::CREATED, status_code);
 
         let resp_ream_actual: Team = serde_json::from_str(body_str.as_str()).unwrap();
         team_id = resp_ream_actual.team_id;
@@ -716,7 +727,7 @@ async fn check_tasks() {
     .await
     .tasks_create(req_task1.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::CREATED, status_code);
 
         task_id = serde_json::from_str::<Task>(body_str.as_str())
             .unwrap()
@@ -737,12 +748,12 @@ async fn check_tasks() {
 
     cl.logout(|result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await
     .login(req_login2, |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await // err - нету прав
     .tasks_create(req_task3.clone(), |result| {
@@ -762,7 +773,7 @@ async fn check_tasks() {
     .await
     .logout(|result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await;
     // \ ----------
@@ -770,7 +781,7 @@ async fn check_tasks() {
     // продолжим выполнять под user_id1
     cl.login(req_login1, |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
 
         reg_list.limit = 100;
         reg_list.offset = 0;
@@ -778,7 +789,7 @@ async fn check_tasks() {
     .await // ok
     .tasks_list(reg_list.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp: TasksList = serde_json::from_str(body_str.as_str()).unwrap();
         assert!(!resp.items.is_empty());
@@ -790,7 +801,7 @@ async fn check_tasks() {
     .await // ok
     .tasks_list(reg_list.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp: TasksList = serde_json::from_str(body_str.as_str()).unwrap();
         assert!(resp.items.is_empty());
@@ -803,7 +814,7 @@ async fn check_tasks() {
     .await // ok: применим фильтрацию
     .tasks_list(reg_list.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp: TasksList = serde_json::from_str(body_str.as_str()).unwrap();
         assert!(resp.items.is_empty());
@@ -817,7 +828,7 @@ async fn check_tasks() {
     .await // ok
     .tasks_one(task_id.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp: Task = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(task_id, resp.task_id)
@@ -825,7 +836,7 @@ async fn check_tasks() {
     .await // ok: обновление происходит корректно, т.к. user_id явл. членом команды
     .tasks_update(task_id.clone(), req_task2.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp: Task = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(req_task2.status, resp.status);
@@ -839,12 +850,12 @@ async fn check_tasks() {
     .await // ok - член группы может удалить задачу (статус canceled)
     .tasks_delete(task_id.clone(), |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await // ok - считаем историю, должно быть три записи (create, update, delete)
     .tasks_history(task_id, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp: TaskHistories = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(3, resp.items.len());
@@ -855,12 +866,14 @@ async fn check_tasks() {
 #[tokio::test]
 async fn check_task_comments() {
     let ctx = get_context().await;
+    let mut db_conn = ctx.transactor.conn().await.unwrap();
     let mut cl = Client::new(
         ctx.http_addr.to_string(),
         ctx.ca.to_string(),
         ctx.crt.to_string(),
         ctx.key.to_string(),
         &ctx.db,
+        &mut db_conn,
     );
 
     let mut user_id = String::new();
@@ -901,7 +914,7 @@ async fn check_task_comments() {
     // создадим пользователя, залогинимся и создадим команду
     cl.register(req_register, true, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         user_id = serde_json::from_str::<ResponseUuid>(body_str.as_str())
             .unwrap()
@@ -910,12 +923,12 @@ async fn check_task_comments() {
     .await
     .login(req_login, |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await
     .teams_create(req_team, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::CREATED, status_code);
 
         team_id = serde_json::from_str::<Team>(body_str.as_str())
             .unwrap()
@@ -928,7 +941,7 @@ async fn check_task_comments() {
     .await
     .tasks_create(req_task, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::CREATED, status_code);
 
         task_id = serde_json::from_str::<Task>(body_str.as_str())
             .unwrap()
@@ -939,7 +952,7 @@ async fn check_task_comments() {
     // ok
     cl.task_comments_create(task_id.clone(), req_task_comment.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::CREATED, status_code);
 
         let resp: TaskComment = serde_json::from_str(body_str.as_str()).unwrap();
 
@@ -953,7 +966,7 @@ async fn check_task_comments() {
     .await // ok - с теми же данными
     .task_comments_create(task_id.clone(), req_task_comment.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::CREATED, status_code);
 
         let resp: TaskComment = serde_json::from_str(body_str.as_str()).unwrap();
 
@@ -967,7 +980,7 @@ async fn check_task_comments() {
     .await // ok
     .task_comments_list(task_id.clone(), 100, 0, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp: TaskCommentsList = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(2, resp.items.len());
@@ -976,7 +989,7 @@ async fn check_task_comments() {
     .await // ok
     .task_comments_list(task_id.clone(), -1, -1, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp: TaskCommentsList = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(2, resp.items.len());
@@ -985,7 +998,7 @@ async fn check_task_comments() {
     .await // ok
     .task_comments_list(task_id.clone(), 0, 0, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp: TaskCommentsList = serde_json::from_str(body_str.as_str()).unwrap();
         assert!(resp.items.is_empty());
@@ -994,7 +1007,7 @@ async fn check_task_comments() {
     .await // ok: с другим task_id
     .task_comments_list(Uuid::new_v4().to_string(), 100, 0, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp: TaskCommentsList = serde_json::from_str(body_str.as_str()).unwrap();
         assert!(resp.items.is_empty());
@@ -1008,12 +1021,12 @@ async fn check_task_comments() {
     .await // ok
     .task_comments_delete(task_comment_id1, |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await // ok
     .task_comments_list(task_id.clone(), 100, 0, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp: TaskCommentsList = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(1, resp.items.len());
@@ -1022,12 +1035,12 @@ async fn check_task_comments() {
     .await
     .task_comments_delete(task_comment_id2, |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await // ok
     .task_comments_list(task_id, 100, 0, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp: TaskCommentsList = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(0, resp.items.len());
@@ -1039,12 +1052,14 @@ async fn check_task_comments() {
 #[tokio::test]
 async fn check_users() {
     let ctx = get_context().await;
+    let mut db_conn = ctx.transactor.conn().await.unwrap();
     let mut cl = Client::new(
         ctx.http_addr.to_string(),
         ctx.ca.to_string(),
         ctx.crt.to_string(),
         ctx.key.to_string(),
         &ctx.db,
+        &mut db_conn,
     );
 
     let mut owner_id = String::new();
@@ -1090,7 +1105,7 @@ async fn check_users() {
     // создадим пользователя, залогинимся
     cl.register(req_register, true, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         owner_id = serde_json::from_str::<ResponseUuid>(body_str.as_str())
             .unwrap()
@@ -1099,7 +1114,7 @@ async fn check_users() {
     .await
     .login(req_login, |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await;
 
@@ -1125,7 +1140,7 @@ async fn check_users() {
     .await // ok
     .users_create(req_user_create.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::CREATED, status_code);
 
         let resp_user_actual: User = serde_json::from_str(body_str.as_str()).unwrap();
         // cравниваем частями, т.к. типы разные и где-то данных может не быть, а где-то быть
@@ -1142,7 +1157,7 @@ async fn check_users() {
     .await // ok
     .users_one(user_id.clone(), |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
     })
     .await;
 
@@ -1156,7 +1171,7 @@ async fn check_users() {
 
     cl.users_update(user_id.clone(), req_user_update.clone(), |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp_user_actual: User = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(req_user_create.email, resp_user_actual.email); // !
@@ -1167,7 +1182,7 @@ async fn check_users() {
     .await // ok: посмотрим что люди есть
     .users_list(0, 0, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let list: UsersList = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(list.items.len(), 0);
@@ -1176,7 +1191,7 @@ async fn check_users() {
     .await // ok: найдем нужное и сравним
     .users_list(-1, -1, |result| {
         let (status_code, body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::OK, status_code);
 
         let resp: UsersList = serde_json::from_str(body_str.as_str()).unwrap();
         assert!(!resp.items.is_empty());
@@ -1191,7 +1206,7 @@ async fn check_users() {
     .await // ок: удалим успешно
     .users_delete(user_id.clone(), |result| {
         let (status_code, _body_str) = result.unwrap();
-        assert!(status_code.is_success());
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await // ok: пользователя не должно быть
     .users_one(user_id, |result| {

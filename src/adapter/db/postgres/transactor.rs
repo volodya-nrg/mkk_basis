@@ -1,3 +1,4 @@
+use sqlx::pool::PoolConnection;
 use sqlx::{PgConnection, Pool, Postgres, Transaction};
 
 #[derive(Debug, thiserror::Error)]
@@ -17,7 +18,7 @@ impl Transactor {
     pub fn new(pool: Pool<Postgres>) -> Self {
         Self { pool }
     }
-    pub async fn execute<F, T, E>(&self, f: F) -> Result<T, TransactionError<E>>
+    pub async fn in_transaction<F, T, E>(&self, f: F) -> Result<T, TransactionError<E>>
     where
         F: AsyncFnOnce(&mut PgConnection) -> Result<T, E>,
     {
@@ -25,5 +26,9 @@ impl Transactor {
         let result = f(&mut *tx).await.map_err(TransactionError::Operation)?;
         tx.commit().await?;
         Ok(result)
+    }
+    pub async fn conn(&self) -> Result<PoolConnection<Postgres>, sqlx::Error> {
+        let conn = self.pool.acquire().await?;
+        Ok(conn)
     }
 }

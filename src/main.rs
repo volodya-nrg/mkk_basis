@@ -1,3 +1,8 @@
+#![cfg_attr(not(test), deny(clippy::unwrap_used))] // Запрещает использование .unwrap() на Option и Result
+#![cfg_attr(not(test), deny(clippy::expect_used))] // Запрещает .expect("...")
+#![cfg_attr(not(test), deny(clippy::panic))] // Запрещает panic!(), unreachable!(), t-odo!(), unimplemented!() и тд
+#![cfg_attr(not(test), deny(unused_must_use))] // Запрещает игнорировать значения, помеченные #[must_use]
+
 mod adapter;
 mod consts;
 mod err_msg;
@@ -12,10 +17,12 @@ use std::fs;
 use std::process;
 use std::time::Duration;
 
-use crate::adapter::db::postgres::transactor::Transactor;
 use adapter::{
-    config::Config, db::postgres::Postgres as PostgresService, email::Email as EmailService,
-    jwt::Jwt as JWTService, logger,
+    config::Config,
+    db::postgres::{Postgres as PostgresService, transactor::Transactor},
+    email::Email as EmailService,
+    jwt::Jwt as JWTService,
+    logger,
 };
 use transport::http_server::HTTPServer;
 use usecase::UseCase;
@@ -71,12 +78,12 @@ async fn run(config_filepath: String) -> Result<(), String> {
         .connect(&cfg.postgres.dsn)
         .await
         .map_err(|e| format!("failed to connect on DB: {e}"))?;
-    let transactor = Transactor::new(pool.clone());
+    let transactor = Transactor::new(pool.clone()); // надо определить уровень транзакций
     let http_server = HTTPServer::new(
         cfg.http_server.address.clone(),
         UseCase::new(
             cfg.addr,
-            PostgresService::new(pool, transactor.clone()),
+            PostgresService::new(),
             JWTService::new(
                 private_key_bytes,
                 consts::ACCESS_TOKEN_TTL_SEC,

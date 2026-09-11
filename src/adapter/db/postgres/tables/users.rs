@@ -1,11 +1,10 @@
-use sqlx::{Pool, Postgres, QueryBuilder, Row};
+use sqlx::{QueryBuilder, Row};
 use std::fmt;
 use uuid::Uuid;
 
 use crate::adapter::db::{
     errors::RepositoryError,
     models::{List, User},
-    postgres::transactor::{TransactionError, Transactor},
     traits::NameAndFields,
 };
 
@@ -26,11 +25,8 @@ impl fmt::Display for Role {
     }
 }
 
-#[derive(Clone)]
-pub struct Users {
-    pool: Pool<Postgres>,
-    transactor: Transactor,
-}
+#[derive(Clone, Default)]
+pub struct Users {}
 impl NameAndFields for Users {
     fn get_name(&self) -> &str {
         "users"
@@ -50,10 +46,15 @@ impl NameAndFields for Users {
     }
 }
 impl Users {
-    pub fn new(pool: Pool<Postgres>, transactor: Transactor) -> Self {
-        Self { pool, transactor }
+    pub fn new() -> Self {
+        Self {}
     }
-    pub async fn list(&self, limit: i32, offset: i32) -> Result<List<User>, RepositoryError> {
+    pub async fn list(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        limit: i32,
+        offset: i32,
+    ) -> Result<List<User>, RepositoryError> {
         let mut common_builder = QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
             self.get_fields().join(","),
@@ -71,28 +72,24 @@ impl Users {
             common_builder.push_bind(offset);
         }
 
-        self.transactor
-            .execute(async |tx| {
-                let items: Vec<User> = common_builder
-                    .build_query_as()
-                    .fetch_all(tx.as_mut())
-                    .await
-                    .map_err(RepositoryError::FailedToQuery)?;
-                let total = count_builder
-                    .build_query_scalar()
-                    .fetch_one(tx.as_mut())
-                    .await
-                    .map_err(RepositoryError::FailedToCount)?;
-
-                Ok(List(items, total))
-            })
+        let items: Vec<User> = common_builder
+            .build_query_as()
+            .fetch_all(executor.as_mut())
             .await
-            .map_err(|e| match e {
-                TransactionError::Database(sqlx_err) => RepositoryError::Common(sqlx_err),
-                TransactionError::Operation(repo_err) => repo_err,
-            })
+            .map_err(RepositoryError::FailedToQuery)?;
+        let total = count_builder
+            .build_query_scalar()
+            .fetch_one(executor.as_mut())
+            .await
+            .map_err(RepositoryError::FailedToCount)?;
+
+        Ok(List(items, total))
     }
-    pub async fn one(&self, item_id: Uuid) -> Result<User, RepositoryError> {
+    pub async fn one(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        item_id: Uuid,
+    ) -> Result<User, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE user_id=$1",
             self.get_fields().join(","),
@@ -101,12 +98,16 @@ impl Users {
         QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(&self.pool)
+            .fetch_optional(executor)
             .await
             .map_err(RepositoryError::FailedToQuery)?
             .ok_or(RepositoryError::NotFoundRow)
     }
-    pub async fn by_email(&self, email: String) -> Result<User, RepositoryError> {
+    pub async fn by_email(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        email: String,
+    ) -> Result<User, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE email=$1",
             self.get_fields().join(","),
@@ -115,17 +116,20 @@ impl Users {
         QueryBuilder::new(query)
             .build_query_as()
             .bind(email)
-            .fetch_optional(&self.pool)
+            .fetch_optional(executor)
             .await
             .map_err(RepositoryError::FailedToQuery)?
             .ok_or(RepositoryError::NotFoundRow)
     }
-    pub async fn create(&self, item: User) -> Result<Uuid, RepositoryError> {
+    pub async fn create(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        item: User,
+    ) -> Result<Uuid, RepositoryError> {
         let query = format!(
             "INSERT INTO {} (email, password, name, email_code, avatar, role) VALUES ($1,$2,$3,$4,$5,$6::user_role_enum) RETURNING user_id",
             self.get_name(),
         );
-
         QueryBuilder::new(query)
             .build()
             .bind(item.email)
@@ -134,13 +138,17 @@ impl Users {
             .bind(item.email_code)
             .bind(item.avatar)
             .bind(self.get_valid_role(item.role))
-            .fetch_one(&self.pool)
+            .fetch_one(executor)
             .await
             .map_err(RepositoryError::FailedToInsert)?
             .try_get(0)
             .map_err(RepositoryError::Common)
     }
-    pub async fn update(&self, item: User) -> Result<(), RepositoryError> {
+    pub async fn update(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        item: User,
+    ) -> Result<(), RepositoryError> {
         let query = format!(
             "UPDATE {} SET email=$1, password=$2, name=$3, email_code=$4, avatar=$5, role=$6::user_role_enum WHERE user_id=$7",
             self.get_name(),
@@ -154,7 +162,7 @@ impl Users {
             .bind(item.avatar)
             .bind(self.get_valid_role(item.role))
             .bind(item.user_id)
-            .execute(&self.pool)
+            .execute(executor)
             .await
             .map_err(RepositoryError::FailedToUpdate)
             .and_then(|result| {
@@ -166,12 +174,16 @@ impl Users {
                 }
             })
     }
-    pub async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError> {
+    pub async fn delete(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        item_id: Uuid,
+    ) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE user_id=$1", self.get_name());
         QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(&self.pool)
+            .execute(executor)
             .await
             .map_err(RepositoryError::FailedToDelete)
             .and_then(|result| {

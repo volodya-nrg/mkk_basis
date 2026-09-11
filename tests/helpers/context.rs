@@ -26,9 +26,10 @@ pub struct Context {
     pub ca: String,
     pub crt: String,
     pub key: String,
-    pub db: PostgresService,
     pub time_now: DateTime<Local>,
     pub container: ContainerAsync<PostgresContainer>, // обязательно нужно, чтоб жил, иначе после выходи из ф-ии уничтожается
+    pub db: PostgresService,
+    pub transactor: Transactor,
 }
 
 impl Context {
@@ -61,18 +62,18 @@ impl Context {
             .unwrap();
         let addr_str = addr_socket.to_string();
         let http_addr = format!("https://{}", addr_str); // явно используем https
+        let postgres_service = PostgresService::new();
         let transactor = Transactor::new(pool.clone());
-        let pg_service = PostgresService::new(pool.clone(), transactor.clone());
         let use_case = UseCase::new(
             "http://localhost.loc".to_string(),
-            pg_service.clone(),
+            postgres_service.clone(),
             JWTService::new(
                 rand::private_key(32),
                 consts::ACCESS_TOKEN_TTL_SEC,
                 consts::REFRESH_TOKEN_TTL_SEC,
             ),
             EmailServiceMock {},
-            transactor,
+            transactor.clone(),
         );
         let certs = certs::gen_certs().unwrap(); // создадим серты
         // эта штука нужна что определения крипто-провайдера в тесте
@@ -93,9 +94,10 @@ impl Context {
             ca: certs.ca_cert.pem(),
             crt: certs.client_cert.pem(),
             key: certs.client_key.serialize_pem(),
-            db: pg_service,
             container,
             time_now: Local::now(),
+            db: postgres_service,
+            transactor,
         }
     }
 }

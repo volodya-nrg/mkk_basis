@@ -166,7 +166,10 @@ where
             .users
             .delete(item_id)
             .await
-            .map_err(|e| e.into_response())
+            .map_or_else(
+                |e| e.into_response(),
+                |_| StatusCode::NO_CONTENT.into_response(),
+            )
     }
 }
 

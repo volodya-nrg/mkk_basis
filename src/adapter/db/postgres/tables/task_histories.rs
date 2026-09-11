@@ -1,18 +1,14 @@
-use sqlx::{Pool, Postgres, QueryBuilder, Row};
+use sqlx::{QueryBuilder, Row};
 use uuid::Uuid;
 
 use crate::adapter::db::{
     errors::RepositoryError,
     models::{List, TaskHistory},
-    postgres::transactor::{TransactionError, Transactor},
     traits::NameAndFields,
 };
 
-#[derive(Clone)]
-pub struct TaskHistories {
-    pool: Pool<Postgres>,
-    transactor: Transactor,
-}
+#[derive(Clone, Default)]
+pub struct TaskHistories {}
 impl NameAndFields for TaskHistories {
     fn get_name(&self) -> &str {
         "task_histories"
@@ -22,12 +18,13 @@ impl NameAndFields for TaskHistories {
     }
 }
 impl TaskHistories {
-    pub fn new(pool: Pool<Postgres>, transactor: Transactor) -> Self {
-        Self { pool, transactor }
+    pub fn new() -> Self {
+        Self {}
     }
     #[allow(dead_code)]
     pub async fn list(
         &self,
+        executor: &mut sqlx::PgConnection,
         limit: i32,
         offset: i32,
     ) -> Result<List<TaskHistory>, RepositoryError> {
@@ -48,29 +45,25 @@ impl TaskHistories {
             common_builder.push_bind(offset);
         }
 
-        self.transactor
-            .execute(async |tx| {
-                let items: Vec<TaskHistory> = common_builder
-                    .build_query_as()
-                    .fetch_all(tx.as_mut())
-                    .await
-                    .map_err(RepositoryError::FailedToQuery)?;
-                let total = count_builder
-                    .build_query_scalar()
-                    .fetch_one(tx.as_mut())
-                    .await
-                    .map_err(RepositoryError::FailedToCount)?;
-
-                Ok(List(items, total))
-            })
+        let items: Vec<TaskHistory> = common_builder
+            .build_query_as()
+            .fetch_all(executor.as_mut())
             .await
-            .map_err(|e| match e {
-                TransactionError::Database(sqlx_err) => RepositoryError::Common(sqlx_err),
-                TransactionError::Operation(repo_err) => repo_err,
-            })
+            .map_err(RepositoryError::FailedToQuery)?;
+        let total = count_builder
+            .build_query_scalar()
+            .fetch_one(executor.as_mut())
+            .await
+            .map_err(RepositoryError::FailedToCount)?;
+
+        Ok(List(items, total))
     }
     #[allow(dead_code)]
-    pub async fn one(&self, item_id: Uuid) -> Result<TaskHistory, RepositoryError> {
+    pub async fn one(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        item_id: Uuid,
+    ) -> Result<TaskHistory, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE task_history_id=$1",
             self.get_fields().join(","),
@@ -79,12 +72,16 @@ impl TaskHistories {
         QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(&self.pool)
+            .fetch_optional(executor)
             .await
             .map_err(RepositoryError::FailedToQuery)?
             .ok_or(RepositoryError::NotFoundRow)
     }
-    pub async fn by_task_id(&self, task_id: Uuid) -> Result<Vec<TaskHistory>, RepositoryError> {
+    pub async fn by_task_id(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        task_id: Uuid,
+    ) -> Result<Vec<TaskHistory>, RepositoryError> {
         QueryBuilder::new(format!(
             "SELECT {} FROM {} WHERE task_id=$1 ORDER BY created_at DESC",
             self.get_fields().join(","),
@@ -92,11 +89,15 @@ impl TaskHistories {
         ))
         .build_query_as()
         .bind(task_id)
-        .fetch_all(&self.pool)
+        .fetch_all(executor)
         .await
         .map_err(RepositoryError::FailedToQuery)
     }
-    pub async fn create(&self, item: TaskHistory) -> Result<Uuid, RepositoryError> {
+    pub async fn create(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        item: TaskHistory,
+    ) -> Result<Uuid, RepositoryError> {
         let query = format!(
             "INSERT INTO {} (task_id, user_id, msg) VALUES ($1,$2,$3) RETURNING task_history_id",
             self.get_name(),
@@ -106,14 +107,18 @@ impl TaskHistories {
             .bind(item.task_id)
             .bind(item.user_id)
             .bind(item.msg)
-            .fetch_one(&self.pool)
+            .fetch_one(executor)
             .await
             .map_err(RepositoryError::FailedToInsert)?
             .try_get(0)
             .map_err(RepositoryError::Common)
     }
     #[allow(dead_code)]
-    pub async fn update(&self, item: TaskHistory) -> Result<(), RepositoryError> {
+    pub async fn update(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        item: TaskHistory,
+    ) -> Result<(), RepositoryError> {
         let query = format!(
             "UPDATE {} SET task_id=$1, user_id=$2, msg=$3 WHERE task_history_id=$4",
             self.get_name(),
@@ -124,7 +129,7 @@ impl TaskHistories {
             .bind(item.user_id)
             .bind(item.msg)
             .bind(item.task_history_id)
-            .execute(&self.pool)
+            .execute(executor)
             .await
             .map_err(RepositoryError::FailedToUpdate)
             .and_then(|result| {
@@ -137,12 +142,16 @@ impl TaskHistories {
             })
     }
     #[allow(dead_code)]
-    pub async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError> {
+    pub async fn delete(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        item_id: Uuid,
+    ) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE task_history_id=$1", self.get_name());
         QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(&self.pool)
+            .execute(executor)
             .await
             .map_err(RepositoryError::FailedToDelete)
             .and_then(|result| {

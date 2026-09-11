@@ -97,7 +97,10 @@ where
             .teams
             .delete(item_id)
             .await
-            .map_err(|e| e.into_response())
+            .map_or_else(
+                |e| e.into_response(),
+                |_| StatusCode::NO_CONTENT.into_response(),
+            )
     }
     pub async fn invite(
         Extension(user): Extension<AuthUser>,
@@ -120,7 +123,6 @@ where
             .teams
             .invite(user.user_id, user.role, team_id, user_id)
             .await
-            //.map_err(|e| e.into_response())
             .map_or_else(|e| e.into_response(), |_| StatusCode::OK.into_response())
     }
 }

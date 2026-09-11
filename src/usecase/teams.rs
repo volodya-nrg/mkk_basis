@@ -2,11 +2,12 @@ use http::StatusCode;
 use uuid::Uuid;
 
 use crate::{
-    adapter::{
-        db::errors::RepositoryError,
-        db::postgres::tables::team_members::TeamMembers as DBTeamMembers,
-        db::postgres::tables::teams::Teams as DBTeams,
-        db::postgres::tables::users::Role as UserRole,
+    adapter::db::postgres::{
+        tables::{
+            team_members::TeamMembers as DBTeamMembers, teams::Teams as DBTeams,
+            users::Role as UserRole,
+        },
+        transactor::{TransactionError, Transactor},
     },
     err_msg::ErrMsg,
 };
@@ -18,57 +19,82 @@ use super::{
 
 #[derive(Clone)] // из-за axum-state
 pub struct Teams {
+    transactor: Transactor,
     teams_repo: DBTeams,
     team_members_repo: DBTeamMembers,
 }
 
 impl Teams {
-    pub fn new(teams_repo: DBTeams, team_members_repo: DBTeamMembers) -> Self {
+    pub fn new(
+        transactor: Transactor,
+        teams_repo: DBTeams,
+        team_members_repo: DBTeamMembers,
+    ) -> Self {
         Self {
+            transactor,
             teams_repo,
             team_members_repo,
         }
     }
     pub async fn list(&self, limit: i32, offset: i32) -> Result<(Vec<Team>, i64), UseCaseError> {
-        self.teams_repo
-            .list(limit, offset)
+        self.transactor
+            .in_transaction(async |tx| {
+                self.teams_repo
+                    .list(tx, limit, offset)
+                    .await
+                    .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))
+                    .map(|list| {
+                        (
+                            list.0.into_iter().map(mapper::team_db_to_team_uc).collect(),
+                            list.1,
+                        )
+                    })
+            })
             .await
-            .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))
-            .map(|list| {
-                (
-                    list.0.into_iter().map(mapper::team_db_to_team_uc).collect(),
-                    list.1,
-                )
+            .map_err(|e| match e {
+                TransactionError::Database(sqlx_err) => UseCaseError::Common(sqlx_err.to_string()),
+                TransactionError::Operation(use_case_err) => use_case_err,
             })
     }
     pub async fn one(&self, item_id: Uuid) -> Result<Team, UseCaseError> {
-        let team_db = self.teams_repo.one(item_id).await.map_err(|e| match e {
-            RepositoryError::NotFoundRow => UseCaseError::ForTransport {
-                status_code: StatusCode::NOT_FOUND,
-                public_err: ErrMsg::NotFoundItem.to_string(),
-                internal_err: None,
-            },
-            other => UseCaseError::Common(other.to_string()),
-        })?;
-        Ok(mapper::team_db_to_team_uc(team_db))
+        let mut db_conn = self
+            .transactor
+            .conn()
+            .await
+            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+        Ok(mapper::team_db_to_team_uc(
+            self.teams_repo.one(&mut db_conn, item_id).await?,
+        ))
     }
     pub async fn create(&self, team: Team) -> Result<Uuid, UseCaseError> {
-        self.teams_repo
-            .create(mapper::team_uc_to_team_db(team))
+        let mut db_conn = self
+            .transactor
+            .conn()
             .await
-            .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))
+            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+        Ok(self
+            .teams_repo
+            .create(&mut db_conn, mapper::team_uc_to_team_db(team))
+            .await?)
     }
     pub async fn update(&self, team: Team) -> Result<(), UseCaseError> {
-        self.teams_repo
-            .update(mapper::team_uc_to_team_db(team))
+        let mut db_conn = self
+            .transactor
+            .conn()
             .await
-            .map_err(|e| UseCaseError::Common(format!("failed to update: {e}")))
+            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+        Ok(self
+            .teams_repo
+            .update(&mut db_conn, mapper::team_uc_to_team_db(team))
+            .await?)
     }
     pub async fn delete(&self, item_id: Uuid) -> Result<(), UseCaseError> {
-        self.teams_repo
-            .delete(item_id)
+        let mut db_conn = self
+            .transactor
+            .conn()
             .await
-            .map_err(|e| UseCaseError::Common(format!("failed to delete: {e}")))
+            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+        Ok(self.teams_repo.delete(&mut db_conn, item_id).await?)
     }
     // пригласить может только owner или admin
     pub async fn invite(
@@ -78,6 +104,12 @@ impl Teams {
         team_id: Uuid,
         user_id: Uuid,
     ) -> Result<(), UseCaseError> {
+        let mut db_conn = self
+            .transactor
+            .conn()
+            .await
+            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+
         let mut is_has_access = false;
 
         if let Some(role) = profile_role
@@ -85,11 +117,7 @@ impl Teams {
         {
             is_has_access = true;
         } else {
-            let team = self
-                .teams_repo
-                .one(team_id)
-                .await
-                .map_err(|e| UseCaseError::Common(format!("failed to get: {e}")))?;
+            let team = self.teams_repo.one(&mut db_conn, team_id).await?;
             if team.created_by == profile_id {
                 is_has_access = true;
             }
@@ -103,13 +131,16 @@ impl Teams {
             });
         }
 
-        self.team_members_repo
-            .create(mapper::team_member_uc_to_team_member_db(TeamMember {
-                team_id,
-                user_id,
-                created_at: Default::default(),
-            }))
-            .await
-            .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))
+        Ok(self
+            .team_members_repo
+            .create(
+                &mut db_conn,
+                mapper::team_member_uc_to_team_member_db(TeamMember {
+                    team_id,
+                    user_id,
+                    created_at: Default::default(),
+                }),
+            )
+            .await?)
     }
 }

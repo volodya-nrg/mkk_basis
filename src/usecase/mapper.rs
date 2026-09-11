@@ -81,6 +81,7 @@ pub fn team_member_uc_to_team_member_db(item: TeamMember) -> DBTeamMember {
     }
 }
 
+#[allow(dead_code)]
 pub fn team_member_db_to_team_member_uc(item: DBTeamMember) -> TeamMember {
     TeamMember {
         team_id: item.team_id,

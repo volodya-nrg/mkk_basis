@@ -1,4 +1,4 @@
-use sqlx::{AssertSqlSafe, Pool, Postgres, QueryBuilder, Row};
+use sqlx::{AssertSqlSafe, QueryBuilder, Row};
 use std::fmt;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -7,7 +7,6 @@ use uuid::Uuid;
 use crate::adapter::db::{
     errors::RepositoryError,
     models::{List, Task, TaskData},
-    postgres::transactor::{TransactionError, Transactor},
     traits::NameAndFields,
 };
 
@@ -36,11 +35,8 @@ impl fmt::Display for Status {
     }
 }
 
-#[derive(Clone)]
-pub struct Tasks {
-    pool: Pool<Postgres>,
-    transactor: Transactor,
-}
+#[derive(Clone, Default)]
+pub struct Tasks {}
 impl NameAndFields for Tasks {
     fn get_name(&self) -> &str {
         "tasks"
@@ -60,10 +56,14 @@ impl NameAndFields for Tasks {
     }
 }
 impl Tasks {
-    pub fn new(pool: Pool<Postgres>, transactor: Transactor) -> Self {
-        Self { pool, transactor }
+    pub fn new() -> Self {
+        Self {}
     }
-    pub async fn list(&self, data: TaskData) -> Result<List<Task>, RepositoryError> {
+    pub async fn list(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        data: TaskData,
+    ) -> Result<List<Task>, RepositoryError> {
         let mut query_common = format!(
             "SELECT {} FROM {}",
             self.get_fields().join(","),
@@ -126,26 +126,22 @@ impl Tasks {
             prepare_common = prepare_common.bind(v);
         }
 
-        self.transactor
-            .execute(async |tx| {
-                let items = prepare_common
-                    .fetch_all(tx.as_mut())
-                    .await
-                    .map_err(RepositoryError::FailedToQuery)?;
-                let total = prepare_count
-                    .fetch_one(tx.as_mut())
-                    .await
-                    .map_err(RepositoryError::FailedToCount)?;
-
-                Ok(List(items, total))
-            })
+        let items = prepare_common
+            .fetch_all(executor.as_mut())
             .await
-            .map_err(|e| match e {
-                TransactionError::Database(sqlx_err) => RepositoryError::Common(sqlx_err),
-                TransactionError::Operation(repo_err) => repo_err,
-            })
+            .map_err(RepositoryError::FailedToQuery)?;
+        let total = prepare_count
+            .fetch_one(executor.as_mut())
+            .await
+            .map_err(RepositoryError::FailedToCount)?;
+
+        Ok(List(items, total))
     }
-    pub async fn one(&self, item_id: Uuid) -> Result<Task, RepositoryError> {
+    pub async fn one(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        item_id: Uuid,
+    ) -> Result<Task, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE task_id=$1",
             self.get_fields().join(","),
@@ -154,12 +150,16 @@ impl Tasks {
         QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(&self.pool)
+            .fetch_optional(executor)
             .await
             .map_err(RepositoryError::FailedToQuery)?
             .ok_or(RepositoryError::NotFoundRow)
     }
-    pub async fn create(&self, item: Task) -> Result<Uuid, RepositoryError> {
+    pub async fn create(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        item: Task,
+    ) -> Result<Uuid, RepositoryError> {
         let query = format!(
             "INSERT INTO {} (name, description, created_by, team_id, assignee_id, status) VALUES ($1,$2,$3,$4,$5,$6::task_status_enum) RETURNING task_id",
             self.get_name(),
@@ -172,13 +172,17 @@ impl Tasks {
             .bind(item.team_id)
             .bind(item.assignee_id)
             .bind(item.status)
-            .fetch_one(&self.pool)
+            .fetch_one(executor)
             .await
             .map_err(RepositoryError::FailedToInsert)?
             .try_get(0)
             .map_err(RepositoryError::Common)
     }
-    pub async fn update(&self, item: Task) -> Result<(), RepositoryError> {
+    pub async fn update(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        item: Task,
+    ) -> Result<(), RepositoryError> {
         let query = format!(
             "UPDATE {} SET name=$1, description=$2, created_by=$3, team_id=$4, assignee_id=$5, status=$6::task_status_enum WHERE task_id=$7",
             self.get_name(),
@@ -192,7 +196,7 @@ impl Tasks {
             .bind(item.assignee_id)
             .bind(item.status)
             .bind(item.task_id)
-            .execute(&self.pool)
+            .execute(executor)
             .await
             .map_err(RepositoryError::FailedToUpdate)
             .and_then(|result| {
@@ -205,12 +209,16 @@ impl Tasks {
             })
     }
     #[allow(dead_code)]
-    pub async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError> {
+    pub async fn delete(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        item_id: Uuid,
+    ) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE task_id=$1", self.get_name());
         QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(&self.pool)
+            .execute(executor)
             .await
             .map_err(RepositoryError::FailedToDelete)
             .and_then(|result| {

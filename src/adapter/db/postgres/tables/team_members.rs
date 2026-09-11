@@ -1,12 +1,10 @@
-use sqlx::{Pool, Postgres, QueryBuilder};
+use sqlx::QueryBuilder;
 use uuid::Uuid;
 
 use crate::adapter::db::{errors::RepositoryError, models::TeamMember, traits::NameAndFields};
 
-#[derive(Clone)]
-pub struct TeamMembers {
-    pool: Pool<Postgres>,
-}
+#[derive(Clone, Default)]
+pub struct TeamMembers {}
 impl NameAndFields for TeamMembers {
     fn get_name(&self) -> &str {
         "team_members"
@@ -16,22 +14,30 @@ impl NameAndFields for TeamMembers {
     }
 }
 impl TeamMembers {
-    pub fn new(pool: Pool<Postgres>) -> Self {
-        Self { pool }
+    pub fn new() -> Self {
+        Self {}
     }
     #[allow(dead_code)]
-    pub async fn all(&self) -> Result<Vec<TeamMember>, RepositoryError> {
+    pub async fn all(
+        &self,
+        executor: &mut sqlx::PgConnection,
+    ) -> Result<Vec<TeamMember>, RepositoryError> {
         QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
             self.get_fields().join(","),
             self.get_name(),
         ))
         .build_query_as()
-        .fetch_all(&self.pool)
+        .fetch_all(executor)
         .await
         .map_err(RepositoryError::FailedToQuery)
     }
-    pub async fn one(&self, team_id: Uuid, user_id: Uuid) -> Result<TeamMember, RepositoryError> {
+    pub async fn one(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        team_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<TeamMember, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE team_id=$1 AND user_id=$2",
             self.get_fields().join(","),
@@ -41,12 +47,16 @@ impl TeamMembers {
             .build_query_as()
             .bind(team_id)
             .bind(user_id)
-            .fetch_optional(&self.pool)
+            .fetch_optional(executor)
             .await
             .map_err(RepositoryError::FailedToQuery)?
             .ok_or(RepositoryError::NotFoundRow)
     }
-    pub async fn create(&self, item: TeamMember) -> Result<(), RepositoryError> {
+    pub async fn create(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        item: TeamMember,
+    ) -> Result<(), RepositoryError> {
         let query = format!(
             "INSERT INTO {} (team_id, user_id) VALUES ($1,$2)",
             self.get_name(),
@@ -55,13 +65,18 @@ impl TeamMembers {
             .build()
             .bind(item.team_id)
             .bind(item.user_id)
-            .execute(&self.pool)
+            .execute(executor)
             .await
             .map_err(RepositoryError::FailedToInsert)
             .map(|_| ())
     }
     #[allow(dead_code)]
-    pub async fn delete(&self, team_id: Uuid, user_id: Uuid) -> Result<(), RepositoryError> {
+    pub async fn delete(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        team_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), RepositoryError> {
         let query = format!(
             "DELETE FROM {} WHERE team_id=$1 AND user_id=$2",
             self.get_name()
@@ -70,7 +85,7 @@ impl TeamMembers {
             .build()
             .bind(team_id)
             .bind(user_id)
-            .execute(&self.pool)
+            .execute(executor)
             .await
             .map_err(RepositoryError::FailedToDelete)
             .and_then(|result| {

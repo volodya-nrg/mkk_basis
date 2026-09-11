@@ -1,10 +1,12 @@
 #![allow(dead_code)]
 
+use super::rand;
 use http::StatusCode;
 use reqwest::{
     Certificate, Client as ReqwestClient, Error as ReqwestError, Identity, Response,
     multipart::Form,
 };
+use sqlx::PgConnection;
 use std::time::Duration;
 
 use mkk_basis::adapter::db::postgres::Postgres as PostgresService;
@@ -12,8 +14,6 @@ use mkk_basis::transport::models::{
     RequestLimitOffset, RequestLogin, RequestRegister, RequestTask, RequestTaskComment,
     RequestTaskData, RequestTeam, RequestTeamInvite, RequestUserCreate, RequestUserUpdate,
 };
-
-use super::rand;
 
 // mut - везде потому что перемешиваются методы, то (не)mut и передается ссылка. Из-за этого нужно
 // указать один вариант.
@@ -24,6 +24,7 @@ pub struct Client<'a> {
     addr: String,
     client: ReqwestClient,
     pub pg_service: &'a PostgresService,
+    db_conn: &'a mut PgConnection,
 }
 
 impl<'a> Client<'a> {
@@ -33,6 +34,7 @@ impl<'a> Client<'a> {
         crt: String,
         key: String,
         pg_service: &'a PostgresService,
+        db_conn: &'a mut PgConnection,
     ) -> Self {
         // ca-сертификат - чтоб проверить сервер
         // crt - чтоб сервер мог проверить клиента
@@ -52,6 +54,7 @@ impl<'a> Client<'a> {
                 .build()
                 .unwrap(),
             pg_service,
+            db_conn,
         }
     }
     async fn parse_response(&self, resp: Response) -> StatusCodeBodyError {
@@ -145,7 +148,7 @@ impl<'a> Client<'a> {
             let email_code = self
                 .pg_service
                 .tbl_users
-                .by_email(req.email.clone())
+                .by_email(self.db_conn.as_mut(), req.email.clone())
                 .await
                 .unwrap()
                 .email_code

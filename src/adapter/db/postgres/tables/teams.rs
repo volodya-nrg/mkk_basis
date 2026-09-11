@@ -1,18 +1,14 @@
-use sqlx::{Pool, Postgres, QueryBuilder, Row};
+use sqlx::{QueryBuilder, Row};
 use uuid::Uuid;
 
 use crate::adapter::db::{
     errors::RepositoryError,
     models::{List, Team},
-    postgres::transactor::{TransactionError, Transactor},
     traits::NameAndFields,
 };
 
-#[derive(Clone)] // из-за axum-state
-pub struct Teams {
-    pool: Pool<Postgres>,
-    transactor: Transactor,
-}
+#[derive(Clone, Default)] // из-за axum-state
+pub struct Teams {}
 impl NameAndFields for Teams {
     fn get_name(&self) -> &str {
         "teams"
@@ -22,10 +18,15 @@ impl NameAndFields for Teams {
     }
 }
 impl Teams {
-    pub fn new(pool: Pool<Postgres>, transactor: Transactor) -> Self {
-        Self { pool, transactor }
+    pub fn new() -> Self {
+        Self {}
     }
-    pub async fn list(&self, limit: i32, offset: i32) -> Result<List<Team>, RepositoryError> {
+    pub async fn list(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        limit: i32,
+        offset: i32,
+    ) -> Result<List<Team>, RepositoryError> {
         let mut common_builder = QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
             self.get_fields().join(","),
@@ -43,28 +44,24 @@ impl Teams {
             common_builder.push_bind(offset);
         }
 
-        self.transactor
-            .execute(async |tx| {
-                let items: Vec<Team> = common_builder
-                    .build_query_as()
-                    .fetch_all(tx.as_mut())
-                    .await
-                    .map_err(RepositoryError::FailedToQuery)?;
-                let total = count_builder
-                    .build_query_scalar()
-                    .fetch_one(tx.as_mut())
-                    .await
-                    .map_err(RepositoryError::FailedToCount)?;
-
-                Ok(List(items, total))
-            })
+        let items: Vec<Team> = common_builder
+            .build_query_as()
+            .fetch_all(&mut *executor)
             .await
-            .map_err(|e| match e {
-                TransactionError::Database(sqlx_err) => RepositoryError::Common(sqlx_err),
-                TransactionError::Operation(repo_err) => repo_err,
-            })
+            .map_err(RepositoryError::FailedToQuery)?;
+        let total = count_builder
+            .build_query_scalar()
+            .fetch_one(&mut *executor)
+            .await
+            .map_err(RepositoryError::FailedToCount)?;
+
+        Ok(List(items, total))
     }
-    pub async fn one(&self, item_id: Uuid) -> Result<Team, RepositoryError> {
+    pub async fn one(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        item_id: Uuid,
+    ) -> Result<Team, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE team_id=$1",
             self.get_fields().join(","),
@@ -73,12 +70,16 @@ impl Teams {
         QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(&self.pool)
+            .fetch_optional(executor)
             .await
             .map_err(RepositoryError::FailedToQuery)?
             .ok_or(RepositoryError::NotFoundRow)
     }
-    pub async fn create(&self, item: Team) -> Result<Uuid, RepositoryError> {
+    pub async fn create(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        item: Team,
+    ) -> Result<Uuid, RepositoryError> {
         let query = format!(
             "INSERT INTO {} (name, created_by) VALUES ($1,$2) RETURNING team_id",
             self.get_name(),
@@ -87,13 +88,17 @@ impl Teams {
             .build()
             .bind(item.name)
             .bind(item.created_by)
-            .fetch_one(&self.pool)
+            .fetch_one(executor)
             .await
             .map_err(RepositoryError::FailedToInsert)?
             .try_get(0)
             .map_err(RepositoryError::Common)
     }
-    pub async fn update(&self, item: Team) -> Result<(), RepositoryError> {
+    pub async fn update(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        item: Team,
+    ) -> Result<(), RepositoryError> {
         let query = format!(
             "UPDATE {} SET name=$1 WHERE team_id=$2", // создателя не меняем
             self.get_name(),
@@ -102,7 +107,7 @@ impl Teams {
             .build()
             .bind(item.name)
             .bind(item.team_id)
-            .execute(&self.pool)
+            .execute(executor)
             .await
             .map_err(RepositoryError::FailedToUpdate)
             .and_then(|result| {
@@ -114,12 +119,16 @@ impl Teams {
                 }
             })
     }
-    pub async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError> {
+    pub async fn delete(
+        &self,
+        executor: &mut sqlx::PgConnection,
+        item_id: Uuid,
+    ) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE team_id=$1", self.get_name());
         QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(&self.pool)
+            .execute(executor)
             .await
             .map_err(RepositoryError::FailedToDelete)
             .and_then(|result| {

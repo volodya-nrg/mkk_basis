@@ -16,6 +16,7 @@ use thiserror::Error as ThisError;
 use crate::adapter::{
     db::{errors::RepositoryError, postgres::Postgres, postgres::transactor::Transactor},
     email::EmailSender,
+    jwt::JWTError,
     jwt::Jwt as JWTService,
 };
 use crate::err_msg::ErrMsg;
@@ -44,15 +45,27 @@ where
         Self {
             auth: auth::Auth::new(
                 addr,
-                db.tbl_users.clone(),
                 jwt_service,
                 email_sender,
-                transactor,
+                transactor.clone(),
+                db.tbl_users.clone(),
             ),
-            teams: teams::Teams::new(db.tbl_teams, db.tbl_team_members.clone()),
-            tasks: tasks::Tasks::new(db.tbl_tasks, db.tbl_task_histories, db.tbl_team_members),
-            task_comments: task_comments::TaskComments::new(db.tbl_task_comments),
-            users: users::Users::new(db.tbl_users),
+            teams: teams::Teams::new(
+                transactor.clone(),
+                db.tbl_teams,
+                db.tbl_team_members.clone(),
+            ),
+            tasks: tasks::Tasks::new(
+                transactor.clone(),
+                db.tbl_tasks,
+                db.tbl_task_histories,
+                db.tbl_team_members,
+            ),
+            task_comments: task_comments::TaskComments::new(
+                transactor.clone(),
+                db.tbl_task_comments,
+            ),
+            users: users::Users::new(transactor.clone(), db.tbl_users),
         }
     }
 }
@@ -124,6 +137,14 @@ impl From<RepositoryError> for UseCaseError {
                 public_err: ErrMsg::NotFoundItem.to_string(),
                 internal_err: None,
             },
+            other => UseCaseError::Common(other.to_string()),
+        }
+    }
+}
+impl From<JWTError> for UseCaseError {
+    fn from(e: JWTError) -> Self {
+        match e {
+            JWTError::ExpiredToken => UseCaseError::Common(e.to_string()), // пусть явно стоит
             other => UseCaseError::Common(other.to_string()),
         }
     }

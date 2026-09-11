@@ -1,13 +1,15 @@
 use http::StatusCode;
 use uuid::Uuid;
 
-use super::{UseCaseError, helpers};
-use crate::adapter::db::postgres::transactor::TransactionError;
 use crate::{
     adapter::{
         db::{
-            errors::RepositoryError, models::User as UserDB,
-            postgres::tables::users::Users as DBUsers, postgres::transactor::Transactor,
+            errors::RepositoryError,
+            models::User as UserDB,
+            postgres::{
+                tables::users::Users as DBUsers,
+                transactor::{TransactionError, Transactor},
+            },
         },
         email::EmailSender,
         helpers as HelpersService,
@@ -17,13 +19,16 @@ use crate::{
     err_msg::ErrMsg,
 };
 
+use super::{UseCaseError, helpers};
+
 #[derive(Clone)] // из-за axum-state
 pub struct Auth<ES> {
     addr: String,
-    users_repo: DBUsers,
-    pub jwt_service: JWTService, // публичен для экстрактора или middleware
     email_sender: ES,
     transactor: Transactor,
+    users_repo: DBUsers,
+
+    pub jwt_service: JWTService, // публичен для экстрактора или middleware
 }
 
 impl<ES> Auth<ES>
@@ -32,17 +37,17 @@ where
 {
     pub fn new(
         addr: String,
-        users_repo: DBUsers,
         jwt_service: JWTService,
         email_sender: ES,
         transactor: Transactor,
+        users_repo: DBUsers,
     ) -> Self {
         Self {
             addr,
-            users_repo,
             jwt_service,
             email_sender,
             transactor,
+            users_repo,
         }
     }
     pub async fn register(
@@ -100,26 +105,30 @@ where
         let email_message = format!("Confirm email: <a href=\"{}\">{}</a>", link, link);
 
         self.transactor
-            .execute(async |tx| {
-                let result = self
+            .in_transaction(async |tx| {
+                let new_uuid = self
                     .users_repo
-                    .create(UserDB {
-                        user_id: Default::default(),
-                        email: email.clone(),
-                        password: password_hash.to_string(),
-                        name: None,
-                        email_code: Some(code.clone()),
-                        avatar: None,
-                        role: None,
-                        created_at: Default::default(),
-                        updated_at: Default::default(),
-                    })
-                    .await
-                    .map_err(|e| UseCaseError::Common(format!("failed to create: {e}")))?;
+                    .create(
+                        tx,
+                        UserDB {
+                            user_id: Default::default(),
+                            email: email.clone(),
+                            password: password_hash.to_string(),
+                            name: None,
+                            email_code: Some(code.clone()),
+                            avatar: None,
+                            role: None,
+                            created_at: Default::default(),
+                            updated_at: Default::default(),
+                        },
+                    )
+                    .await?;
+
                 self.email_sender
                     .send(email, email_subject.to_string(), email_message.to_string())
                     .map_err(|e| UseCaseError::Common(format!("failed to send email: {e}")))?;
-                Ok(result)
+
+                Ok(new_uuid)
             })
             .await
             .map_err(|e| match e {
@@ -154,24 +163,22 @@ where
             });
         }
 
-        let mut user = match self.users_repo.by_email(email.clone()).await {
-            Ok(v) => v,
-            Err(e) => {
-                if let RepositoryError::NotFoundRow = e {
-                    return Err(UseCaseError::ForTransport {
-                        status_code: StatusCode::BAD_REQUEST,
-                        public_err: ErrMsg::NotFoundUser.to_string(),
-                        internal_err: Some(format!("user send other email ({})", email)),
-                    });
-                }
-                return Err(UseCaseError::Common(e.to_string()));
-            }
-        };
-        let expected_code = user.email_code.ok_or_else(|| UseCaseError::ForTransport {
-            status_code: StatusCode::BAD_REQUEST,
-            public_err: ErrMsg::EmailAlreadyConfirm.to_string(),
-            internal_err: None,
-        })?;
+        let mut db_conn = self
+            .transactor
+            .conn()
+            .await
+            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+        let mut user_db = self
+            .users_repo
+            .by_email(&mut db_conn, email.clone())
+            .await?;
+        let expected_code = user_db
+            .email_code
+            .ok_or_else(|| UseCaseError::ForTransport {
+                status_code: StatusCode::BAD_REQUEST,
+                public_err: ErrMsg::EmailAlreadyConfirm.to_string(),
+                internal_err: None,
+            })?;
 
         if expected_code != actual_code {
             return Err(UseCaseError::ForTransport {
@@ -181,14 +188,9 @@ where
             });
         }
 
-        user.email_code = None;
+        user_db.email_code = None;
 
-        self.users_repo
-            .update(user)
-            .await
-            .map_err(|e| UseCaseError::Common(format!("failed up update: {}", e)))?;
-
-        Ok(())
+        Ok(self.users_repo.update(&mut db_conn, user_db).await?)
     }
     pub async fn login(
         &self,
@@ -210,18 +212,24 @@ where
             });
         }
 
-        let user = match self.users_repo.by_email(email.clone()).await {
-            Ok(v) => v,
-            Err(e) => {
-                // если пользователь не найден, то нужно перенаправлять его на страницу регистрации
+        let mut db_conn = self
+            .transactor
+            .conn()
+            .await
+            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+        let user_db = self
+            .users_repo
+            .by_email(&mut db_conn, email.clone())
+            .await
+            .map_err(|e| {
+                // ! если пользователь не найден, то нужно перенаправлять его на страницу регистрации
                 if let RepositoryError::NotFoundRow = e {
-                    return Err(UseCaseError::UserNotExists);
+                    return UseCaseError::UserNotExists;
                 }
-                return Err(UseCaseError::Common(e.to_string()));
-            }
-        };
+                UseCaseError::Common(e.to_string())
+            })?;
 
-        if user.email_code.is_some() {
+        if user_db.email_code.is_some() {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: ErrMsg::VerifyYourEmail.to_string(),
@@ -229,7 +237,7 @@ where
             });
         }
 
-        let password_is_eq = helpers::password_verify(password.as_str(), user.password.as_str())
+        let password_is_eq = helpers::password_verify(password.as_str(), user_db.password.as_str())
             .map_err(|e| UseCaseError::Common(format!("failed to verify password: {e}")))?;
 
         if !password_is_eq {
@@ -242,12 +250,8 @@ where
 
         let access_token = self
             .jwt_service
-            .generate_access_token(user.user_id, user.role)
-            .map_err(|e| UseCaseError::Common(e.to_string()))?;
-        let refresh_token = self
-            .jwt_service
-            .generate_refresh_token(user.user_id)
-            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+            .generate_access_token(user_db.user_id, user_db.role)?;
+        let refresh_token = self.jwt_service.generate_refresh_token(user_db.user_id)?;
 
         Ok((access_token, refresh_token))
     }
@@ -275,29 +279,16 @@ where
             });
         }
 
-        let result = self.users_repo.one(claims.sub).await;
-        let user = match result {
-            Ok(v) => v,
-            Err(e) => {
-                if let RepositoryError::NotFoundRow = e {
-                    return Err(UseCaseError::ForTransport {
-                        status_code: StatusCode::BAD_REQUEST,
-                        public_err: ErrMsg::NotFoundUser.to_string(),
-                        internal_err: None,
-                    });
-                }
-                return Err(UseCaseError::Common(e.to_string()));
-            }
-        };
-
+        let mut db_conn = self
+            .transactor
+            .conn()
+            .await
+            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+        let user_db = self.users_repo.one(&mut db_conn, claims.sub).await?;
         let access_token = self
             .jwt_service
-            .generate_access_token(user.user_id, user.role)
-            .map_err(|e| UseCaseError::Common(e.to_string()))?;
-        let new_refresh_token = self
-            .jwt_service
-            .generate_refresh_token(user.user_id)
-            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+            .generate_access_token(user_db.user_id, user_db.role)?;
+        let new_refresh_token = self.jwt_service.generate_refresh_token(user_db.user_id)?;
 
         Ok((access_token, new_refresh_token)) // чтоб пользователь максимально не логинился больше в системе, генерируем новый токен обновления
     }
