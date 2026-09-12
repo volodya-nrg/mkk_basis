@@ -21,7 +21,7 @@ use helpers::{client::Client, consts, context::Context, rand};
 
 #[ctor(unsafe)]
 fn init() {
-    logger::init(String::new(), String::new(), "", None, true).unwrap()
+    logger::init(String::new(), String::new(), "error", None, true).unwrap()
 }
 
 static CONTEXT: OnceCell<Context> = OnceCell::const_new();
