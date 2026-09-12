@@ -38,7 +38,7 @@ where
         let claim = use_case
             .auth
             .jwt_service
-            .validate_access_token(token)
+            .validate_access_token(&token)
             .map_err(|e| {
                 log::error!("{e}");
                 StatusCode::UNAUTHORIZED

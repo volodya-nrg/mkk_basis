@@ -148,7 +148,7 @@ impl<'a> Client<'a> {
             let email_code = self
                 .pg_service
                 .tbl_users
-                .by_email(self.db_conn.as_mut(), req.email.clone())
+                .by_email(self.db_conn.as_mut(), &req.email)
                 .await
                 .unwrap()
                 .email_code

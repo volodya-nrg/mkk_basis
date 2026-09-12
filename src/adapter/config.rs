@@ -1,18 +1,5 @@
 use config::{Config as ConfigExternal, File, FileFormat};
 use serde::Deserialize;
-use std::fmt;
-
-#[derive(Debug)]
-pub enum ConfigError {
-    Common(String),
-}
-impl fmt::Display for ConfigError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ConfigError::Common(s) => write!(f, "{s}"),
-        }
-    }
-}
 
 #[derive(Deserialize)]
 pub struct Config {
@@ -56,12 +43,12 @@ pub struct Email {
 }
 
 impl Config {
-    pub fn new(filepath: String) -> Result<Self, ConfigError> {
+    pub fn new(filepath: &str) -> Result<Self, String> {
         ConfigExternal::builder()
-            .add_source(File::new(&filepath, FileFormat::Yaml))
+            .add_source(File::new(filepath, FileFormat::Yaml))
             .build()
-            .map_err(|e| ConfigError::Common(format!("failed to build: {e}")))?
+            .map_err(|e| format!("failed to build: {e}"))?
             .try_deserialize()
-            .map_err(|e| ConfigError::Common(format!("failed to deserialize: {e}")))
+            .map_err(|e| format!("failed to deserialize: {e}"))
     }
 }

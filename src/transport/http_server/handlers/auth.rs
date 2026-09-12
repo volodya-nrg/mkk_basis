@@ -28,9 +28,9 @@ where
         use_case
             .auth
             .register(
-                payload.email,
-                payload.password,
-                payload.password_confirm,
+                &payload.email,
+                &payload.password,
+                &payload.password_confirm,
                 payload.agreement,
                 payload.privacy_policy,
             )
@@ -51,7 +51,7 @@ where
     ) -> impl IntoResponse {
         use_case
             .auth
-            .register_confirm(query.email, query.code)
+            .register_confirm(&query.email, &query.code)
             .await
             .map_or_else(
                 |e| e.into_response(),
@@ -62,7 +62,7 @@ where
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestLogin>,
     ) -> impl IntoResponse {
-        let result = use_case.auth.login(payload.email, payload.password).await;
+        let result = use_case.auth.login(&payload.email, &payload.password).await;
         let (access_token, refresh_token) = match result {
             Ok(v) => v,
             Err(e) => {
@@ -100,14 +100,11 @@ where
             Some(v) => v,
             None => return StatusCode::UNAUTHORIZED.into_response(),
         };
-        let (access_token, refresh_token) = match use_case
-            .auth
-            .refresh_tokens(refresh_token_src.to_string())
-            .await
-        {
-            Ok(v) => v,
-            Err(e) => return e.into_response(),
-        };
+        let (access_token, refresh_token) =
+            match use_case.auth.refresh_tokens(refresh_token_src).await {
+                Ok(v) => v,
+                Err(e) => return e.into_response(),
+            };
 
         (
             StatusCode::NO_CONTENT,

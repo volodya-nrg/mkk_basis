@@ -42,16 +42,16 @@ async fn main() {
 }
 
 async fn run(config_filepath: String) -> Result<(), String> {
-    let cfg = Config::new(config_filepath).map_err(|e| {
+    let cfg = Config::new(&config_filepath).map_err(|e| {
         let str = format!("failed to create new config: {e}");
         eprint!("{}", str);
         str
     })?;
 
     logger::init(
-        cfg.service_name,
-        cfg.version,
-        cfg.log.level,
+        cfg.service_name.clone(),
+        cfg.version.clone(),
+        &cfg.log.level,
         cfg.log.filepath,
         false,
     )
@@ -78,7 +78,7 @@ async fn run(config_filepath: String) -> Result<(), String> {
         .connect(&cfg.postgres.dsn)
         .await
         .map_err(|e| format!("failed to connect on DB: {e}"))?;
-    let transactor = Transactor::new(pool.clone()); // надо определить уровень транзакций
+    let transactor = Transactor::new(pool); // надо определить уровень транзакций
     let http_server = HTTPServer::new(
         cfg.http_server.address.clone(),
         UseCase::new(
@@ -90,11 +90,11 @@ async fn run(config_filepath: String) -> Result<(), String> {
                 consts::REFRESH_TOKEN_TTL_SEC,
             ),
             EmailService::new(
-                cfg.email.host,
-                cfg.email.login,
-                cfg.email.pass,
-                cfg.email.from_email,
-                cfg.email.from_name,
+                &cfg.email.host,
+                &cfg.email.login,
+                &cfg.email.pass,
+                &cfg.email.from_email,
+                &cfg.email.from_name,
                 Duration::from_secs(3),
             ),
             transactor,

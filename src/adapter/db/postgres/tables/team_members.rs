@@ -35,8 +35,8 @@ impl TeamMembers {
     pub async fn one(
         &self,
         executor: &mut sqlx::PgConnection,
-        team_id: Uuid,
-        user_id: Uuid,
+        team_id: &Uuid,
+        user_id: &Uuid,
     ) -> Result<TeamMember, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE team_id=$1 AND user_id=$2",
@@ -74,8 +74,8 @@ impl TeamMembers {
     pub async fn delete(
         &self,
         executor: &mut sqlx::PgConnection,
-        team_id: Uuid,
-        user_id: Uuid,
+        team_id: &Uuid,
+        user_id: &Uuid,
     ) -> Result<(), RepositoryError> {
         let query = format!(
             "DELETE FROM {} WHERE team_id=$1 AND user_id=$2",

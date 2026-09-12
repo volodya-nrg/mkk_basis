@@ -31,7 +31,7 @@ impl TaskComments {
     pub async fn list(
         &self,
         executor: &mut sqlx::PgConnection, // везде стоит это, Executor не подходит, тк нужно executor иногда использовать несколько раз
-        task_id: Uuid,
+        task_id: &Uuid,
         limit: i32,
         offset: i32,
     ) -> Result<List<TaskComment>, RepositoryError> {
@@ -96,7 +96,7 @@ impl TaskComments {
     pub async fn one(
         &self,
         executor: &mut sqlx::PgConnection,
-        item_id: Uuid,
+        item_id: &Uuid,
     ) -> Result<TaskComment, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE task_comment_id=$1",
@@ -124,7 +124,7 @@ impl TaskComments {
             .build()
             .bind(item.task_id)
             .bind(item.user_id)
-            .bind(item.msg)
+            .bind(&item.msg)
             .fetch_one(executor)
             .await
             .map_err(RepositoryError::FailedToInsert)?
@@ -145,7 +145,7 @@ impl TaskComments {
             .build()
             .bind(item.task_id)
             .bind(item.user_id)
-            .bind(item.msg)
+            .bind(&item.msg)
             .bind(item.task_comment_id)
             .execute(executor)
             .await
@@ -162,7 +162,7 @@ impl TaskComments {
     pub async fn delete(
         &self,
         executor: &mut sqlx::PgConnection,
-        item_id: Uuid,
+        item_id: &Uuid,
     ) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE task_comment_id=$1", self.get_name());
         QueryBuilder::new(query)

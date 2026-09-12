@@ -29,7 +29,7 @@ impl TaskComments {
         self.transactor
             .in_transaction(async |tx| {
                 self.task_comments_repo
-                    .list(tx, task_id, limit, offset)
+                    .list(tx, &task_id, limit, offset)
                     .await
                     .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))
                     .map(|list| {
@@ -55,7 +55,7 @@ impl TaskComments {
             .await
             .map_err(|e| UseCaseError::Common(e.to_string()))?;
         Ok(mapper::task_comment_db_to_task_comment_uc(
-            self.task_comments_repo.one(&mut db_conn, item_id).await?,
+            self.task_comments_repo.one(&mut db_conn, &item_id).await?,
         ))
     }
     pub async fn create(&self, task_comment: TaskComment) -> Result<Uuid, UseCaseError> {
@@ -80,7 +80,7 @@ impl TaskComments {
             .map_err(|e| UseCaseError::Common(e.to_string()))?;
         Ok(self
             .task_comments_repo
-            .delete(&mut db_conn, item_id)
+            .delete(&mut db_conn, &item_id)
             .await?)
     }
 }

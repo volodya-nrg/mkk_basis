@@ -53,7 +53,7 @@ impl Users {
             .map_err(|e| UseCaseError::Common(e.to_string()))?;
 
         Ok(mapper::user_db_to_user_uc(
-            self.users_repo.one(&mut db_conn, item_id).await?,
+            self.users_repo.one(&mut db_conn, &item_id).await?,
         ))
     }
     pub async fn create(&self, mut user: UserCreate) -> Result<Uuid, UseCaseError> {
@@ -104,7 +104,7 @@ impl Users {
             .conn()
             .await
             .map_err(|e| UseCaseError::Common(e.to_string()))?;
-        let user_db = self.users_repo.one(&mut db_conn, user.user_id).await?;
+        let user_db = self.users_repo.one(&mut db_conn, &user.user_id).await?;
         let mut user_db_copy = user_db.clone();
 
         if let Some(v) = user.email {
@@ -162,12 +162,12 @@ impl Users {
             .conn()
             .await
             .map_err(|e| UseCaseError::Common(e.to_string()))?;
-        let user = self.users_repo.one(&mut db_conn, item_id).await?;
+        let user = self.users_repo.one(&mut db_conn, &item_id).await?;
 
         self.transactor
             .in_transaction(async |tx| {
                 self.users_repo
-                    .delete(tx, item_id)
+                    .delete(tx, &item_id)
                     .await
                     .map_err(|e| UseCaseError::Common(e.to_string()))
                     .and_then(|_| {

@@ -84,12 +84,12 @@ impl Tasks {
                 assignee_id.to_string(),
             ));
         }
-        if let Some(status) = data.status
+        if let Some(status) = &data.status
             && Status::contains_value(status.clone())
         {
             params.push((
                 format!("status=${}::task_status_enum", params.len() + 1),
-                status,
+                status.clone(),
             ));
         }
         if !params.is_empty() {
@@ -140,7 +140,7 @@ impl Tasks {
     pub async fn one(
         &self,
         executor: &mut sqlx::PgConnection,
-        item_id: Uuid,
+        item_id: &Uuid,
     ) -> Result<Task, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE task_id=$1",
@@ -166,12 +166,12 @@ impl Tasks {
         );
         QueryBuilder::new(query)
             .build()
-            .bind(item.name)
-            .bind(item.description)
+            .bind(&item.name)
+            .bind(&item.description)
             .bind(item.created_by)
             .bind(item.team_id)
             .bind(item.assignee_id)
-            .bind(item.status)
+            .bind(&item.status)
             .fetch_one(executor)
             .await
             .map_err(RepositoryError::FailedToInsert)?
@@ -189,12 +189,12 @@ impl Tasks {
         );
         QueryBuilder::new(query)
             .build()
-            .bind(item.name)
-            .bind(item.description)
+            .bind(&item.name)
+            .bind(&item.description)
             .bind(item.created_by)
             .bind(item.team_id)
             .bind(item.assignee_id)
-            .bind(item.status)
+            .bind(&item.status)
             .bind(item.task_id)
             .execute(executor)
             .await
@@ -212,7 +212,7 @@ impl Tasks {
     pub async fn delete(
         &self,
         executor: &mut sqlx::PgConnection,
-        item_id: Uuid,
+        item_id: &Uuid,
     ) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE task_id=$1", self.get_name());
         QueryBuilder::new(query)

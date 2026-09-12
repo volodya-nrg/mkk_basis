@@ -60,7 +60,7 @@ impl Teams {
     pub async fn one(
         &self,
         executor: &mut sqlx::PgConnection,
-        item_id: Uuid,
+        item_id: &Uuid,
     ) -> Result<Team, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE team_id=$1",
@@ -86,7 +86,7 @@ impl Teams {
         );
         QueryBuilder::new(query)
             .build()
-            .bind(item.name)
+            .bind(&item.name)
             .bind(item.created_by)
             .fetch_one(executor)
             .await
@@ -105,7 +105,7 @@ impl Teams {
         );
         QueryBuilder::new(query)
             .build()
-            .bind(item.name)
+            .bind(&item.name)
             .bind(item.team_id)
             .execute(executor)
             .await
@@ -122,7 +122,7 @@ impl Teams {
     pub async fn delete(
         &self,
         executor: &mut sqlx::PgConnection,
-        item_id: Uuid,
+        item_id: &Uuid,
     ) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE team_id=$1", self.get_name());
         QueryBuilder::new(query)

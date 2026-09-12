@@ -67,7 +67,7 @@ impl Tasks {
             .await
             .map_err(|e| UseCaseError::Common(e.to_string()))?;
         Ok(mapper::task_db_to_task_uc(
-            self.tasks_repo.one(&mut db_conn, item_id).await?,
+            self.tasks_repo.one(&mut db_conn, &item_id).await?,
         ))
     }
     pub async fn create(&self, task: Task, user_id: Uuid) -> Result<Uuid, UseCaseError> {
@@ -150,7 +150,7 @@ impl Tasks {
             .await
             .map_err(|e| UseCaseError::Common(e.to_string()))?;
         let mut task =
-            mapper::task_db_to_task_uc(self.tasks_repo.one(&mut db_conn, task_id).await?);
+            mapper::task_db_to_task_uc(self.tasks_repo.one(&mut db_conn, &task_id).await?);
 
         self.check_access(task.team_id, user_id).await?;
         task.status = TaskStatus::Cancelled.to_string();
@@ -193,7 +193,7 @@ impl Tasks {
             .map_err(|e| UseCaseError::Common(e.to_string()))?;
         Ok(self
             .task_histories_repo
-            .by_task_id(&mut db_conn, item_id)
+            .by_task_id(&mut db_conn, &item_id)
             .await?
             .into_iter() // по значениям
             .map(mapper::task_history_db_to_task_history_uc)
@@ -207,7 +207,7 @@ impl Tasks {
             .map_err(|e| UseCaseError::Common(e.to_string()))?;
         let _ = self
             .team_members_repo
-            .one(&mut db_conn, team_id, user_id)
+            .one(&mut db_conn, &team_id, &user_id)
             .await
             .map_err(|e| match e {
                 RepositoryError::NotFoundRow => UseCaseError::ForTransport {

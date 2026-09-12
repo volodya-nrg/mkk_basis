@@ -62,7 +62,7 @@ impl TaskHistories {
     pub async fn one(
         &self,
         executor: &mut sqlx::PgConnection,
-        item_id: Uuid,
+        item_id: &Uuid,
     ) -> Result<TaskHistory, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE task_history_id=$1",
@@ -80,7 +80,7 @@ impl TaskHistories {
     pub async fn by_task_id(
         &self,
         executor: &mut sqlx::PgConnection,
-        task_id: Uuid,
+        task_id: &Uuid,
     ) -> Result<Vec<TaskHistory>, RepositoryError> {
         QueryBuilder::new(format!(
             "SELECT {} FROM {} WHERE task_id=$1 ORDER BY created_at DESC",
@@ -106,7 +106,7 @@ impl TaskHistories {
             .build()
             .bind(item.task_id)
             .bind(item.user_id)
-            .bind(item.msg)
+            .bind(&item.msg)
             .fetch_one(executor)
             .await
             .map_err(RepositoryError::FailedToInsert)?
@@ -127,7 +127,7 @@ impl TaskHistories {
             .build()
             .bind(item.task_id)
             .bind(item.user_id)
-            .bind(item.msg)
+            .bind(&item.msg)
             .bind(item.task_history_id)
             .execute(executor)
             .await
@@ -145,7 +145,7 @@ impl TaskHistories {
     pub async fn delete(
         &self,
         executor: &mut sqlx::PgConnection,
-        item_id: Uuid,
+        item_id: &Uuid,
     ) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE task_history_id=$1", self.get_name());
         QueryBuilder::new(query)

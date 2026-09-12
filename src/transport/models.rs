@@ -1,5 +1,6 @@
 use uuid::Uuid;
 
+// подгрузим сюда все grpc-модели
 include!(concat!(env!("OUT_DIR"), "/mkk_basis_service.v1.rs"));
 
 #[derive(Clone)]

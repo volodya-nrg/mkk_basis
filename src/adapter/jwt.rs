@@ -68,40 +68,40 @@ impl Jwt {
     }
     pub fn generate_access_token(
         &self,
-        user_id: Uuid,
-        role: Option<String>,
+        user_id: &Uuid,
+        role: &Option<String>,
     ) -> Result<String, JWTError> {
         let now = Utc::now();
         let expire = now + Duration::seconds(self.access_expire_secs);
         jsonwebtoken::encode(
             &jsonwebtoken::Header::default(),
             &AccessClaims {
-                sub: user_id,
+                sub: *user_id,
                 exp: expire.timestamp() as usize,
                 iat: now.timestamp() as usize,
                 token_type: TYPE_ACCESS.to_string(),
-                role,
+                role: role.clone(),
             },
             &jsonwebtoken::EncodingKey::from_secret(self.private_key_bytes.as_slice()),
         )
-        .map_err(JWTError::Common)
+        .map_err(|e| e.into())
     }
-    pub fn generate_refresh_token(&self, user_id: Uuid) -> Result<String, JWTError> {
+    pub fn generate_refresh_token(&self, user_id: &Uuid) -> Result<String, JWTError> {
         let now = Utc::now();
         let expire = now + Duration::seconds(self.refresh_expire_secs);
         jsonwebtoken::encode(
             &jsonwebtoken::Header::default(),
             &RefreshClaims {
-                sub: user_id,
+                sub: *user_id,
                 exp: expire.timestamp() as usize,
                 iat: now.timestamp() as usize,
                 token_type: TYPE_REFRESH.to_string(),
             },
             &jsonwebtoken::EncodingKey::from_secret(self.private_key_bytes.as_slice()),
         )
-        .map_err(JWTError::Common)
+        .map_err(|e| e.into())
     }
-    pub fn validate_access_token(&self, token: String) -> Result<AccessClaims, JWTError> {
+    pub fn validate_access_token(&self, token: &str) -> Result<AccessClaims, JWTError> {
         jsonwebtoken::decode::<AccessClaims>(
             token,
             &jsonwebtoken::DecodingKey::from_secret(self.private_key_bytes.as_slice()),
@@ -110,7 +110,7 @@ impl Jwt {
         .map(|data| data.claims)
         .map_err(|e| e.into())
     }
-    pub fn validate_refresh_token(&self, token: String) -> Result<RefreshClaims, JWTError> {
+    pub fn validate_refresh_token(&self, token: &str) -> Result<RefreshClaims, JWTError> {
         jsonwebtoken::decode::<RefreshClaims>(
             token,
             &jsonwebtoken::DecodingKey::from_secret(self.private_key_bytes.as_slice()),
@@ -149,20 +149,20 @@ mod tests {
         let user_id = Uuid::new_v4();
 
         let access_token = jwt
-            .generate_access_token(user_id, Some(ROLE_ADMIN.to_string()))
+            .generate_access_token(&user_id, &Some(ROLE_ADMIN.to_string()))
             .unwrap();
         assert!(!access_token.is_empty());
 
-        let refresh_token = jwt.generate_refresh_token(user_id).unwrap();
+        let refresh_token = jwt.generate_refresh_token(&user_id).unwrap();
         assert!(!refresh_token.is_empty());
 
-        let access_claims = jwt.validate_access_token(access_token.clone()).unwrap();
+        let access_claims = jwt.validate_access_token(&access_token).unwrap();
         assert_eq!(TYPE_ACCESS, access_claims.token_type);
         assert_eq!(user_id, access_claims.sub);
         assert!(access_claims.role.is_some());
         assert_eq!(ROLE_ADMIN, access_claims.role.unwrap());
 
-        let refresh_claims = jwt.validate_refresh_token(refresh_token.clone()).unwrap();
+        let refresh_claims = jwt.validate_refresh_token(&refresh_token).unwrap();
         assert_eq!(TYPE_REFRESH, refresh_claims.token_type);
         assert_eq!(user_id, refresh_claims.sub);
 
@@ -170,11 +170,11 @@ mod tests {
         sleep(std::time::Duration::from_secs(SEC + SEC));
 
         assert_matches!(
-            jwt.validate_access_token(access_token.clone()),
+            jwt.validate_access_token(&access_token),
             Err(JWTError::ExpiredToken),
         );
         assert_matches!(
-            jwt.validate_refresh_token(refresh_token.clone()),
+            jwt.validate_refresh_token(&refresh_token),
             Err(JWTError::ExpiredToken),
         );
     }

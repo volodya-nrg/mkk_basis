@@ -28,7 +28,6 @@ impl Transactor {
         Ok(result)
     }
     pub async fn conn(&self) -> Result<PoolConnection<Postgres>, sqlx::Error> {
-        let conn = self.pool.acquire().await?;
-        Ok(conn)
+        self.pool.acquire().await // TODO тут постоянно доставать конечно не удобно
     }
 }

@@ -52,13 +52,13 @@ where
     }
     pub async fn register(
         &self,
-        email: String,
-        password: String,
-        password_confirm: String,
+        email: &str,
+        password: &str,
+        password_confirm: &str,
         agreement: bool,
         privacy_policy: bool,
     ) -> Result<Uuid, UseCaseError> {
-        if !HelpersService::is_valid_email(&email) {
+        if !HelpersService::is_valid_email(email) {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: ErrMsg::EmailNotCorrect.to_string(),
@@ -95,7 +95,7 @@ where
         }
 
         let code = Uuid::new_v4().simple().to_string();
-        let password_hash = helpers::password_hash(&password)
+        let password_hash = helpers::password_hash(password)
             .map_err(|e| UseCaseError::Common(format!("failed to create password hash: {e}")))?;
         let link = format!(
             "{}/register/confirm?email={}&code={}",
@@ -106,26 +106,17 @@ where
 
         self.transactor
             .in_transaction(async |tx| {
-                let new_uuid = self
-                    .users_repo
-                    .create(
-                        tx,
-                        UserDB {
-                            user_id: Default::default(),
-                            email: email.clone(),
-                            password: password_hash.to_string(),
-                            name: None,
-                            email_code: Some(code.clone()),
-                            avatar: None,
-                            role: None,
-                            created_at: Default::default(),
-                            updated_at: Default::default(),
-                        },
-                    )
-                    .await?;
+                let user_db = UserDB {
+                    // так линтер советует
+                    email: email.to_string(),
+                    password: password_hash.to_string(),
+                    email_code: Some(code),
+                    ..Default::default()
+                };
+                let new_uuid = self.users_repo.create(tx, user_db).await?;
 
                 self.email_sender
-                    .send(email, email_subject.to_string(), email_message.to_string())
+                    .send(email, email_subject.as_str(), email_message.as_str())
                     .map_err(|e| UseCaseError::Common(format!("failed to send email: {e}")))?;
 
                 Ok(new_uuid)
@@ -138,8 +129,8 @@ where
     }
     pub async fn register_confirm(
         &self,
-        email: String,
-        actual_code: String,
+        email: &str,
+        actual_code: &str,
     ) -> Result<(), UseCaseError> {
         if email.is_empty() {
             return Err(UseCaseError::ForTransport {
@@ -155,7 +146,7 @@ where
                 internal_err: None,
             });
         }
-        if !HelpersService::is_valid_email(&email) {
+        if !HelpersService::is_valid_email(email) {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: ErrMsg::EmailNotCorrect.to_string(),
@@ -168,10 +159,7 @@ where
             .conn()
             .await
             .map_err(|e| UseCaseError::Common(e.to_string()))?;
-        let mut user_db = self
-            .users_repo
-            .by_email(&mut db_conn, email.clone())
-            .await?;
+        let mut user_db = self.users_repo.by_email(&mut db_conn, email).await?;
         let expected_code = user_db
             .email_code
             .ok_or_else(|| UseCaseError::ForTransport {
@@ -194,10 +182,10 @@ where
     }
     pub async fn login(
         &self,
-        email: String,
-        password: String,
+        email: &str,
+        password: &str,
     ) -> Result<(String, String), UseCaseError> {
-        if !HelpersService::is_valid_email(&email) {
+        if !HelpersService::is_valid_email(email) {
             return Err(UseCaseError::ForTransport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: ErrMsg::EmailNotCorrect.to_string(),
@@ -219,7 +207,7 @@ where
             .map_err(|e| UseCaseError::Common(e.to_string()))?;
         let user_db = self
             .users_repo
-            .by_email(&mut db_conn, email.clone())
+            .by_email(&mut db_conn, email)
             .await
             .map_err(|e| {
                 // ! если пользователь не найден, то нужно перенаправлять его на страницу регистрации
@@ -237,7 +225,7 @@ where
             });
         }
 
-        let password_is_eq = helpers::password_verify(password.as_str(), user_db.password.as_str())
+        let password_is_eq = helpers::password_verify(password, user_db.password.as_str())
             .map_err(|e| UseCaseError::Common(format!("failed to verify password: {e}")))?;
 
         if !password_is_eq {
@@ -250,12 +238,12 @@ where
 
         let access_token = self
             .jwt_service
-            .generate_access_token(user_db.user_id, user_db.role)?;
-        let refresh_token = self.jwt_service.generate_refresh_token(user_db.user_id)?;
+            .generate_access_token(&user_db.user_id, &user_db.role)?;
+        let refresh_token = self.jwt_service.generate_refresh_token(&user_db.user_id)?;
 
         Ok((access_token, refresh_token))
     }
-    pub async fn refresh_tokens(&self, token: String) -> Result<(String, String), UseCaseError> {
+    pub async fn refresh_tokens(&self, token: &str) -> Result<(String, String), UseCaseError> {
         let claims = self
             .jwt_service
             .validate_refresh_token(token)
@@ -284,11 +272,11 @@ where
             .conn()
             .await
             .map_err(|e| UseCaseError::Common(e.to_string()))?;
-        let user_db = self.users_repo.one(&mut db_conn, claims.sub).await?;
+        let user_db = self.users_repo.one(&mut db_conn, &claims.sub).await?;
         let access_token = self
             .jwt_service
-            .generate_access_token(user_db.user_id, user_db.role)?;
-        let new_refresh_token = self.jwt_service.generate_refresh_token(user_db.user_id)?;
+            .generate_access_token(&user_db.user_id, &user_db.role)?;
+        let new_refresh_token = self.jwt_service.generate_refresh_token(&user_db.user_id)?;
 
         Ok((access_token, new_refresh_token)) // чтоб пользователь максимально не логинился больше в системе, генерируем новый токен обновления
     }

@@ -63,7 +63,7 @@ impl Teams {
             .await
             .map_err(|e| UseCaseError::Common(e.to_string()))?;
         Ok(mapper::team_db_to_team_uc(
-            self.teams_repo.one(&mut db_conn, item_id).await?,
+            self.teams_repo.one(&mut db_conn, &item_id).await?,
         ))
     }
     pub async fn create(&self, team: Team) -> Result<Uuid, UseCaseError> {
@@ -94,7 +94,7 @@ impl Teams {
             .conn()
             .await
             .map_err(|e| UseCaseError::Common(e.to_string()))?;
-        Ok(self.teams_repo.delete(&mut db_conn, item_id).await?)
+        Ok(self.teams_repo.delete(&mut db_conn, &item_id).await?)
     }
     // пригласить может только owner или admin
     pub async fn invite(
@@ -117,7 +117,7 @@ impl Teams {
         {
             is_has_access = true;
         } else {
-            let team = self.teams_repo.one(&mut db_conn, team_id).await?;
+            let team = self.teams_repo.one(&mut db_conn, &team_id).await?;
             if team.created_by == profile_id {
                 is_has_access = true;
             }

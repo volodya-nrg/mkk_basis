@@ -21,7 +21,7 @@ use helpers::{client::Client, consts, context::Context, rand};
 
 #[ctor(unsafe)]
 fn init() {
-    logger::init(String::new(), String::new(), String::new(), None, true).unwrap()
+    logger::init(String::new(), String::new(), "", None, true).unwrap()
 }
 
 static CONTEXT: OnceCell<Context> = OnceCell::const_new();
@@ -204,7 +204,7 @@ async fn check_auth() {
         .tbl_users
         .by_email(
             ctx.transactor.conn().await.unwrap().as_mut(),
-            req_register2.email.clone(),
+            &req_register2.email,
         )
         .await
         .unwrap()

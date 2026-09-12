@@ -1,7 +1,6 @@
 use env_logger::{Builder, Target};
 use log::{LevelFilter, Record};
 use serde::Serialize;
-use std::fmt;
 use std::fs::OpenOptions;
 use std::io::Write;
 
@@ -14,28 +13,13 @@ struct LogEntry {
     version: String,
 }
 
-// Debug - для unwrap и подобных
-#[derive(Debug)]
-pub enum LogError {
-    Common(std::io::Error),
-}
-
-// fmt::Display - для возможности конвертации в строку ".to_string()"
-impl fmt::Display for LogError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            LogError::Common(s) => write!(f, "{s}"),
-        }
-    }
-}
-
 pub fn init(
     service_name: String,
     version: String,
-    level: String,
+    level: &str,
     filepath: Option<String>,
     is_test: bool,
-) -> Result<(), LogError> {
+) -> Result<(), String> {
     let level: LevelFilter = match level.to_lowercase().as_str() {
         "info" => LevelFilter::Info,
         "warn" => LevelFilter::Warn,
@@ -44,12 +28,12 @@ pub fn init(
     };
     let mut builder = Builder::new();
 
-    if filepath.is_some() {
+    if let Some(v) = filepath {
         let log_file = OpenOptions::new()
             .create(true)
             .append(true)
-            .open(filepath.unwrap_or_default())
-            .map_err(LogError::Common)?;
+            .open(v.clone())
+            .map_err(|e| format!("failed to open filepath({v}): {e}"))?;
 
         builder.target(Target::Pipe(Box::new(log_file)));
     }

@@ -93,7 +93,7 @@ impl IntoResponse for UseCaseError {
         let mut public_error_result = String::from("server internal error");
         let mut internal_error_result = String::new();
         let mut status_code_result = StatusCode::INTERNAL_SERVER_ERROR;
-
+        
         match self {
             UseCaseError::Common(v) => {
                 internal_error_result = v;
