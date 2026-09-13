@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use uuid::Uuid;
 
 use crate::adapter::email::EmailSender;
-use crate::transport::http_server::handlers::HandlerError;
+use crate::transport::http_server::handlers::{HandlerError, handler_err};
 use crate::transport::models::AuthUser;
 use crate::transport::{
     mapper,
@@ -38,13 +38,7 @@ where
         };
 
         use_case.tasks.list(request_task_data).await.map_or_else(
-            |e| {
-                HandlerError {
-                    source: e,
-                    handler: "tasks->list",
-                }
-                .into_response()
-            },
+            |e| handler_err!(e).into_response(),
             |(items, total)| {
                 Json(TasksList {
                     items: items.into_iter().map(mapper::task_uc_to_task_tr).collect(),
@@ -60,13 +54,7 @@ where
         State(use_case): State<UseCase<ES>>,
     ) -> impl IntoResponse {
         use_case.tasks.one(item_id).await.map_or_else(
-            |e| {
-                HandlerError {
-                    source: e,
-                    handler: "tasks->one",
-                }
-                .into_response()
-            },
+            |e| handler_err!(e).into_response(),
             |v| Json(mapper::task_uc_to_task_tr(v)).into_response(),
         )
     }
@@ -88,23 +76,11 @@ where
         let result = use_case.tasks.create(uc_task, user.user_id).await;
         let new_uuid = match result {
             Ok(v) => v,
-            Err(e) => {
-                return HandlerError {
-                    source: e,
-                    handler: "tasks->create",
-                }
-                .into_response();
-            }
+            Err(e) => return handler_err!(e).into_response(),
         };
 
         use_case.tasks.one(new_uuid).await.map_or_else(
-            |e| {
-                HandlerError {
-                    source: e,
-                    handler: "tasks->create",
-                }
-                .into_response()
-            },
+            |e| handler_err!(e).into_response(),
             |v| (StatusCode::CREATED, Json(mapper::task_uc_to_task_tr(v))).into_response(),
         )
     }
@@ -128,21 +104,11 @@ where
         uc_task.task_id = task_id;
 
         if let Err(e) = use_case.tasks.update(uc_task, user.user_id).await {
-            return HandlerError {
-                source: e,
-                handler: "tasks->update",
-            }
-            .into_response();
+            return handler_err!(e).into_response();
         };
 
         use_case.tasks.one(task_id).await.map_or_else(
-            |e| {
-                HandlerError {
-                    source: e,
-                    handler: "tasks->update",
-                }
-                .into_response()
-            },
+            |e| handler_err!(e).into_response(),
             |v| Json(mapper::task_uc_to_task_tr(v)).into_response(),
         )
     }
@@ -156,13 +122,7 @@ where
             .delete(item_id, user.user_id)
             .await
             .map_or_else(
-                |e| {
-                    HandlerError {
-                        source: e,
-                        handler: "tasks->delete",
-                    }
-                    .into_response()
-                },
+                |e| handler_err!(e).into_response(),
                 |_| StatusCode::NO_CONTENT.into_response(),
             )
     }
@@ -172,13 +132,7 @@ where
         Path(task_id): Path<Uuid>,
     ) -> impl IntoResponse {
         use_case.tasks.get_history(task_id).await.map_or_else(
-            |e| {
-                HandlerError {
-                    source: e,
-                    handler: "tasks->history",
-                }
-                .into_response()
-            },
+            |e| handler_err!(e).into_response(),
             |v| {
                 Json(TaskHistories {
                     items: v

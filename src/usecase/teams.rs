@@ -7,7 +7,7 @@ use crate::{
             team_members::TeamMembers as DBTeamMembers, teams::Teams as DBTeams,
             users::Role as UserRole,
         },
-        transactor::{TransactionError, Transactor},
+        transactor::Transactor,
     },
     err_msg::ErrMsg,
 };
@@ -37,63 +37,39 @@ impl Teams {
         }
     }
     pub async fn list(&self, limit: i32, offset: i32) -> Result<(Vec<Team>, i64), UseCaseError> {
-        self.transactor
-            .in_transaction(async |tx| {
-                self.teams_repo
-                    .list(tx, limit, offset)
-                    .await
-                    .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))
-                    .map(|list| {
-                        (
-                            list.0.into_iter().map(mapper::team_db_to_team_uc).collect(),
-                            list.1,
-                        )
-                    })
+        Ok(self
+            .transactor
+            .in_transaction::<_, _, UseCaseError>(async |tx| {
+                let list = self.teams_repo.list(tx, limit, offset).await?;
+                Ok((
+                    list.0.into_iter().map(mapper::team_db_to_team_uc).collect(),
+                    list.1,
+                ))
             })
-            .await
-            .map_err(|e| match e {
-                TransactionError::Database(sqlx_err) => UseCaseError::Common(sqlx_err.to_string()),
-                TransactionError::Operation(use_case_err) => use_case_err,
-            })
+            .await?)
     }
     pub async fn one(&self, item_id: Uuid) -> Result<Team, UseCaseError> {
-        let mut db_conn = self
-            .transactor
-            .conn()
-            .await
-            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+        let mut db_conn = self.transactor.conn().await?;
         Ok(mapper::team_db_to_team_uc(
             self.teams_repo.one(&mut db_conn, &item_id).await?,
         ))
     }
     pub async fn create(&self, team: Team) -> Result<Uuid, UseCaseError> {
-        let mut db_conn = self
-            .transactor
-            .conn()
-            .await
-            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+        let mut db_conn = self.transactor.conn().await?;
         Ok(self
             .teams_repo
             .create(&mut db_conn, mapper::team_uc_to_team_db(team))
             .await?)
     }
     pub async fn update(&self, team: Team) -> Result<(), UseCaseError> {
-        let mut db_conn = self
-            .transactor
-            .conn()
-            .await
-            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+        let mut db_conn = self.transactor.conn().await?;
         Ok(self
             .teams_repo
             .update(&mut db_conn, mapper::team_uc_to_team_db(team))
             .await?)
     }
     pub async fn delete(&self, item_id: Uuid) -> Result<(), UseCaseError> {
-        let mut db_conn = self
-            .transactor
-            .conn()
-            .await
-            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+        let mut db_conn = self.transactor.conn().await?;
         Ok(self.teams_repo.delete(&mut db_conn, &item_id).await?)
     }
     // пригласить может только owner или admin
@@ -104,12 +80,7 @@ impl Teams {
         team_id: Uuid,
         user_id: Uuid,
     ) -> Result<(), UseCaseError> {
-        let mut db_conn = self
-            .transactor
-            .conn()
-            .await
-            .map_err(|e| UseCaseError::Common(e.to_string()))?;
-
+        let mut db_conn = self.transactor.conn().await?;
         let mut is_has_access = false;
 
         if let Some(role) = profile_role
@@ -124,7 +95,7 @@ impl Teams {
         }
 
         if !is_has_access {
-            return Err(UseCaseError::ForTransport {
+            return Err(UseCaseError::Transport {
                 status_code: StatusCode::FORBIDDEN,
                 public_err: ErrMsg::NoRules.to_string(),
                 internal_err: None,

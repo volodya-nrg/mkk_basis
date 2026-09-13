@@ -13,13 +13,17 @@ use testcontainers_modules::{
 };
 use tokio::time::sleep;
 
-use super::{certs, consts, mocks::EmailServiceMock, rand};
-use mkk_basis::adapter::db::postgres::transactor::Transactor;
 use mkk_basis::{
-    adapter::{db::postgres::Postgres as PostgresService, jwt::Jwt as JWTService},
+    adapter::{
+        db::postgres::Postgres as PostgresService,
+        db::postgres::transactor::{IsolationLevel, Transactor},
+        jwt::Jwt as JWTService,
+    },
     transport::{self, http_server::HTTPServer},
     usecase::UseCase,
 };
+
+use super::{certs, consts, mocks::EmailServiceMock, rand};
 
 pub struct Context {
     pub http_addr: String,
@@ -63,7 +67,7 @@ impl Context {
         let addr_str = addr_socket.to_string();
         let http_addr = format!("https://{}", addr_str); // явно используем https
         let postgres_service = PostgresService::new();
-        let transactor = Transactor::new(pool.clone());
+        let transactor = Transactor::new(pool.clone(), IsolationLevel::Serializable);
         let use_case = UseCase::new(
             "http://localhost.loc".to_string(),
             postgres_service.clone(),

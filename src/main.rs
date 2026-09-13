@@ -19,7 +19,10 @@ use std::time::Duration;
 
 use adapter::{
     config::Config,
-    db::postgres::{Postgres as PostgresService, transactor::Transactor},
+    db::postgres::{
+        Postgres as PostgresService,
+        transactor::{IsolationLevel, Transactor},
+    },
     email::Email as EmailService,
     jwt::Jwt as JWTService,
     logger,
@@ -78,7 +81,7 @@ async fn run(config_filepath: String) -> Result<(), String> {
         .connect(&cfg.postgres.dsn)
         .await
         .map_err(|e| format!("failed to connect on DB: {e}"))?;
-    let transactor = Transactor::new(pool); // надо определить уровень транзакций
+    let transactor = Transactor::new(pool, IsolationLevel::ReadCommitted);
     let http_server = HTTPServer::new(
         cfg.http_server.address.clone(),
         UseCase::new(

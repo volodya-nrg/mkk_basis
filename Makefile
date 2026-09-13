@@ -68,10 +68,11 @@ check_version_certs:
 
 .PHONY: test_db
 test_db:
-	RUST_BACKTRACE=1 cargo test --test db -- --nocapture # --include-ignored
+	RUST_BACKTRACE=1 cargo test --test db -- --nocapture # --include-ignored; "RUST_BACKTRACE=1" - нормальная степень развернутости
 
 .PHONY: test_transport
 test_transport:
+	# export RUST_MIN_STACK=8388608  # 8 МБ - по дефолту 2 МБ
 	RUST_BACKTRACE=1 cargo test --test transport -- --nocapture # --include-ignored
 
 .PHONY: test_units

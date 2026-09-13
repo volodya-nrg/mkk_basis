@@ -9,8 +9,8 @@ pub mod teams;
 pub mod users;
 
 use http::StatusCode;
-use thiserror::Error as ThisError;
 
+use crate::adapter::db::postgres::transactor::TransactionError;
 use crate::adapter::{
     db::{errors::RepositoryError, postgres::Postgres, postgres::transactor::Transactor},
     email::EmailSender,
@@ -69,26 +69,21 @@ where
 
 // ------
 
-#[derive(ThisError, Debug)]
+// тут thiserror не нужен, т.к. конвертация в строку ни где не происходит, а берутся их значения
+#[derive(Debug)]
 pub enum UseCaseError {
-    #[error("{0}")]
     Common(String),
-    #[error(
-        "{status_code}; {public_err}; {internal_err};",
-        internal_err = internal_err.as_deref().unwrap_or("none")
-    )]
-    ForTransport {
+    Transport {
         status_code: StatusCode,
         public_err: String,
         internal_err: Option<String>,
     },
-    #[error("user not found")]
     UserNotExists,
 }
 impl From<RepositoryError> for UseCaseError {
     fn from(e: RepositoryError) -> Self {
         match e {
-            RepositoryError::NotFoundRow => UseCaseError::ForTransport {
+            RepositoryError::NotFoundRow => UseCaseError::Transport {
                 status_code: StatusCode::NOT_FOUND,
                 public_err: ErrMsg::NotFoundItem.to_string(),
                 internal_err: None,
@@ -99,9 +94,23 @@ impl From<RepositoryError> for UseCaseError {
 }
 impl From<JWTError> for UseCaseError {
     fn from(e: JWTError) -> Self {
+        UseCaseError::Common(e.to_string())
+    }
+}
+impl From<sqlx::Error> for UseCaseError {
+    fn from(e: sqlx::Error) -> Self {
+        UseCaseError::Common(e.to_string())
+    }
+}
+impl<E> From<TransactionError<E>> for UseCaseError
+where
+    E: Into<UseCaseError>,
+{
+    fn from(e: TransactionError<E>) -> Self {
         match e {
-            JWTError::ExpiredToken => UseCaseError::Common(e.to_string()), // пусть явно стоит
-            other => UseCaseError::Common(other.to_string()),
+            TransactionError::Database(sqlx_err) => UseCaseError::Common(sqlx_err.to_string()),
+            TransactionError::Operation(e) => e.into(),
+            // other => UseCaseError::from(other), - тут было переполнение стека
         }
     }
 }

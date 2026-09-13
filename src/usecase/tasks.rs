@@ -8,7 +8,7 @@ use crate::adapter::db::{
             task_histories::TaskHistories as DBTaskHistories, tasks::Status as TaskStatus,
             tasks::Tasks as DBTasks, team_members::TeamMembers as DBTeamMembers,
         },
-        transactor::{TransactionError, Transactor},
+        transactor::Transactor,
     },
 };
 use crate::err_msg::ErrMsg;
@@ -41,31 +41,22 @@ impl Tasks {
         }
     }
     pub async fn list(&self, data: TaskData) -> Result<(Vec<Task>, i64), UseCaseError> {
-        self.transactor
-            .in_transaction(async |tx| {
-                self.tasks_repo
+        Ok(self
+            .transactor
+            .in_transaction::<_, _, UseCaseError>(async |tx| {
+                let list = self
+                    .tasks_repo
                     .list(tx, mapper::task_data_uc_to_task_data_db(data))
-                    .await
-                    .map_err(|e| UseCaseError::Common(format!("failed to get items: {e}")))
-                    .map(|list| {
-                        (
-                            list.0.into_iter().map(mapper::task_db_to_task_uc).collect(),
-                            list.1,
-                        )
-                    })
+                    .await?;
+                Ok((
+                    list.0.into_iter().map(mapper::task_db_to_task_uc).collect(),
+                    list.1,
+                ))
             })
-            .await
-            .map_err(|e| match e {
-                TransactionError::Database(sqlx_err) => UseCaseError::Common(sqlx_err.to_string()),
-                TransactionError::Operation(use_case_err) => use_case_err,
-            })
+            .await?)
     }
     pub async fn one(&self, item_id: Uuid) -> Result<Task, UseCaseError> {
-        let mut db_conn = self
-            .transactor
-            .conn()
-            .await
-            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+        let mut db_conn = self.transactor.conn().await?;
         Ok(mapper::task_db_to_task_uc(
             self.tasks_repo.one(&mut db_conn, &item_id).await?,
         ))
@@ -74,13 +65,13 @@ impl Tasks {
         // создать задачу может только член команды
         self.check_access(task.team_id, user_id).await?;
 
-        self.transactor
-            .in_transaction(async |tx| {
+        Ok(self
+            .transactor
+            .in_transaction::<_, _, UseCaseError>(async |tx| {
                 let new_task_uuid = self
                     .tasks_repo
                     .create(tx.as_mut(), mapper::task_uc_to_task_db(task))
-                    .await
-                    .map_err(|e| UseCaseError::Common(format!("failed to create task: {e}")))?;
+                    .await?;
                 let _ = self
                     .task_histories_repo
                     .create(
@@ -93,31 +84,23 @@ impl Tasks {
                             created_at: Default::default(),
                         }),
                     )
-                    .await
-                    .map_err(|e| {
-                        UseCaseError::Common(format!("failed to create task_history: {e}"))
-                    })?;
+                    .await?;
 
                 Ok(new_task_uuid)
             })
-            .await
-            .map_err(|e| match e {
-                TransactionError::Database(sqlx_err) => UseCaseError::Common(sqlx_err.to_string()),
-                TransactionError::Operation(use_case_err) => use_case_err,
-            })
+            .await?)
     }
     pub async fn update(&self, task: Task, user_id: Uuid) -> Result<(), UseCaseError> {
         // обновить задачу может только член команды
         self.check_access(task.team_id, user_id).await?;
 
-        let task_id = task.task_id;
-
-        self.transactor
+        let task_id = task.task_id; // copy-semantic
+        let _ = self
+            .transactor
             .in_transaction(async |tx| {
                 self.tasks_repo
                     .update(tx.as_mut(), mapper::task_uc_to_task_db(task))
-                    .await
-                    .map_err(|e| UseCaseError::Common(format!("failed to update: {e}")))?;
+                    .await?;
 
                 self.task_histories_repo
                     .create(
@@ -131,36 +114,26 @@ impl Tasks {
                         }),
                     )
                     .await
-                    .map_err(|e| {
-                        UseCaseError::Common(format!("failed to create task_history: {e}"))
-                    })
             })
-            .await
-            .map_err(|e| match e {
-                TransactionError::Database(sqlx_err) => UseCaseError::Common(sqlx_err.to_string()),
-                TransactionError::Operation(use_case_err) => use_case_err,
-            })
-            .map(|_| ())
+            .await?;
+
+        Ok(())
     }
     // удалить задачу может только член команды
     pub async fn delete(&self, task_id: Uuid, user_id: Uuid) -> Result<(), UseCaseError> {
-        let mut db_conn = self
-            .transactor
-            .conn()
-            .await
-            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+        let mut db_conn = self.transactor.conn().await?;
         let mut task =
             mapper::task_db_to_task_uc(self.tasks_repo.one(&mut db_conn, &task_id).await?);
 
         self.check_access(task.team_id, user_id).await?;
         task.status = TaskStatus::Cancelled.to_string();
 
-        self.transactor
+        let _ = self
+            .transactor
             .in_transaction(async |tx| {
                 self.tasks_repo
                     .update(tx.as_mut(), mapper::task_uc_to_task_db(task))
-                    .await
-                    .map_err(|e| UseCaseError::Common(format!("failed to delete-update: {e}")))?;
+                    .await?;
 
                 self.task_histories_repo
                     .create(
@@ -174,23 +147,13 @@ impl Tasks {
                         }),
                     )
                     .await
-                    .map_err(|e| {
-                        UseCaseError::Common(format!("failed to create task_history: {e}"))
-                    })
             })
-            .await
-            .map_err(|e| match e {
-                TransactionError::Database(sqlx_err) => UseCaseError::Common(sqlx_err.to_string()),
-                TransactionError::Operation(use_case_err) => use_case_err,
-            })
-            .map(|_| ())
+            .await?;
+
+        Ok(())
     }
     pub async fn get_history(&self, item_id: Uuid) -> Result<Vec<TaskHistory>, UseCaseError> {
-        let mut db_conn = self
-            .transactor
-            .conn()
-            .await
-            .map_err(|e| UseCaseError::Common(e.to_string()))?;
+        let mut db_conn = self.transactor.conn().await?;
         Ok(self
             .task_histories_repo
             .by_task_id(&mut db_conn, &item_id)
@@ -200,24 +163,18 @@ impl Tasks {
             .collect())
     }
     async fn check_access(&self, team_id: Uuid, user_id: Uuid) -> Result<(), UseCaseError> {
-        let mut db_conn = self
-            .transactor
-            .conn()
-            .await
-            .map_err(|e| UseCaseError::Common(e.to_string()))?;
-        let _ = self
-            .team_members_repo
+        let mut db_conn = self.transactor.conn().await?;
+        self.team_members_repo
             .one(&mut db_conn, &team_id, &user_id)
             .await
             .map_err(|e| match e {
-                RepositoryError::NotFoundRow => UseCaseError::ForTransport {
+                RepositoryError::NotFoundRow => UseCaseError::Transport {
                     status_code: StatusCode::FORBIDDEN,
                     public_err: ErrMsg::NoAccessTeamMemberOnly.to_string(),
                     internal_err: None,
                 },
                 other => UseCaseError::Common(other.to_string()),
-            })?;
-
-        Ok(())
+            })
+            .map(|_| ())
     }
 }

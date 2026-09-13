@@ -9,7 +9,7 @@ use std::marker::PhantomData;
 use crate::adapter::email::EmailSender;
 use crate::consts;
 use crate::transport::{
-    http_server::handlers::HandlerError,
+    http_server::handlers::{HandlerError, handler_err},
     models::{RequestLogin, RequestRegister, RequestRegisterConfirm, ResponseUuid},
 };
 use crate::usecase::{UseCase, UseCaseError};
@@ -37,13 +37,7 @@ where
             )
             .await
             .map_or_else(
-                |e| {
-                    HandlerError {
-                        source: e,
-                        handler: "auth->register",
-                    }
-                    .into_response()
-                },
+                |e| handler_err!(e).into_response(),
                 |new_uuid| {
                     Json(ResponseUuid {
                         value: new_uuid.to_string(),
@@ -61,13 +55,7 @@ where
             .register_confirm(&query.email, &query.code)
             .await
             .map_or_else(
-                |e| {
-                    HandlerError {
-                        source: e,
-                        handler: "auth->register-confirm",
-                    }
-                    .into_response()
-                },
+                |e| handler_err!(e).into_response(),
                 |_| StatusCode::NO_CONTENT.into_response(),
             )
     }
@@ -81,11 +69,7 @@ where
             Err(e) => {
                 return match e {
                     UseCaseError::UserNotExists => Redirect::to("/").into_response(),
-                    _ => HandlerError {
-                        source: e,
-                        handler: "auth->login",
-                    }
-                    .into_response(),
+                    _ => handler_err!(e).into_response(),
                 };
             }
         };
@@ -120,15 +104,8 @@ where
         let (access_token, refresh_token) =
             match use_case.auth.refresh_tokens(refresh_token_src).await {
                 Ok(v) => v,
-                Err(e) => {
-                    return HandlerError {
-                        source: e,
-                        handler: "auth->refresh-tokens",
-                    }
-                    .into_response();
-                }
+                Err(e) => return handler_err!(e).into_response(),
             };
-
         (
             StatusCode::NO_CONTENT,
             AppendHeaders([

@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 use uuid::Uuid;
 
 use crate::adapter::email::EmailSender;
-use crate::transport::http_server::handlers::HandlerError;
+use crate::transport::http_server::handlers::{HandlerError, handler_err};
 use crate::transport::models::AuthUser;
 use crate::transport::{
     mapper,
@@ -35,13 +35,7 @@ where
             .list(task_id, payload.limit, payload.offset)
             .await
             .map_or_else(
-                |e| {
-                    HandlerError {
-                        source: e,
-                        handler: "tasks-comments->list",
-                    }
-                    .into_response()
-                },
+                |e| handler_err!(e).into_response(),
                 |(items, total)| {
                     Json(TaskCommentsList {
                         items: items
@@ -70,23 +64,11 @@ where
             .await;
         let new_uuid = match result {
             Ok(v) => v,
-            Err(e) => {
-                return HandlerError {
-                    source: e,
-                    handler: "tasks-comments->create",
-                }
-                .into_response();
-            }
+            Err(e) => return handler_err!(e).into_response(),
         };
 
         use_case.task_comments.one(new_uuid).await.map_or_else(
-            |e| {
-                HandlerError {
-                    source: e,
-                    handler: "tasks-comments->create",
-                }
-                .into_response()
-            },
+            |e| handler_err!(e).into_response(),
             |v| {
                 (
                     StatusCode::CREATED,
@@ -102,13 +84,7 @@ where
         State(use_case): State<UseCase<ES>>,
     ) -> impl IntoResponse {
         use_case.task_comments.delete(item_id).await.map_or_else(
-            |e| {
-                HandlerError {
-                    source: e,
-                    handler: "tasks-comments->delete",
-                }
-                .into_response()
-            },
+            |e| handler_err!(e).into_response(),
             |_| StatusCode::NO_CONTENT.into_response(),
         )
     }

@@ -6,9 +6,9 @@ use std::io::Write;
 
 #[derive(Serialize)]
 struct LogEntry {
+    // в логах поля отображаются в том же порядке что и порядок свойств
     level: String,
     message: String,
-    target: String,
     service_name: String,
     version: String,
 }
@@ -41,12 +41,12 @@ pub fn init(
     builder
         .filter(None, level)
         .format(move |buf, record: &Record| {
+            // target, line показывают на одну точку - не информативно, поэтому игнорим
             let json_string = serde_json::to_string(&LogEntry {
                 level: record.level().to_string(),
                 service_name: service_name.clone(),
                 version: version.clone(),
                 message: record.args().to_string(),
-                target: record.target().to_string(),
             })
             .unwrap_or_else(|_| record.args().to_string());
             writeln!(buf, "{}", json_string).unwrap_or_default();

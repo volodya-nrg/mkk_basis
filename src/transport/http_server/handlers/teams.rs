@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 use uuid::Uuid;
 
 use crate::adapter::email::EmailSender;
-use crate::transport::http_server::handlers::HandlerError;
+use crate::transport::http_server::handlers::{HandlerError, handler_err};
 use crate::transport::models::{AuthUser, ResponseMsg};
 use crate::transport::{
     mapper,
@@ -33,13 +33,7 @@ where
             .list(payload.limit, payload.offset)
             .await
             .map_or_else(
-                |e| {
-                    HandlerError {
-                        source: e,
-                        handler: "teams->list",
-                    }
-                    .into_response()
-                },
+                |e| handler_err!(e).into_response(),
                 |(items, total)| {
                     Json(TeamsList {
                         items: items.into_iter().map(mapper::team_uc_to_team_tr).collect(),
@@ -55,13 +49,7 @@ where
         State(use_case): State<UseCase<ES>>,
     ) -> impl IntoResponse {
         use_case.teams.one(item_id).await.map_or_else(
-            |e| {
-                HandlerError {
-                    source: e,
-                    handler: "teams->one",
-                }
-                .into_response()
-            },
+            |e| handler_err!(e).into_response(),
             |v| Json(mapper::team_uc_to_team_tr(v)).into_response(),
         )
     }
@@ -75,23 +63,11 @@ where
 
         let new_uuid = match use_case.teams.create(team_uc).await {
             Ok(v) => v,
-            Err(e) => {
-                return HandlerError {
-                    source: e,
-                    handler: "teams->create",
-                }
-                .into_response();
-            }
+            Err(e) => return handler_err!(e).into_response(),
         };
 
         use_case.teams.one(new_uuid).await.map_or_else(
-            |e| {
-                HandlerError {
-                    source: e,
-                    handler: "teams->create",
-                }
-                .into_response()
-            },
+            |e| handler_err!(e).into_response(),
             |v| (StatusCode::CREATED, Json(mapper::team_uc_to_team_tr(v))).into_response(),
         )
     }
@@ -105,21 +81,11 @@ where
         uc_team.team_id = item_id;
 
         if let Err(e) = use_case.teams.update(uc_team).await {
-            return HandlerError {
-                source: e,
-                handler: "teams->update",
-            }
-            .into_response();
+            return handler_err!(e).into_response();
         };
 
         use_case.teams.one(item_id).await.map_or_else(
-            |e| {
-                HandlerError {
-                    source: e,
-                    handler: "teams->update",
-                }
-                .into_response()
-            },
+            |e| handler_err!(e).into_response(),
             |v| Json(mapper::team_uc_to_team_tr(v)).into_response(),
         )
     }
@@ -129,13 +95,7 @@ where
         State(use_case): State<UseCase<ES>>,
     ) -> impl IntoResponse {
         use_case.teams.delete(item_id).await.map_or_else(
-            |e| {
-                HandlerError {
-                    source: e,
-                    handler: "teams->delete",
-                }
-                .into_response()
-            },
+            |e| handler_err!(e).into_response(),
             |_| StatusCode::NO_CONTENT.into_response(),
         )
     }
@@ -161,13 +121,7 @@ where
             .invite(user.user_id, user.role, team_id, user_id)
             .await
             .map_or_else(
-                |e| {
-                    HandlerError {
-                        source: e,
-                        handler: "teams->invite",
-                    }
-                    .into_response()
-                },
+                |e| handler_err!(e).into_response(),
                 |_| StatusCode::OK.into_response(),
             )
     }

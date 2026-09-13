@@ -13,9 +13,19 @@ use crate::err_msg::ErrMsg;
 use crate::transport::models::ResponseMsg;
 use crate::usecase::UseCaseError;
 
+macro_rules! handler_err {
+    ($source:expr) => {
+        HandlerError {
+            use_case_err: $source,
+            source: concat!(file!(), ":", line!()), // format! тут не подойдет
+        }
+    };
+}
+pub(crate) use handler_err;
+
 pub struct HandlerError {
-    pub source: UseCaseError,
-    pub handler: &'static str,
+    use_case_err: UseCaseError,
+    source: &'static str,
 }
 impl IntoResponse for HandlerError {
     fn into_response(self) -> Response {
@@ -23,11 +33,11 @@ impl IntoResponse for HandlerError {
         let mut internal_error_result = String::new();
         let mut status_code_result = StatusCode::INTERNAL_SERVER_ERROR;
 
-        match self.source {
+        match self.use_case_err {
             UseCaseError::Common(v) => {
                 internal_error_result = v;
             }
-            UseCaseError::ForTransport {
+            UseCaseError::Transport {
                 status_code,
                 public_err,
                 internal_err,
@@ -46,7 +56,12 @@ impl IntoResponse for HandlerError {
         }
 
         if !internal_error_result.is_empty() {
-            log::error!("{}; {}", self.handler, internal_error_result);
+            log::error!(
+                "{} ({}) -> {}",
+                self.source,
+                status_code_result.as_u16(),
+                internal_error_result
+            );
         }
 
         (

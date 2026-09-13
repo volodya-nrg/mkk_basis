@@ -1,24 +1,18 @@
 use chrono::{Duration, Utc};
 use jsonwebtoken::errors;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use uuid::Uuid;
 
 pub const TYPE_ACCESS: &str = "access";
 pub const TYPE_REFRESH: &str = "refresh";
 
-#[derive(Debug)]
+// т.к. стоит thiserror::Error, то нет необходимости в fmt::Display
+#[derive(Debug, thiserror::Error)]
 pub enum JWTError {
+    #[error("token expired")]
     ExpiredToken,
+    #[error("{0}")]
     Common(errors::Error),
-}
-impl fmt::Display for JWTError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            JWTError::ExpiredToken => write!(f, "token expired"),
-            JWTError::Common(s) => write!(f, "{s}"),
-        }
-    }
 }
 
 // From - для e.into() (авто-конвертация)

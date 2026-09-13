@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::adapter::{email::EmailSender, helpers};
 use crate::err_msg::ErrMsg;
-use crate::transport::http_server::handlers::HandlerError;
+use crate::transport::http_server::handlers::{HandlerError, handler_err};
 use crate::transport::{
     mapper,
     models::{
@@ -44,13 +44,7 @@ where
             .list(payload.limit, payload.offset)
             .await
             .map_or_else(
-                |e| {
-                    HandlerError {
-                        source: e,
-                        handler: "users->list",
-                    }
-                    .into_response()
-                },
+                |e| handler_err!(e).into_response(),
                 |(items, total)| {
                     Json(UsersList {
                         items: items.into_iter().map(mapper::user_uc_to_user_tr).collect(),
@@ -66,13 +60,7 @@ where
         State(use_case): State<UseCase<ES>>,
     ) -> impl IntoResponse {
         use_case.users.one(item_id).await.map_or_else(
-            |e| {
-                HandlerError {
-                    source: e,
-                    handler: "users->one",
-                }
-                .into_response()
-            },
+            |e| handler_err!(e).into_response(),
             |v| Json(mapper::user_uc_to_user_tr(v)).into_response(),
         )
     }
@@ -115,23 +103,11 @@ where
             .await;
         let new_uuid = match result {
             Ok(v) => v,
-            Err(e) => {
-                return HandlerError {
-                    source: e,
-                    handler: "users->create",
-                }
-                .into_response();
-            }
+            Err(e) => return handler_err!(e).into_response(),
         };
 
         use_case.users.one(new_uuid).await.map_or_else(
-            |e| {
-                HandlerError {
-                    source: e,
-                    handler: "users->create",
-                }
-                .into_response()
-            },
+            |e| handler_err!(e).into_response(),
             |v| (StatusCode::CREATED, Json(mapper::user_uc_to_user_tr(v))).into_response(),
         )
     }
@@ -174,21 +150,11 @@ where
         user_uc.user_id = item_id;
 
         if let Err(e) = use_case.users.update(user_uc).await {
-            return HandlerError {
-                source: e,
-                handler: "users->update",
-            }
-            .into_response();
+            return handler_err!(e).into_response();
         }
 
         use_case.users.one(item_id).await.map_or_else(
-            |e| {
-                HandlerError {
-                    source: e,
-                    handler: "users->update",
-                }
-                .into_response()
-            },
+            |e| handler_err!(e).into_response(),
             |v| Json(mapper::user_uc_to_user_tr(v)).into_response(),
         )
     }
@@ -198,13 +164,7 @@ where
         State(use_case): State<UseCase<ES>>,
     ) -> impl IntoResponse {
         use_case.users.delete(item_id).await.map_or_else(
-            |e| {
-                HandlerError {
-                    source: e,
-                    handler: "users->delete",
-                }
-                .into_response()
-            },
+            |e| handler_err!(e).into_response(),
             |_| StatusCode::NO_CONTENT.into_response(),
         )
     }
