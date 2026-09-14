@@ -80,8 +80,6 @@ impl Context {
             transactor.clone(),
         );
         let certs = certs::gen_certs().unwrap(); // создадим серты
-        // эта штука нужна что определения крипто-провайдера в тесте
-        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
         let tls_config = transport::http_server::configure_tls(
             certs.ca_cert.pem().into_bytes(),
             certs.server_cert.pem().into_bytes(),

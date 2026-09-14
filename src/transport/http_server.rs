@@ -176,6 +176,8 @@ pub fn configure_tls(
     crt_data: Vec<u8>,
     key_data: Vec<u8>,
 ) -> Result<RustlsConfig, String> {
+    // эта штука нужна что определения крипто-провайдера
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     let ca_certs =
         convert_pem_certificates(ca_data).map_err(|e| format!("failed to convert ca: {e}"))?;
     let crt_certs =
