@@ -1,11 +1,7 @@
 #![allow(dead_code)]
 
-use super::rand;
 use http::StatusCode;
-use reqwest::{
-    Certificate, Client as ReqwestClient, Error as ReqwestError, Identity, Response,
-    multipart::Form,
-};
+use reqwest::{Certificate, Identity, Response, multipart::Form};
 use sqlx::PgConnection;
 use std::time::Duration;
 
@@ -15,14 +11,17 @@ use mkk_basis::transport::models::{
     RequestTaskData, RequestTeam, RequestTeamInvite, RequestUserCreate, RequestUserUpdate,
 };
 
-// mut - везде потому что перемешиваются методы, то (не)mut и передается ссылка. Из-за этого нужно
-// указать один вариант.
+use super::rand;
 
-pub type StatusCodeBodyError = Result<(StatusCode, String), ReqwestError>;
+pub type StatusCodeBodyError = Result<(StatusCode, String), reqwest::Error>;
+
+// Client - клиент в некоторых методах имеет "mut self", поэтому удобней везде так объявить и возвращать
+// мутабельный объект. Если клиента отдавать по значениям, то между может быть move, что не удобно.
+// Частично сделать &mut self не получится, т.к. каждый метод по сути отдает разный тип ((не)mut).
 
 pub struct Client<'a> {
     addr: String,
-    client: ReqwestClient,
+    client: reqwest::Client,
     pub pg_service: &'a PostgresService,
     db_conn: &'a mut PgConnection,
 }
@@ -45,7 +44,7 @@ impl<'a> Client<'a> {
 
         Self {
             addr: addr.to_string(),
-            client: ReqwestClient::builder()
+            client: reqwest::Client::builder()
                 .user_agent("my-rust-test-client/1.0")
                 .add_root_certificate(ca)
                 .identity(identity)
