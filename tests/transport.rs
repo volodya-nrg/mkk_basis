@@ -1162,10 +1162,9 @@ async fn check_users() {
     .await;
 
     // ok: обновим успешно
-    let req_user_update = RequestUserUpdate {
+    let mut req_user_update = RequestUserUpdate {
         name: Some(rand::str()),
         role: Some(UsersRole::Null.to_string()),
-        is_remove_avatar: true,
         ..Default::default()
     };
 
@@ -1177,7 +1176,20 @@ async fn check_users() {
         assert_eq!(req_user_create.email, resp_user_actual.email); // !
         assert_eq!(req_user_update.name, resp_user_actual.name);
         assert!(resp_user_actual.role.is_none());
-        assert!(resp_user_actual.avatar.is_none());
+        assert!(resp_user_actual.avatar.is_some()); // аватарка должна присутствовать
+
+        req_user_update = RequestUserUpdate {
+            is_remove_avatar: true,
+            ..Default::default()
+        }
+    })
+    .await
+    .users_update(user_id.clone(), req_user_update.clone(), |result| {
+        let (status_code, body_str) = result.unwrap();
+        assert_eq!(StatusCode::OK, status_code);
+
+        let resp_user_actual: User = serde_json::from_str(body_str.as_str()).unwrap();
+        assert!(resp_user_actual.avatar.is_none()); // аватарка не должно быть должна
     })
     .await // ok: посмотрим что люди есть
     .users_list(0, 0, |result| {

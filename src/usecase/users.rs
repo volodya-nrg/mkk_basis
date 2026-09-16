@@ -117,11 +117,12 @@ impl Users {
             .in_transaction(async |tx| {
                 self.users_repo.update(tx, user_db_copy).await?;
 
-                if let Some(v) = user_db.avatar.clone()
-                    && let Err(e) = fs::remove_file(v.clone())
+                if user.is_remove_avatar
+                    && let Some(avatar_filepath) = user_db.avatar.clone()
+                    && let Err(e) = fs::remove_file(avatar_filepath.clone())
                 {
                     return Err(UseCaseError::Common(format!(
-                        "failed to remove file ({v}): {e}",
+                        "failed to remove file ({avatar_filepath}): {e}",
                     )));
                 }
 
