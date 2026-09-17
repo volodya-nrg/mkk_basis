@@ -110,22 +110,22 @@ pub fn user_create_tr_to_user_create_uc(item: RequestUserCreate) -> UserCreate {
     UserCreate {
         email: item.email,
         password: item.password,
-        name: item.name.map(|v| v.to_string()),
+        name: item.name,
         email_code: None,
-        role: item.role.map(|v| v.to_string()),
-        avatar: item.avatar.map(|v| v.to_string()),
+        role: item.role,
+        avatar: item.avatar,
     }
 }
 
 pub fn user_tr_update_to_user_uc_update(item: RequestUserUpdate) -> UserUpdate {
     UserUpdate {
         user_id: Default::default(),
-        email: item.email.map(|v| v.to_string()),
-        password: item.password.map(|v| v.to_string()),
-        name: item.name.map(|v| v.to_string()),
+        email: item.email,
+        password: item.password,
+        name: item.name,
         email_code: None,
-        role: item.role.map(|v| v.to_string()),
-        avatar: item.avatar.map(|v| v.to_string()),
+        role: item.role,
+        avatar: item.avatar,
         is_remove_avatar: item.is_remove_avatar,
     }
 }

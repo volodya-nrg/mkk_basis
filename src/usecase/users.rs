@@ -19,7 +19,7 @@ pub struct Users {
 }
 
 impl Users {
-    pub fn new(transactor: Transactor, users_repo: DBUsers) -> Self {
+    pub const fn new(transactor: Transactor, users_repo: DBUsers) -> Self {
         Self {
             transactor,
             users_repo,

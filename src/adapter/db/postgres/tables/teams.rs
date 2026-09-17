@@ -18,7 +18,7 @@ impl NameAndFields for Teams {
     }
 }
 impl Teams {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {}
     }
     pub async fn list(

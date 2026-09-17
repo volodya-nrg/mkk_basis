@@ -62,7 +62,7 @@ where
                 transactor.clone(),
                 db.tbl_task_comments,
             ),
-            users: users::Users::new(transactor.clone(), db.tbl_users),
+            users: users::Users::new(transactor, db.tbl_users),
         }
     }
 }
@@ -83,34 +83,34 @@ pub enum UseCaseError {
 impl From<RepositoryError> for UseCaseError {
     fn from(e: RepositoryError) -> Self {
         match e {
-            RepositoryError::NotFoundRow => UseCaseError::Transport {
+            RepositoryError::NotFoundRow => Self::Transport {
                 status_code: StatusCode::NOT_FOUND,
                 public_err: ErrMsg::NotFoundItem.to_string(),
                 internal_err: None,
             },
-            other => UseCaseError::Common(other.to_string()),
+            other => Self::Common(other.to_string()),
         }
     }
 }
 impl From<JWTError> for UseCaseError {
     fn from(e: JWTError) -> Self {
-        UseCaseError::Common(e.to_string())
+        Self::Common(e.to_string())
     }
 }
 impl From<sqlx::Error> for UseCaseError {
     fn from(e: sqlx::Error) -> Self {
-        UseCaseError::Common(e.to_string())
+        Self::Common(e.to_string())
     }
 }
 impl<E> From<TransactionError<E>> for UseCaseError
 where
-    E: Into<UseCaseError>,
+    E: Into<Self>,
 {
     fn from(e: TransactionError<E>) -> Self {
         match e {
-            TransactionError::Database(sqlx_err) => UseCaseError::Common(sqlx_err.to_string()),
+            TransactionError::Database(sqlx_err) => Self::Common(sqlx_err.to_string()),
             TransactionError::Operation(e) => e.into(),
-            // other => UseCaseError::from(other), - тут было переполнение стека
+            // other => Self::from(other), - тут было переполнение стека
         }
     }
 }

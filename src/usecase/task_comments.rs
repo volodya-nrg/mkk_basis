@@ -13,7 +13,7 @@ pub struct TaskComments {
 }
 
 impl TaskComments {
-    pub fn new(transactor: Transactor, task_comments_repo: DBTaskComments) -> Self {
+    pub const fn new(transactor: Transactor, task_comments_repo: DBTaskComments) -> Self {
         Self {
             transactor,
             task_comments_repo,

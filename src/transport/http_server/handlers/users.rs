@@ -236,5 +236,5 @@ fn upload_file(file_data: Vec<u8>) -> Result<String, UploadErr> {
             }
         })?;
 
-    Ok(filepath.to_string())
+    Ok(filepath)
 }

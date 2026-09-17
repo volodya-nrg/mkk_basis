@@ -17,7 +17,7 @@ pub struct Postgres {
 }
 
 impl Postgres {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             tbl_users: Users::new(),
             tbl_teams: Teams::new(),

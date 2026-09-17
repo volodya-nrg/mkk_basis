@@ -28,7 +28,7 @@ impl<ES> HTTPServer<ES>
 where
     ES: EmailSender,
 {
-    pub fn new(addr: String, use_case: UseCase<ES>, tls_config: Option<RustlsConfig>) -> Self {
+    pub const fn new(addr: String, use_case: UseCase<ES>, tls_config: Option<RustlsConfig>) -> Self {
         Self {
             addr,
             use_case,
@@ -151,7 +151,7 @@ where
                 get(users::Handlers::one)
                     .patch(users::Handlers::update)
                     .delete(users::Handlers::delete)
-                    .layer(layer_auth.clone()),
+                    .layer(layer_auth),
             );
         let static_loc = Router::new()
             .nest_service("/js", ServeDir::new("./web/js"))

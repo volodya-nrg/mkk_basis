@@ -22,7 +22,7 @@ rand = "0.10.2"
 rcgen = "0.14.9"
 rustls-pemfile = "2.2.0"
 rustls = "0.23.43"
-serde = { version = "1.0.228", features = ["derive"] }
+serde = { version = "1.0.228", features = ["derive"] } # Включает функцию `derive` у serde.
 serde_json = "1.0.151"
 sqlx = { version = "0.9.0", features = ["postgres", "chrono", "runtime-tokio", "macros", "uuid"] }
 strum = "0.28.0"
@@ -49,3 +49,19 @@ name = "fib_bench"
 # По умолчанию true для всех целей.
 # Если установлено в false, то вы несёте ответственность за определение функции main() для запуска тестов и бенчмарков.
 harness = false
+
+[lints.clippy]
+# Включаем все линты по умолчанию (correctness, suspicious, style, complexity, perf)
+all = "deny" # "deny" - если есть ошибки, то сборка ломается
+# Включаем строгие линты. Будьте готовы к ложным срабатываниям.
+#pedantic = "warn" - перебор чуть
+# Включаем новые, разрабатываемые линты
+nursery = "warn" # "warn" - если есть ошибки, то сборка НЕ ломается, выводятся предупреждения
+# Включаем линты для Cargo.toml
+#cargo = "warn" - перебор чуть
+# Группу restriction целиком НЕ включаем! (см. ниже)
+# restriction = "deny" ❌
+
+#unwrap_used = "warn"
+#expect_used = "allow"
+#panic = "allow"

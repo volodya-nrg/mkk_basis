@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use http::StatusCode;
-use reqwest::{Certificate, Identity, Response, multipart::Form};
+use reqwest::{multipart::Form, Certificate, Identity, Response};
 use sqlx::PgConnection;
 use std::time::Duration;
 
@@ -43,7 +43,7 @@ impl<'a> Client<'a> {
         let identity = Identity::from_pem(format!("{}{}", crt, key).as_bytes()).unwrap();
 
         Self {
-            addr: addr.to_string(),
+            addr,
             client: reqwest::Client::builder()
                 .user_agent("my-rust-test-client/1.0")
                 .add_root_certificate(ca)
@@ -182,7 +182,7 @@ impl<'a> Client<'a> {
             query_items.push(format!("code={}", v));
         }
         if !query_items.is_empty() {
-            address = address + "?" + &query_items.join("&").to_string();
+            address = address + "?" + &query_items.join("&");
         }
 
         let result = async {

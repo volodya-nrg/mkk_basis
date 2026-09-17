@@ -14,7 +14,7 @@ impl NameAndFields for TeamMembers {
     }
 }
 impl TeamMembers {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {}
     }
     #[allow(dead_code)]

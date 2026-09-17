@@ -1062,7 +1062,6 @@ async fn check_users() {
         &mut db_conn,
     );
 
-    let mut owner_id = String::new();
     let mut user_id = String::new();
     let req_register = rand::request_register();
     let mut req_user_create = rand::request_user_create();
@@ -1104,12 +1103,8 @@ async fn check_users() {
 
     // создадим пользователя, залогинимся
     cl.register(req_register, true, |result| {
-        let (status_code, body_str) = result.unwrap();
+        let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::OK, status_code);
-
-        owner_id = serde_json::from_str::<ResponseUuid>(body_str.as_str())
-            .unwrap()
-            .value;
     })
     .await
     .login(req_login, |result| {
@@ -1208,12 +1203,7 @@ async fn check_users() {
         let resp: UsersList = serde_json::from_str(body_str.as_str()).unwrap();
         assert!(!resp.items.is_empty());
         assert!(resp.total > 0);
-        assert!(
-            resp.items
-                .iter()
-                .find(|item| item.user_id == user_id)
-                .is_some()
-        );
+        assert!(resp.items.iter().any(|item| item.user_id == user_id));
     })
     .await // ок: удалим успешно
     .users_delete(user_id.clone(), |result| {

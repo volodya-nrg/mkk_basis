@@ -10,7 +10,7 @@ use crate::adapter::db::{
     traits::NameAndFields,
 };
 
-#[derive(Debug, EnumIter, PartialEq)]
+#[derive(Debug, EnumIter, PartialEq, Eq)]
 pub enum Status {
     Start,
     Todo,
@@ -19,17 +19,17 @@ pub enum Status {
 }
 impl Status {
     fn contains_value(v: String) -> bool {
-        Status::iter().any(|s| s.to_string() == v)
+        Self::iter().any(|s| s.to_string() == v)
     }
 }
 // можно поставить "заклинание" Display, но тогда будет начинаться с большой буквы, поэтому пишем сами как надо
 impl fmt::Display for Status {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
-            Status::Start => "start",
-            Status::Todo => "todo",
-            Status::Done => "done",
-            Status::Cancelled => "cancelled",
+            Self::Start => "start",
+            Self::Todo => "todo",
+            Self::Done => "done",
+            Self::Cancelled => "cancelled",
         };
         write!(f, "{}", s)
     }
@@ -56,7 +56,7 @@ impl NameAndFields for Tasks {
     }
 }
 impl Tasks {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {}
     }
     pub async fn list(

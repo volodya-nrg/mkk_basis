@@ -32,7 +32,7 @@ impl<ES> Auth<ES>
 where
     ES: EmailSender,
 {
-    pub fn new(
+    pub const fn new(
         addr: String,
         jwt_service: JWTService,
         email_sender: ES,
@@ -195,7 +195,7 @@ where
             .await
             .map_err(|e| {
                 // ! если пользователь не найден, то нужно перенаправлять его на страницу регистрации - тут исключение
-                if let RepositoryError::NotFoundRow = e {
+                if matches!(e, RepositoryError::NotFoundRow) {
                     return UseCaseError::UserNotExists;
                 }
                 UseCaseError::Common(e.to_string())

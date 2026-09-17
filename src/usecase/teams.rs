@@ -25,7 +25,7 @@ pub struct Teams {
 }
 
 impl Teams {
-    pub fn new(
+    pub const fn new(
         transactor: Transactor,
         teams_repo: DBTeams,
         team_members_repo: DBTeamMembers,
@@ -81,18 +81,17 @@ impl Teams {
         user_id: Uuid,
     ) -> Result<(), UseCaseError> {
         let mut db_conn = self.transactor.conn().await?;
-        let mut is_has_access = false;
-
-        if let Some(role) = profile_role
+        let is_has_access = if let Some(role) = profile_role
             && role == UserRole::Admin.to_string()
         {
-            is_has_access = true;
+            true
         } else {
-            let team = self.teams_repo.one(&mut db_conn, &team_id).await?;
-            if team.created_by == profile_id {
-                is_has_access = true;
-            }
-        }
+            self.teams_repo
+                .one(&mut db_conn, &team_id)
+                .await?
+                .created_by
+                == profile_id
+        };
 
         if !is_has_access {
             return Err(UseCaseError::Transport {

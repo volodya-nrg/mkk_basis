@@ -46,13 +46,13 @@ impl EmailSender for Email {
         let (local_from_email, domain_from_email) = self
             .from_email
             .split_once('@')
-            .ok_or("invalid email: missing @ from 'from'".to_string())?;
+            .ok_or_else(||"invalid email: missing @ from 'from'".to_string())?;
         let address_from_email = Address::new(local_from_email, domain_from_email)
             .map_err(|e| format!("failed to create address from 'from': {e}"))?;
         let mailbox_from = Mailbox::new(Some(self.from_name.clone()), address_from_email);
         let (local_to, domain_to) = to
             .split_once('@')
-            .ok_or("invalid email: missing @ from 'to'".to_string())?;
+            .ok_or_else(||"invalid email: missing @ from 'to'".to_string())?;
         let address_to = Address::new(local_to, domain_to)
             .map_err(|e| format!("failed to create address from 'to': {e}"))?;
         let mailbox_to = Mailbox::new(None, address_to);

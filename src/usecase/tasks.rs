@@ -27,7 +27,7 @@ pub struct Tasks {
 }
 
 impl Tasks {
-    pub fn new(
+    pub const fn new(
         transactor: Transactor,
         tasks_repo: DBTasks,
         task_histories_repo: DBTaskHistories,

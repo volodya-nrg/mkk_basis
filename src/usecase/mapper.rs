@@ -73,7 +73,7 @@ pub fn team_uc_to_team_db(item: Team) -> DBTeam {
     }
 }
 
-pub fn team_member_uc_to_team_member_db(item: TeamMember) -> DBTeamMember {
+pub const fn team_member_uc_to_team_member_db(item: TeamMember) -> DBTeamMember {
     DBTeamMember {
         team_id: item.team_id,
         user_id: item.user_id,
@@ -82,7 +82,7 @@ pub fn team_member_uc_to_team_member_db(item: TeamMember) -> DBTeamMember {
 }
 
 #[allow(dead_code)]
-pub fn team_member_db_to_team_member_uc(item: DBTeamMember) -> TeamMember {
+pub const fn team_member_db_to_team_member_uc(item: DBTeamMember) -> TeamMember {
     TeamMember {
         team_id: item.team_id,
         user_id: item.user_id,

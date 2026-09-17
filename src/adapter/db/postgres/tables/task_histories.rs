@@ -18,7 +18,7 @@ impl NameAndFields for TaskHistories {
     }
 }
 impl TaskHistories {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {}
     }
     #[allow(dead_code)]

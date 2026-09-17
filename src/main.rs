@@ -1,8 +1,3 @@
-#![cfg_attr(not(test), deny(clippy::unwrap_used))] // Запрещает использование .unwrap() на Option и Result
-#![cfg_attr(not(test), deny(clippy::expect_used))] // Запрещает .expect("...")
-#![cfg_attr(not(test), deny(clippy::panic))] // Запрещает panic!(), unreachable!(), t-odo!(), unimplemented!() и тд
-#![cfg_attr(not(test), deny(unused_must_use))] // Запрещает игнорировать значения, помеченные #[must_use]
-
 mod adapter;
 mod consts;
 mod err_msg;
@@ -10,7 +5,6 @@ mod err_msg;
 mod transport;
 mod usecase;
 
-use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use sqlx::postgres::PgPoolOptions;
 use std::fs;
@@ -35,7 +29,6 @@ struct Args {
     #[arg(short, long, default_value = "./data/config.yaml")]
     config: String,
 }
-
 
 /*
 async-await:
@@ -85,9 +78,7 @@ async fn run(config_filepath: String) -> Result<(), String> {
 
     let private_key_bytes =
         fs::read(cfg.private_key_path).map_err(|e| format!("failed to read private key: {e}"))?;
-    let mut tls_config_for_server: Option<RustlsConfig> = None;
-
-    if cfg.http_server.tls.is_use {
+    let tls_config_for_server = if cfg.http_server.tls.is_use {
         let ca_bytes = fs::read(cfg.http_server.tls.ca_filepath)
             .map_err(|e| format!("failed to read ca file: {e}"))?;
         let crt_bytes = fs::read(cfg.http_server.tls.crt_filepath)
@@ -96,8 +87,10 @@ async fn run(config_filepath: String) -> Result<(), String> {
             .map_err(|e| format!("failed to read key file: {e}"))?;
         let tls_config = transport::http_server::configure_tls(ca_bytes, crt_bytes, key_bytes)
             .map_err(|e| format!("failed to configure tls: {e}"))?;
-        tls_config_for_server = Some(tls_config);
-    }
+        Some(tls_config)
+    } else {
+        None
+    };
 
     let pool = PgPoolOptions::new()
         .acquire_timeout(Duration::new(3, 0))

@@ -18,7 +18,7 @@ pub enum IsolationLevel {
     Serializable,
 }
 impl IsolationLevel {
-    fn as_sql(&self) -> &'static str {
+    const fn as_sql(&self) -> &'static str {
         match self {
             Self::None => "",
             Self::ReadUncommitted => " ISOLATION LEVEL READ UNCOMMITTED",
@@ -36,7 +36,7 @@ pub struct Transactor {
 }
 
 impl Transactor {
-    pub fn new(pool: Pool<Postgres>, level: IsolationLevel) -> Self {
+    pub const fn new(pool: Pool<Postgres>, level: IsolationLevel) -> Self {
         Self { pool, level }
     }
     pub async fn in_transaction<F, T, E>(&self, f: F) -> Result<T, TransactionError<E>>

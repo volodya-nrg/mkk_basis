@@ -19,8 +19,8 @@ pub enum JWTError {
 impl From<errors::Error> for JWTError {
     fn from(value: errors::Error) -> Self {
         match value.kind() {
-            errors::ErrorKind::ExpiredSignature => JWTError::ExpiredToken,
-            _ => JWTError::Common(value),
+            errors::ErrorKind::ExpiredSignature => Self::ExpiredToken,
+            _ => Self::Common(value),
         }
     }
 }
@@ -49,7 +49,7 @@ pub struct Jwt {
     refresh_expire_secs: i64,
 }
 impl Jwt {
-    pub fn new(
+    pub const fn new(
         private_key_bytes: Vec<u8>,
         access_expire_secs: i64,
         refresh_expire_secs: i64,

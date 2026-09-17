@@ -17,9 +17,9 @@ pub enum Role {
 impl fmt::Display for Role {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
-            Role::Admin => "admin",
-            Role::Moder => "moder",
-            Role::Null => "null",
+            Self::Admin => "admin",
+            Self::Moder => "moder",
+            Self::Null => "null",
         };
         write!(f, "{}", s)
     }
@@ -46,7 +46,7 @@ impl NameAndFields for Users {
     }
 }
 impl Users {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {}
     }
     pub async fn list(
