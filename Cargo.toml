@@ -1,9 +1,9 @@
-[package]
-name = "mkk_basis"
-version = "0.1.0"
-edition = "2024"
+[package] # Определяет пакет
+name = "mkk_basis" # Имя пакета
+version = "0.1.0" # Версия пакета
+edition = "2024" # Редакция Rust. Влияет на то, с какой редакцией Rust компилируется ваш пакет. Установка ключа edition в [package] повлияет на все цели/крейты в пакете, включая наборы тестов, бенчмарки, бинарные файлы, примеры и т.д.
 
-[dependencies]
+[dependencies] # Зависимости библиотеки пакета
 argon2 = "0.6.0"
 axum-extra = { version = "0.12.6", features = ["cookie"] }
 axum-server = { version = "0.8.0", features = ["tls-rustls-no-provider"] }
@@ -11,7 +11,6 @@ axum = { version = "0.8.9", features = ["multipart"] }
 chrono = { version = "0.4.45", features = ["serde"] }
 clap = { version = "4.6.1", features = ["derive"] }
 config = "0.15.25"
-ctor = "1.0.12"
 email_address = "0.2.9"
 env_logger = "0.11.11"
 http = "1.5.0"
@@ -21,7 +20,6 @@ lettre = "0.11.23"
 log = "0.4.33"
 rand = "0.10.2"
 rcgen = "0.14.9"
-reqwest = { version = "0.13.4", features = ["form", "json", "multipart", "stream", "cookies"] }
 rustls-pemfile = "2.2.0"
 rustls = "0.23.43"
 serde = { version = "1.0.228", features = ["derive"] }
@@ -29,12 +27,25 @@ serde_json = "1.0.151"
 sqlx = { version = "0.9.0", features = ["postgres", "chrono", "runtime-tokio", "macros", "uuid"] }
 strum = "0.28.0"
 strum_macros = "0.28.0"
-testcontainers-modules = { version = "0.15.0", features = ["postgres"] }
 thiserror = "2.0.20"
 tokio = { version = "1.52.3", features = ["full"] }
 tower-http = { version = "0.7.0", features = ["fs", "limit", "cors"] }
 uuid = { version = "1.24.0", features = ["v4", "serde"] }
 prost = "0.14"
 
-[build-dependencies]
+[dev-dependencies] # Зависимости для примеров, тестов и бенчмарков
+ctor = "1.0.12"
+reqwest = { version = "0.13.4", features = ["form", "json", "multipart", "stream", "cookies"] }
+testcontainers-modules = { version = "0.15.0", features = ["postgres"] }
+criterion = "0.8.2"
+
+[build-dependencies] # Зависимости для скриптов сборки
 prost-build = "0.14.4"
+
+[[bench]]
+name = "fib_bench"
+# Поле harness указывает, что флаг --test будет передан в rustc, который автоматически включит библиотеку libtest,
+# являющуюся драйвером для сбора и запуска тестов, помеченных атрибутом #[test], или бенчмарков с атрибутом #[bench].
+# По умолчанию true для всех целей.
+# Если установлено в false, то вы несёте ответственность за определение функции main() для запуска тестов и бенчмарков.
+harness = false

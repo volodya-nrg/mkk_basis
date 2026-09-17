@@ -67,25 +67,34 @@ check_version_certs:
 	openssl x509 -in ./data/server.crt -text -noout | grep "Version"
 
 .PHONY: test_db
-test_db:
+test_db: # запуск интеграционного теста
 	RUST_BACKTRACE=1 cargo test --test db -- --nocapture # --include-ignored; "RUST_BACKTRACE=1" - нормальная степень развернутости
 
 .PHONY: test_transport
-test_transport:
+test_transport: # запуск интеграционного теста
 	# export RUST_MIN_STACK=8388608  # 8 МБ - по дефолту 2 МБ
 	RUST_BACKTRACE=1 cargo test --test transport -- --nocapture # --include-ignored
 
 .PHONY: test_units
-test_units:
+test_units: # запуск модульного теста(ов)
 	cargo test adapter::jwt
 
 .PHONY: cargo_reload
 cargo_reload:
+	# cargo update [regex] - обновляет все, либо пакет regex
 	cargo clean && cargo update && cargo build
 
 .PHONY: cargo_check
 cargo_check:
 	cargo check
+
+.PHONY: cargo_bench
+cargo_bench:
+	CRITERION_DEBUG=1 cargo bench
+
+.PHONY: rustup_update
+rustup_update:
+	rustup update
 
 .PHONY: lint
 lint:
