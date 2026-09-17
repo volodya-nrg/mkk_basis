@@ -64,7 +64,7 @@ gen_tls_certs:
 
 .PHONY: check_version_certs
 check_version_certs:
-	openssl x509 -in ./data/server.crt -text -noout | grep "Version"
+	openssl x509 -in ./data/httpServer.crt -text -noout | grep "Version"
 
 .PHONY: test_db
 test_db: # запуск интеграционного теста

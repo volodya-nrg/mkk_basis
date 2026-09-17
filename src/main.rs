@@ -36,7 +36,30 @@ struct Args {
     config: String,
 }
 
-#[tokio::main]
+
+/*
+async-await:
+    асинхронный код
+    не блокирует текущий поток, который может взять после др. задачу на выполнение
+    возвращает обещание (future) результата
+    await - приостанови эту задачу пока future не будет готов и отдай поток другим задачам. Выполнение может остановится и продолжить позже.
+    небходим executor который продвигает эту задачу. Он делает poll, пока не получит результат.
+runtime:
+    многопотомный runtime с ланировщиком, I/O-драйвером и таймером
+    let rt = Runtime::new().unwrap();
+    let result = rt.block_on(async {...});
+#[tokio::main]:
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all() // включает I/O-драйвер и таймеры
+        .build() // строит runtime
+        .unwrap()
+        .block_on(async {
+            println!("Hello world"); // запускает future
+        })
+    По умолчанию используется многопоточный runtime (multi_thread) с числом воркеров, равным количеству ядер CPU.
+*/
+
+#[tokio::main] // атрибут-макрос, создает tokio-runtime
 async fn main() {
     if let Err(e) = run(Args::parse().config).await {
         log::error!("failed to run app: {e}");
