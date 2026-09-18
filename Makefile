@@ -82,6 +82,7 @@ test_units: # запуск модульного теста(ов)
 .PHONY: cargo_reload
 cargo_reload:
 	# cargo update [regex] - обновляет все, либо пакет regex
+	# cargo clean - удаляет папку target
 	cargo clean && cargo update && cargo build
 
 .PHONY: cargo_check
