@@ -16,11 +16,11 @@ struct LogEntry {
 pub fn init(
     service_name: String,
     version: String,
-    level: &str,
+    ref_level: &str,
     filepath: Option<String>,
     is_test: bool,
 ) -> Result<(), String> {
-    let level: LevelFilter = match level.to_lowercase().as_str() {
+    let level: LevelFilter = match ref_level.to_lowercase().as_str() {
         "info" => LevelFilter::Info,
         "warn" => LevelFilter::Warn,
         "error" => LevelFilter::Error,

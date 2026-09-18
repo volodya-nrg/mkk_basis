@@ -197,27 +197,29 @@ fn get_string_option_from_map(map: &HashMap<String, Vec<u8>>, key: &str) -> Opti
 }
 
 fn upload_file(file_data: Vec<u8>) -> Result<String, UploadErr> {
-    let ext = image::guess_format(&file_data)
-        .map_err(|e| {
-            log::error!("failed to read image format: {}", e);
-            UploadErr {
-                status_code: StatusCode::INTERNAL_SERVER_ERROR,
-                msg: String::new(),
-            }
-        })?
-        .extensions_str()
-        .first()
-        .ok_or_else(|| UploadErr {
-            status_code: StatusCode::BAD_REQUEST,
-            msg: ErrMsg::UndefinedTypeImage.to_string(),
-        })?;
-    let new_filename = format!(
-        "{}_{}.{}",
-        Utc::now().timestamp(),
-        helpers::rand_str_limit(5),
-        ext,
-    );
-    let filepath = format!("./web/uploaded/{}", new_filename);
+    let filepath = {
+        let ext = image::guess_format(&file_data)
+            .map_err(|e| {
+                log::error!("failed to read image format: {}", e);
+                UploadErr {
+                    status_code: StatusCode::INTERNAL_SERVER_ERROR,
+                    msg: String::new(),
+                }
+            })?
+            .extensions_str()
+            .first()
+            .ok_or_else(|| UploadErr {
+                status_code: StatusCode::BAD_REQUEST,
+                msg: ErrMsg::UndefinedTypeImage.to_string(),
+            })?;
+        let new_filename = format!(
+            "{}_{}.{}",
+            Utc::now().timestamp(),
+            helpers::rand_str_limit(5),
+            ext,
+        );
+        format!("./web/uploaded/{}", new_filename)
+    };
 
     File::create(filepath.clone())
         .map_err(|e| {

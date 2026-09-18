@@ -23,36 +23,36 @@ pub struct Email {
 
 impl Email {
     pub fn new(
-        host: &str,
-        login: &str,
-        pass: &str,
-        from_email: &str,
-        from_name: &str,
+        ref_host: &str,
+        ref_login: &str,
+        ref_pass: &str,
+        ref_from_email: &str,
+        ref_from_name: &str,
         timeout: Duration,
     ) -> Self {
         Self {
-            host: host.to_string(),
-            login: login.to_string(),
-            pass: pass.to_string(),
-            from_email: from_email.to_string(),
-            from_name: from_name.to_string(),
+            host: ref_host.to_string(),
+            login: ref_login.to_string(),
+            pass: ref_pass.to_string(),
+            from_email: ref_from_email.to_string(),
+            from_name: ref_from_name.to_string(),
             timeout,
         }
     }
 }
 
 impl EmailSender for Email {
-    fn send(&self, to: &str, subject: &str, body: &str) -> Result<(), String> {
+    fn send(&self, ref_to: &str, ref_subject: &str, ref_body: &str) -> Result<(), String> {
         let (local_from_email, domain_from_email) = self
             .from_email
             .split_once('@')
-            .ok_or_else(||"invalid email: missing @ from 'from'".to_string())?;
+            .ok_or_else(|| "invalid email: missing @ from 'from'".to_string())?;
         let address_from_email = Address::new(local_from_email, domain_from_email)
             .map_err(|e| format!("failed to create address from 'from': {e}"))?;
         let mailbox_from = Mailbox::new(Some(self.from_name.clone()), address_from_email);
-        let (local_to, domain_to) = to
+        let (local_to, domain_to) = ref_to
             .split_once('@')
-            .ok_or_else(||"invalid email: missing @ from 'to'".to_string())?;
+            .ok_or_else(|| "invalid email: missing @ from 'to'".to_string())?;
         let address_to = Address::new(local_to, domain_to)
             .map_err(|e| format!("failed to create address from 'to': {e}"))?;
         let mailbox_to = Mailbox::new(None, address_to);
@@ -60,9 +60,9 @@ impl EmailSender for Email {
             .from(mailbox_from)
             // .reply_to("Yuin <yuin@domain.tld>".parse().unwrap())
             .to(mailbox_to)
-            .subject(subject)
+            .subject(ref_subject)
             .header(ContentType::TEXT_HTML)
-            .body(body.to_string())
+            .body(ref_body.to_string())
             .map_err(|e| format!("failed to create body: {e}"))?;
 
         SmtpTransport::starttls_relay(self.host.as_str())

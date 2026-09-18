@@ -73,8 +73,7 @@ where
                     .into_response();
             }
         };
-        let result = use_case.tasks.create(uc_task, user.user_id).await;
-        let new_uuid = match result {
+        let new_uuid = match use_case.tasks.create(uc_task, user.user_id).await {
             Ok(v) => v,
             Err(e) => return handler_err!(e).into_response(),
         };

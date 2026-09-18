@@ -1,8 +1,8 @@
 use email_address::EmailAddress;
 use rand::{RngExt, distr::Alphanumeric};
 
-pub fn is_valid_email(email: &str) -> bool {
-    EmailAddress::is_valid(email)
+pub fn is_valid_email(ref_email: &str) -> bool {
+    EmailAddress::is_valid(ref_email)
 }
 
 // общая ф-ия, нужна и в тестах и в основном коде

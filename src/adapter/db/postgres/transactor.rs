@@ -57,6 +57,6 @@ impl Transactor {
         Ok(result)
     }
     pub async fn conn(&self) -> Result<PoolConnection<Postgres>, sqlx::Error> {
-        self.pool.acquire().await // TODO тут постоянно доставать конечно не удобно
+        self.pool.acquire().await
     }
 }

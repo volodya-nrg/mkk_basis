@@ -28,7 +28,11 @@ impl<ES> HTTPServer<ES>
 where
     ES: EmailSender,
 {
-    pub const fn new(addr: String, use_case: UseCase<ES>, tls_config: Option<RustlsConfig>) -> Self {
+    pub const fn new(
+        addr: String,
+        use_case: UseCase<ES>,
+        tls_config: Option<RustlsConfig>,
+    ) -> Self {
         Self {
             addr,
             use_case,

@@ -62,7 +62,7 @@ impl TaskComments {
 
         let mut prepare_count = sqlx::query_scalar(AssertSqlSafe(query_count));
         let params_copy = params.clone();
-        for (_, v) in params_copy.iter() {
+        for (_, v) in params_copy {
             prepare_count = prepare_count.bind(v);
         }
 
@@ -78,7 +78,7 @@ impl TaskComments {
         }
 
         let mut prepare_common = sqlx::query_as::<_, TaskComment>(AssertSqlSafe(query_common));
-        for (_, v) in params.iter() {
+        for (_, v) in params {
             prepare_common = prepare_common.bind(v);
         }
 

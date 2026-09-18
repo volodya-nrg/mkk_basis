@@ -60,7 +60,7 @@ async fn main() {
     }
 }
 
-async fn run(config_filepath: String) -> Result<(), String> {
+async fn run(config_filepath: String) -> Result<(), String> { // возвращаешься тип Unit ("()")
     let cfg = Config::new(&config_filepath).map_err(|e| {
         let str = format!("failed to create new config: {e}");
         eprint!("{}", str);
