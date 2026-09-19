@@ -1,4 +1,4 @@
-mod helpers;
+mod common;
 
 use axum::http::StatusCode;
 use ctor::ctor;
@@ -16,9 +16,9 @@ use mkk_basis::{
         TeamsList, User, UsersList,
     },
 };
-
-use helpers::{client::Client, consts, context::Context, rand};
 use mkk_basis::adapter::email::EmailSender;
+
+use common::{client::Client, consts, context::Context, rand};
 
 #[ctor(unsafe)]
 fn init() {

@@ -1,4 +1,4 @@
-mod helpers;
+mod common;
 
 use ctor::ctor;
 use sqlx::testing::TestTermination;
@@ -16,7 +16,7 @@ use mkk_basis::adapter::{
     logger,
 };
 
-use helpers::{context::Context, rand};
+use common::{context::Context, rand};
 
 #[ctor(unsafe)]
 fn init() {

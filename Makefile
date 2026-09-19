@@ -79,6 +79,26 @@ test_transport: # запуск интеграционного теста
 test_units: # запуск модульного теста(ов)
 	cargo test adapter::jwt
 
+.PHONY: nextest_db
+nextest_db:
+	cargo nextest run --test db --no-capture # --no-capture → показывать println!, dbg!, stderr;
+
+.PHONY: nextest_transport
+nextest_transport:
+	cargo nextest run --test transport --no-capture
+
+.PHONY: nextest_units
+nextest_units:
+	cargo nextest run -E '\
+        test(adapter::jwt::tests::check_all)\
+        or test(adapter::helpers::tests::check_random_via_os_thread)\
+        or test(adapter::helpers::tests::check_random_via_tokio_thread)\
+    ' --no-capture
+
+.PHONY: nextest_list
+nextest_list:
+	cargo nextest list
+
 .PHONY: cargo_reload
 cargo_reload:
 	# cargo update [regex] - обновляет все, либо пакет regex

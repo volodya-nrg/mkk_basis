@@ -80,3 +80,4 @@
   *mut_ref = 5;
 - Arc<T> (Atomically Reference Counted) - потоко-безопастная штука. 
 - https://github.com/awesome-rust-com/awesome-rust - сборник популярных крейтов
+- src/bin - создаются сколько угодно других исполняемых главных файлов

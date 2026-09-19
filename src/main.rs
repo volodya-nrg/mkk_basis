@@ -1,17 +1,10 @@
-mod adapter;
-mod consts;
-mod err_msg;
-// mod protos;
-mod transport;
-mod usecase;
-
 use clap::Parser;
 use sqlx::postgres::PgPoolOptions;
 use std::fs;
 use std::process;
 use std::time::Duration;
 
-use adapter::{
+use mkk_basis::adapter::{
     config::Config,
     db::postgres::{
         Postgres as PostgresService,
@@ -21,8 +14,10 @@ use adapter::{
     jwt::Jwt as JWTService,
     logger,
 };
-use transport::http_server::HTTPServer;
-use usecase::UseCase;
+use mkk_basis::consts;
+use mkk_basis::transport;
+use mkk_basis::transport::http_server::HTTPServer;
+use mkk_basis::usecase::UseCase;
 
 #[derive(Parser)]
 struct Args {
@@ -60,7 +55,8 @@ async fn main() {
     }
 }
 
-async fn run(config_filepath: String) -> Result<(), String> { // возвращаешься тип Unit ("()")
+async fn run(config_filepath: String) -> Result<(), String> {
+    // возвращаешься тип Unit ("()")
     let cfg = Config::new(&config_filepath).map_err(|e| {
         let str = format!("failed to create new config: {e}");
         eprint!("{}", str);
