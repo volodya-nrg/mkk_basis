@@ -19,23 +19,20 @@ use crate::{
 use super::{UseCaseError, helpers};
 
 #[derive(Clone)] // из-за axum-state
-pub struct Auth<ES> {
+pub struct Auth<T> {
     addr: String,
-    email_sender: ES,
+    email_sender: T,
     transactor: Transactor,
     users_repo: DBUsers,
 
     pub jwt_service: JWTService, // публичен для экстрактора или middleware
 }
 
-impl<ES> Auth<ES>
-where
-    ES: EmailSender,
-{
+impl<T: EmailSender> Auth<T> {
     pub const fn new(
         addr: String,
         jwt_service: JWTService,
-        email_sender: ES,
+        email_sender: T,
         transactor: Transactor,
         users_repo: DBUsers,
     ) -> Self {
@@ -48,7 +45,7 @@ where
         }
     }
     pub async fn register(
-        &self,
+        &mut self,
         ref_email: &str,
         ref_password: &str,
         ref_password_confirm: &str,
@@ -105,10 +102,9 @@ where
             .transactor
             .in_transaction::<_, _, UseCaseError>(async |tx| {
                 let user_db = UserDB {
-                    // так линтер советует
                     email: ref_email.to_string(),
                     password: password_hash.to_string(),
-                    email_code: Some(code),
+                    email_code: Some(code.clone()),
                     ..Default::default()
                 };
                 let new_uuid = self.users_repo.create(tx, user_db).await?;
@@ -116,6 +112,9 @@ where
                 self.email_sender
                     .send(ref_email, email_subject.as_str(), email_message.as_str())
                     .map_err(|e| UseCaseError::Common(format!("failed to send email: {e}")))?;
+
+                // сохраним тут код для теста
+                self.email_sender.save_code(ref_email, code.as_str());
 
                 Ok(new_uuid)
             })

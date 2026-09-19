@@ -18,21 +18,14 @@ use crate::adapter::email::EmailSender;
 use crate::usecase::UseCase;
 use handlers::{auth, etc, task_comments, tasks, teams, users};
 
-pub struct HTTPServer<ES> {
+pub struct HTTPServer<T> {
     addr: String,
-    use_case: UseCase<ES>,
+    use_case: UseCase<T>,
     tls_config: Option<RustlsConfig>,
 }
 
-impl<ES> HTTPServer<ES>
-where
-    ES: EmailSender,
-{
-    pub const fn new(
-        addr: String,
-        use_case: UseCase<ES>,
-        tls_config: Option<RustlsConfig>,
-    ) -> Self {
+impl<T: EmailSender> HTTPServer<T> {
+    pub const fn new(addr: String, use_case: UseCase<T>, tls_config: Option<RustlsConfig>) -> Self {
         Self {
             addr,
             use_case,

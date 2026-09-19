@@ -18,6 +18,7 @@ use mkk_basis::{
 };
 
 use helpers::{client::Client, consts, context::Context, rand};
+use mkk_basis::adapter::email::EmailSender;
 
 #[ctor(unsafe)]
 fn init() {
@@ -33,14 +34,12 @@ async fn get_context() -> &'static Context {
 #[tokio::test]
 async fn check_etc() {
     let ctx = get_context().await;
-    let mut db_conn = ctx.transactor.conn().await.unwrap();
     let mut cl = Client::new(
         ctx.http_addr.to_string(),
         ctx.ca.to_string(),
         ctx.crt.to_string(),
         ctx.key.to_string(),
-        &ctx.db,
-        &mut db_conn,
+        &ctx.email_service,
     );
 
     cl.index(|result| {
@@ -80,14 +79,12 @@ async fn check_etc() {
 #[tokio::test]
 async fn check_auth() {
     let ctx = get_context().await;
-    let mut db_conn = ctx.transactor.conn().await.unwrap();
     let mut cl = Client::new(
         ctx.http_addr.to_string(),
         ctx.ca.to_string(),
         ctx.crt.to_string(),
         ctx.key.to_string(),
-        &ctx.db,
-        &mut db_conn,
+        &ctx.email_service,
     );
 
     let wrong_email = "abc".to_string();
@@ -199,17 +196,7 @@ async fn check_auth() {
     .await;
 
     // достанем явно код
-    let email_code = cl
-        .pg_service
-        .tbl_users
-        .by_email(
-            ctx.transactor.conn().await.unwrap().as_mut(),
-            &req_register2.email,
-        )
-        .await
-        .unwrap()
-        .email_code
-        .unwrap();
+    let email_code = ctx.email_service.get_code(req_register2.email.as_str());
 
     // ok
     cl.register_confirm(
@@ -286,14 +273,12 @@ async fn check_auth() {
 #[tokio::test]
 async fn check_teams() {
     let ctx = get_context().await;
-    let mut db_conn = ctx.transactor.conn().await.unwrap();
     let mut cl = Client::new(
         ctx.http_addr.to_string(),
         ctx.ca.to_string(),
         ctx.crt.to_string(),
         ctx.key.to_string(),
-        &ctx.db,
-        &mut db_conn,
+        &ctx.email_service,
     );
 
     let mut user_id = String::new();
@@ -618,14 +603,12 @@ async fn check_teams() {
 #[tokio::test]
 async fn check_tasks() {
     let ctx = get_context().await;
-    let mut db_conn = ctx.transactor.conn().await.unwrap();
     let mut cl = Client::new(
         ctx.http_addr.to_string(),
         ctx.ca.to_string(),
         ctx.crt.to_string(),
         ctx.key.to_string(),
-        &ctx.db,
-        &mut db_conn,
+        &ctx.email_service,
     );
 
     let mut user_id1 = String::new();
@@ -866,14 +849,12 @@ async fn check_tasks() {
 #[tokio::test]
 async fn check_task_comments() {
     let ctx = get_context().await;
-    let mut db_conn = ctx.transactor.conn().await.unwrap();
     let mut cl = Client::new(
         ctx.http_addr.to_string(),
         ctx.ca.to_string(),
         ctx.crt.to_string(),
         ctx.key.to_string(),
-        &ctx.db,
-        &mut db_conn,
+        &ctx.email_service,
     );
 
     let mut user_id = String::new();
@@ -1052,14 +1033,12 @@ async fn check_task_comments() {
 #[tokio::test]
 async fn check_users() {
     let ctx = get_context().await;
-    let mut db_conn = ctx.transactor.conn().await.unwrap();
     let mut cl = Client::new(
         ctx.http_addr.to_string(),
         ctx.ca.to_string(),
         ctx.crt.to_string(),
         ctx.key.to_string(),
-        &ctx.db,
-        &mut db_conn,
+        &ctx.email_service,
     );
 
     let mut user_id = String::new();

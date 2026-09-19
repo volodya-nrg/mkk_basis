@@ -11,20 +11,20 @@ pub enum TransactionError<E> {
 #[allow(dead_code)]
 #[derive(Clone)]
 pub enum IsolationLevel {
-    None,
     ReadUncommitted,
     ReadCommitted, // default
     RepeatableRead,
     Serializable,
+    None,
 }
 impl IsolationLevel {
     const fn as_sql(&self) -> &'static str {
         match self {
-            Self::None => "",
             Self::ReadUncommitted => " ISOLATION LEVEL READ UNCOMMITTED",
             Self::ReadCommitted => " ISOLATION LEVEL READ COMMITTED",
             Self::RepeatableRead => " ISOLATION LEVEL REPEATABLE READ",
             Self::Serializable => " ISOLATION LEVEL SERIALIZABLE",
+            Self::None => "",
         }
     }
 }

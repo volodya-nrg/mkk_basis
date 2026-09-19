@@ -1,11 +1,10 @@
 #![allow(dead_code)]
 
 use http::StatusCode;
-use reqwest::{multipart::Form, Certificate, Identity, Response};
-use sqlx::PgConnection;
+use reqwest::{Certificate, Identity, Response, multipart::Form};
 use std::time::Duration;
 
-use mkk_basis::adapter::db::postgres::Postgres as PostgresService;
+use mkk_basis::adapter::email::EmailSender;
 use mkk_basis::transport::models::{
     RequestLimitOffset, RequestLogin, RequestRegister, RequestTask, RequestTaskComment,
     RequestTaskData, RequestTeam, RequestTeamInvite, RequestUserCreate, RequestUserUpdate,
@@ -19,22 +18,17 @@ pub type StatusCodeBodyError = Result<(StatusCode, String), reqwest::Error>;
 // мутабельный объект. Если клиента отдавать по значениям, то между может быть move, что не удобно.
 // Частично сделать &mut self не получится, т.к. каждый метод по сути отдает разный тип ((не)mut).
 
-pub struct Client<'a> {
+pub struct Client<'a, ES> {
     addr: String,
     client: reqwest::Client,
-    pub pg_service: &'a PostgresService,
-    db_conn: &'a mut PgConnection,
+    email_service: &'a ES,
 }
 
-impl<'a> Client<'a> {
-    pub fn new(
-        addr: String,
-        ca: String,
-        crt: String,
-        key: String,
-        pg_service: &'a PostgresService,
-        db_conn: &'a mut PgConnection,
-    ) -> Self {
+impl<'a, ES> Client<'a, ES>
+where
+    ES: EmailSender,
+{
+    pub fn new(addr: String, ca: String, crt: String, key: String, email_service: &'a ES) -> Self {
         // ca-сертификат - чтоб проверить сервер
         // crt - чтоб сервер мог проверить клиента
         // key - доказательство владения crt
@@ -52,8 +46,7 @@ impl<'a> Client<'a> {
                 .cookie_store(true)
                 .build()
                 .unwrap(),
-            pg_service,
-            db_conn,
+            email_service,
         }
     }
     async fn parse_response(&self, resp: Response) -> StatusCodeBodyError {
@@ -63,10 +56,7 @@ impl<'a> Client<'a> {
     }
 
     // etc
-    pub async fn index<F>(&mut self, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn index(&mut self, mut cb: impl FnMut(StatusCodeBodyError)) -> &mut Self {
         let result = async {
             let response = self.client.get(&self.addr).send().await?;
             self.parse_response(response).await
@@ -75,10 +65,7 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn health<F>(&mut self, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn health(&mut self, mut cb: impl FnMut(StatusCodeBodyError)) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -91,10 +78,7 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn page404<F>(&mut self, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn page404(&mut self, mut cb: impl FnMut(StatusCodeBodyError)) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -107,10 +91,11 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn get_file<F>(&mut self, url_filepath: String, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn get_file(
+        &mut self,
+        url_filepath: String,
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let url_filepath = url_filepath
             .strip_prefix('/')
             .unwrap_or(url_filepath.as_str());
@@ -128,10 +113,12 @@ impl<'a> Client<'a> {
     }
 
     // auth
-    pub async fn register<F>(&mut self, req: RequestRegister, is_full: bool, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn register(
+        &mut self,
+        req: RequestRegister,
+        is_full: bool,
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -144,34 +131,31 @@ impl<'a> Client<'a> {
         .await;
 
         if is_full {
-            let email_code = self
-                .pg_service
-                .tbl_users
-                .by_email(self.db_conn.as_mut(), &req.email)
-                .await
-                .unwrap()
-                .email_code
-                .unwrap();
-
-            self.register_confirm(Some(req.email), Some(email_code), |result2| {
-                let (status_code, _body_str) = result2.unwrap();
-                assert!(status_code.is_success());
-            })
-            .await;
+            let email_code = self.email_service.get_code(&req.email);
+            let result2 = self
+                .register_confirm_common(Some(req.email), Some(email_code))
+                .await;
+            let (status_code, _body_str) = result2.unwrap();
+            assert!(status_code.is_success());
         }
 
         cb(result);
         self
     }
-    pub async fn register_confirm<F>(
+    pub async fn register_confirm(
         &mut self,
         email: Option<String>,
         code: Option<String>,
-        mut cb: F,
-    ) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
+        cb(self.register_confirm_common(email, code).await);
+        self
+    }
+    async fn register_confirm_common(
+        &self,
+        email: Option<String>,
+        code: Option<String>,
+    ) -> StatusCodeBodyError {
         let mut address = format!("{}/register/confirm", self.addr);
         let mut query_items: Vec<String> = Vec::new();
 
@@ -185,19 +169,14 @@ impl<'a> Client<'a> {
             address = address + "?" + &query_items.join("&");
         }
 
-        let result = async {
-            let response = self.client.get(address).send().await?;
-            self.parse_response(response).await
-        }
-        .await;
-
-        cb(result);
-        self
+        let response = self.client.get(address).send().await?;
+        self.parse_response(response).await
     }
-    pub async fn login<F>(&mut self, req: RequestLogin, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn login(
+        &mut self,
+        req: RequestLogin,
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -217,10 +196,7 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn logout<F>(&mut self, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn logout(&mut self, mut cb: impl FnMut(StatusCodeBodyError)) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -234,10 +210,7 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn refresh_tokens<F>(&mut self, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn refresh_tokens(&mut self, mut cb: impl FnMut(StatusCodeBodyError)) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -253,10 +226,12 @@ impl<'a> Client<'a> {
     }
 
     // teams
-    pub async fn teams_list<F>(&mut self, limit: i32, offset: i32, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn teams_list(
+        &mut self,
+        limit: i32,
+        offset: i32,
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -270,10 +245,11 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn teams_one<F>(&mut self, uuid: String, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn teams_one(
+        &mut self,
+        uuid: String,
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -286,10 +262,11 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn teams_create<F>(&mut self, req: RequestTeam, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn teams_create(
+        &mut self,
+        req: RequestTeam,
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -304,15 +281,12 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn teams_update<F>(
+    pub async fn teams_update(
         &mut self,
         item_id: String,
         req: RequestTeam,
-        mut cb: F,
-    ) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -327,10 +301,11 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn teams_delete<F>(&mut self, item_id: String, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn teams_delete(
+        &mut self,
+        item_id: String,
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -344,15 +319,12 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn teams_invite<F>(
+    pub async fn teams_invite(
         &mut self,
         item_id: String,
         req: RequestTeamInvite,
-        mut cb: F,
-    ) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -369,10 +341,11 @@ impl<'a> Client<'a> {
     }
 
     // tasks
-    pub async fn tasks_list<F>(&mut self, req: RequestTaskData, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn tasks_list(
+        &mut self,
+        req: RequestTaskData,
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -387,10 +360,11 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn tasks_one<F>(&mut self, item_id: String, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn tasks_one(
+        &mut self,
+        item_id: String,
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -404,10 +378,11 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn tasks_create<F>(&mut self, req: RequestTask, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn tasks_create(
+        &mut self,
+        req: RequestTask,
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -422,15 +397,12 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn tasks_update<F>(
+    pub async fn tasks_update(
         &mut self,
         item_id: String,
         req: RequestTask,
-        mut cb: F,
-    ) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -445,10 +417,11 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn tasks_delete<F>(&mut self, item_id: String, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn tasks_delete(
+        &mut self,
+        item_id: String,
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -462,10 +435,11 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn tasks_history<F>(&mut self, item_id: String, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn tasks_history(
+        &mut self,
+        item_id: String,
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -481,10 +455,12 @@ impl<'a> Client<'a> {
     }
 
     // users
-    pub async fn users_list<F>(&mut self, limit: i32, offset: i32, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn users_list(
+        &mut self,
+        limit: i32,
+        offset: i32,
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -499,10 +475,11 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn users_one<F>(&mut self, item_id: String, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn users_one(
+        &mut self,
+        item_id: String,
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -516,10 +493,11 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn users_create<F>(&mut self, req: RequestUserCreate, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn users_create(
+        &mut self,
+        req: RequestUserCreate,
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let mut form = Form::new()
             .text("email", req.email)
             .text("password", req.password);
@@ -548,15 +526,12 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn users_update<F>(
+    pub async fn users_update(
         &mut self,
         item_id: String,
         req: RequestUserUpdate,
-        mut cb: F,
-    ) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let mut form = Form::new();
 
         if let Some(v) = req.email {
@@ -592,10 +567,11 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn users_delete<F>(&mut self, item_id: String, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn users_delete(
+        &mut self,
+        item_id: String,
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -611,16 +587,13 @@ impl<'a> Client<'a> {
     }
 
     // task comments
-    pub async fn task_comments_list<F>(
+    pub async fn task_comments_list(
         &mut self,
         task_id: String,
         limit: i32,
         offset: i32,
-        mut cb: F,
-    ) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -635,15 +608,12 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn task_comments_create<F>(
+    pub async fn task_comments_create(
         &mut self,
         task_id: String,
         req: RequestTaskComment,
-        mut cb: F,
-    ) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client
@@ -658,10 +628,11 @@ impl<'a> Client<'a> {
         cb(result);
         self
     }
-    pub async fn task_comments_delete<F>(&mut self, item_id: String, mut cb: F) -> &mut Self
-    where
-        F: FnMut(StatusCodeBodyError),
-    {
+    pub async fn task_comments_delete(
+        &mut self,
+        item_id: String,
+        mut cb: impl FnMut(StatusCodeBodyError),
+    ) -> &mut Self {
         let result = async {
             let response = self
                 .client

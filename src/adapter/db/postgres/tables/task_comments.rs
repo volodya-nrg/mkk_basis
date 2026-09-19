@@ -35,6 +35,24 @@ impl TaskComments {
         limit: i32,
         offset: i32,
     ) -> Result<List<TaskComment>, RepositoryError> {
+        /*
+            fn main() {
+                let mut a = 5;
+                unsafe {
+                    let r1: &mut i32 = &mut a; // первая мутабельная ссылка
+                    let ptr: *mut i32 = r1 as *mut i32; // мутабельный указатель
+                    let r2: &mut i32 = ptr.as_mut().unwrap(); // указатель во вторую ссылку
+                    inc(r1);
+                    inc(r2);
+                }
+                println!("{a}"); // 7
+            }
+
+            fn inc(a: &mut i32) {
+                *a = *a + 1;
+            }
+        */
+
         let mut query_common = format!(
             "SELECT {} FROM {}",
             self.get_fields().join(","),

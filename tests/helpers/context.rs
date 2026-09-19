@@ -34,6 +34,7 @@ pub struct Context {
     pub container: ContainerAsync<PostgresContainer>, // обязательно нужно, чтоб жил, иначе после выходи из ф-ии уничтожается
     pub db: PostgresService,
     pub transactor: Transactor,
+    pub email_service: EmailServiceMock,
 }
 
 impl Context {
@@ -68,6 +69,7 @@ impl Context {
         let http_addr = format!("https://{}", addr_str); // явно используем https
         let postgres_service = PostgresService::new();
         let transactor = Transactor::new(pool.clone(), IsolationLevel::Serializable);
+        let email_service = EmailServiceMock::new();
         let use_case = UseCase::new(
             "http://localhost.loc".to_string(),
             postgres_service.clone(),
@@ -76,7 +78,7 @@ impl Context {
                 consts::ACCESS_TOKEN_TTL_SEC,
                 consts::REFRESH_TOKEN_TTL_SEC,
             ),
-            EmailServiceMock {},
+            email_service.clone(),
             transactor.clone(),
         );
         let certs = certs::gen_certs().unwrap(); // создадим серты
@@ -100,6 +102,7 @@ impl Context {
             time_now: Local::now(),
             db: postgres_service,
             transactor,
+            email_service,
         }
     }
 }

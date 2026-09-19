@@ -2,6 +2,7 @@ use std::fmt;
 
 use super::consts;
 
+#[derive(Debug)]
 pub enum ErrMsg {
     BadFileData,
     EmailAlreadyConfirm,
@@ -61,3 +62,7 @@ impl fmt::Display for ErrMsg {
         }
     }
 }
+
+// После этого нашу ошибку можно будет связывать в цепочку с другими ошибками из стандартной библиотеки.
+// Debug необходим.
+impl std::error::Error for ErrMsg {}

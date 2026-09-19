@@ -184,7 +184,7 @@ pub fn task_comment() -> TaskComment {
 }
 pub fn create_image(ext: &str) -> Result<PathBuf, ImageError> {
     const SIDE: u32 = 1024;
-    let format = match ext {
+    let format = match ext.to_lowercase().as_str() {
         "png" => ImageFormat::Png,
         "jpg" | "jpeg" => ImageFormat::Jpeg,
         "gif" => ImageFormat::Gif,

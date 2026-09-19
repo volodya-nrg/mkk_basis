@@ -20,23 +20,20 @@ use crate::adapter::{
 use crate::err_msg::ErrMsg;
 
 #[derive(Clone)] // из-за axum-state
-pub struct UseCase<ES> {
-    pub auth: auth::Auth<ES>,
+pub struct UseCase<T> {
+    pub auth: auth::Auth<T>,
     pub teams: teams::Teams,
     pub tasks: tasks::Tasks,
     pub task_comments: task_comments::TaskComments,
     pub users: users::Users,
 }
 
-impl<ES> UseCase<ES>
-where
-    ES: EmailSender,
-{
+impl<T: EmailSender> UseCase<T> {
     pub fn new(
         addr: String,
         db: Postgres,
         jwt_service: JWTService,
-        email_sender: ES,
+        email_sender: T,
         transactor: Transactor,
     ) -> Self {
         Self {

@@ -23,7 +23,7 @@ where
     ES: EmailSender,
 {
     pub async fn register(
-        State(use_case): State<UseCase<ES>>,
+        State(mut use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestRegister>,
     ) -> impl IntoResponse {
         use_case
