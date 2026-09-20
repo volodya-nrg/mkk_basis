@@ -57,7 +57,7 @@ impl EmailSender for Email {
         let mailbox_from = Mailbox::new(Some(self.from_name.clone()), address_from_email);
         let (local_to, domain_to) = ref_to
             .split_once('@')
-            .ok_or_else(|| "invalid email: missing @ from 'to'".to_string())?;
+            .ok_or_else(|| "invalid email: missing @ from 'to'".to_string())?; // linter просит использовать эту ф-ию, а не ok_or
         let address_to = Address::new(local_to, domain_to)
             .map_err(|e| format!("failed to create address from 'to': {e}"))?;
         let mailbox_to = Mailbox::new(None, address_to);

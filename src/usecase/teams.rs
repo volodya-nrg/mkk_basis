@@ -51,7 +51,7 @@ impl Teams {
     pub async fn one(&self, item_id: Uuid) -> Result<Team, UseCaseError> {
         let mut db_conn = self.transactor.conn().await?;
         Ok(mapper::team_db_to_team_uc(
-            self.teams_repo.one(&mut db_conn, &item_id).await?,
+            self.teams_repo.one(&mut db_conn, item_id).await?,
         ))
     }
     pub async fn create(&self, team: Team) -> Result<Uuid, UseCaseError> {
@@ -70,7 +70,7 @@ impl Teams {
     }
     pub async fn delete(&self, item_id: Uuid) -> Result<(), UseCaseError> {
         let mut db_conn = self.transactor.conn().await?;
-        Ok(self.teams_repo.delete(&mut db_conn, &item_id).await?)
+        Ok(self.teams_repo.delete(&mut db_conn, item_id).await?)
     }
     // пригласить может только owner или admin
     pub async fn invite(
@@ -87,7 +87,7 @@ impl Teams {
             true
         } else {
             self.teams_repo
-                .one(&mut db_conn, &team_id)
+                .one(&mut db_conn, team_id)
                 .await?
                 .created_by
                 == profile_id

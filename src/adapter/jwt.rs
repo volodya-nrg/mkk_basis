@@ -62,31 +62,31 @@ impl Jwt {
     }
     pub fn generate_access_token(
         &self,
-        user_id: &Uuid,
-        role: &Option<String>,
+        user_id: Uuid,
+        role: Option<String>,
     ) -> Result<String, JWTError> {
         let now = Utc::now();
         let expire = now + Duration::seconds(self.access_expire_secs);
         jsonwebtoken::encode(
             &jsonwebtoken::Header::default(),
             &AccessClaims {
-                sub: *user_id,
+                sub: user_id,
                 exp: expire.timestamp() as usize,
                 iat: now.timestamp() as usize,
                 token_type: TYPE_ACCESS.to_string(),
-                role: role.clone(),
+                role,
             },
             &jsonwebtoken::EncodingKey::from_secret(self.private_key_bytes.as_slice()),
         )
         .map_err(|e| e.into())
     }
-    pub fn generate_refresh_token(&self, user_id: &Uuid) -> Result<String, JWTError> {
+    pub fn generate_refresh_token(&self, user_id: Uuid) -> Result<String, JWTError> {
         let now = Utc::now();
         let expire = now + Duration::seconds(self.refresh_expire_secs);
         jsonwebtoken::encode(
             &jsonwebtoken::Header::default(),
             &RefreshClaims {
-                sub: *user_id,
+                sub: user_id,
                 exp: expire.timestamp() as usize,
                 iat: now.timestamp() as usize,
                 token_type: TYPE_REFRESH.to_string(),
@@ -143,11 +143,11 @@ mod tests {
         let user_id = Uuid::new_v4();
 
         let access_token = jwt
-            .generate_access_token(&user_id, &Some(ROLE_ADMIN.to_string()))
+            .generate_access_token(user_id, Some(ROLE_ADMIN.to_string()))
             .unwrap();
         assert!(!access_token.is_empty());
 
-        let refresh_token = jwt.generate_refresh_token(&user_id).unwrap();
+        let refresh_token = jwt.generate_refresh_token(user_id).unwrap();
         assert!(!refresh_token.is_empty());
 
         let access_claims = jwt.validate_access_token(&access_token).unwrap();

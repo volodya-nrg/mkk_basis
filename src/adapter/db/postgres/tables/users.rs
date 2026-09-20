@@ -88,7 +88,7 @@ impl Users {
     pub async fn one(
         &self,
         executor: &mut sqlx::PgConnection,
-        item_id: &Uuid,
+        item_id: Uuid,
     ) -> Result<User, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE user_id=$1",
@@ -137,7 +137,7 @@ impl Users {
             .bind(&item.name)
             .bind(&item.email_code)
             .bind(&item.avatar)
-            .bind(self.get_valid_role(&item.role))
+            .bind(self.get_valid_role(item.role))
             .fetch_one(executor)
             .await
             .map_err(RepositoryError::FailedToInsert)?
@@ -160,7 +160,7 @@ impl Users {
             .bind(&item.name)
             .bind(&item.email_code)
             .bind(&item.avatar)
-            .bind(self.get_valid_role(&item.role))
+            .bind(self.get_valid_role(item.role))
             .bind(item.user_id)
             .execute(executor)
             .await
@@ -177,7 +177,7 @@ impl Users {
     pub async fn delete(
         &self,
         executor: &mut sqlx::PgConnection,
-        item_id: &Uuid,
+        item_id: Uuid,
     ) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE user_id=$1", self.get_name());
         QueryBuilder::new(query)
@@ -195,7 +195,7 @@ impl Users {
                 }
             })
     }
-    fn get_valid_role(&self, role: &Option<String>) -> Option<String> {
+    fn get_valid_role(&self, role: Option<String>) -> Option<String> {
         let role_loc = role.clone();
         if let Some(v) = role
             && *v == Role::Null.to_string()

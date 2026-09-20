@@ -7,7 +7,7 @@ use crate::adapter::db::{
     traits::NameAndFields,
 };
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default)] // Clone из-за axum-state, linter nребует Default
 pub struct TaskComments {}
 impl NameAndFields for TaskComments {
     fn get_name(&self) -> &str {
@@ -31,7 +31,7 @@ impl TaskComments {
     pub async fn list(
         &self,
         executor: &mut sqlx::PgConnection, // везде стоит это, Executor не подходит, тк нужно executor иногда использовать несколько раз
-        task_id: &Uuid,
+        task_id: Uuid,
         limit: i32,
         offset: i32,
     ) -> Result<List<TaskComment>, RepositoryError> {
@@ -114,7 +114,7 @@ impl TaskComments {
     pub async fn one(
         &self,
         executor: &mut sqlx::PgConnection,
-        item_id: &Uuid,
+        item_id: Uuid,
     ) -> Result<TaskComment, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE task_comment_id=$1",
@@ -169,6 +169,7 @@ impl TaskComments {
             .await
             .map_err(RepositoryError::FailedToUpdate)
             .and_then(|result| {
+                // and_then - as map() and flatten()
                 let rows = result.rows_affected();
                 if rows == 1 {
                     Ok(())
@@ -180,7 +181,7 @@ impl TaskComments {
     pub async fn delete(
         &self,
         executor: &mut sqlx::PgConnection,
-        item_id: &Uuid,
+        item_id: Uuid,
     ) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE task_comment_id=$1", self.get_name());
         QueryBuilder::new(query)

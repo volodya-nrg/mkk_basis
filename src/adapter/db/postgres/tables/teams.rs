@@ -7,7 +7,7 @@ use crate::adapter::db::{
     traits::NameAndFields,
 };
 
-#[derive(Clone, Default)] // из-за axum-state
+#[derive(Clone, Default)]
 pub struct Teams {}
 impl NameAndFields for Teams {
     fn get_name(&self) -> &str {
@@ -60,7 +60,7 @@ impl Teams {
     pub async fn one(
         &self,
         executor: &mut sqlx::PgConnection,
-        item_id: &Uuid,
+        item_id: Uuid,
     ) -> Result<Team, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE team_id=$1",
@@ -122,7 +122,7 @@ impl Teams {
     pub async fn delete(
         &self,
         executor: &mut sqlx::PgConnection,
-        item_id: &Uuid,
+        item_id: Uuid,
     ) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE team_id=$1", self.get_name());
         QueryBuilder::new(query)

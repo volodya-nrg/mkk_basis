@@ -221,8 +221,8 @@ impl<T: EmailSender> Auth<T> {
 
         let access_token = self
             .jwt_service
-            .generate_access_token(&user_db.user_id, &user_db.role)?;
-        let refresh_token = self.jwt_service.generate_refresh_token(&user_db.user_id)?;
+            .generate_access_token(user_db.user_id, user_db.role)?;
+        let refresh_token = self.jwt_service.generate_refresh_token(user_db.user_id)?;
 
         Ok((access_token, refresh_token))
     }
@@ -251,11 +251,11 @@ impl<T: EmailSender> Auth<T> {
         }
 
         let mut db_conn = self.transactor.conn().await?;
-        let user_db = self.users_repo.one(&mut db_conn, &claims.sub).await?;
+        let user_db = self.users_repo.one(&mut db_conn, claims.sub).await?;
         let access_token = self
             .jwt_service
-            .generate_access_token(&user_db.user_id, &user_db.role)?;
-        let new_refresh_token = self.jwt_service.generate_refresh_token(&user_db.user_id)?;
+            .generate_access_token(user_db.user_id, user_db.role)?;
+        let new_refresh_token = self.jwt_service.generate_refresh_token(user_db.user_id)?;
 
         Ok((access_token, new_refresh_token)) // чтоб пользователь максимально не логинился больше в системе, генерируем новый токен обновления
     }

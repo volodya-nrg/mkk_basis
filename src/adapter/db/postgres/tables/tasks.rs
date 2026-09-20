@@ -140,7 +140,7 @@ impl Tasks {
     pub async fn one(
         &self,
         executor: &mut sqlx::PgConnection,
-        item_id: &Uuid,
+        item_id: Uuid,
     ) -> Result<Task, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE task_id=$1",
@@ -212,7 +212,7 @@ impl Tasks {
     pub async fn delete(
         &self,
         executor: &mut sqlx::PgConnection,
-        item_id: &Uuid,
+        item_id: Uuid,
     ) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE task_id=$1", self.get_name());
         QueryBuilder::new(query)

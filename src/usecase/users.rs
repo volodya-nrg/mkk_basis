@@ -40,7 +40,7 @@ impl Users {
     pub async fn one(&self, item_id: Uuid) -> Result<User, UseCaseError> {
         let mut db_conn = self.transactor.conn().await?;
         Ok(mapper::user_db_to_user_uc(
-            self.users_repo.one(&mut db_conn, &item_id).await?,
+            self.users_repo.one(&mut db_conn, item_id).await?,
         ))
     }
     pub async fn create(&self, mut user: UserCreate) -> Result<Uuid, UseCaseError> {
@@ -83,7 +83,7 @@ impl Users {
     }
     pub async fn update(&self, user: UserUpdate) -> Result<(), UseCaseError> {
         let mut db_conn = self.transactor.conn().await?;
-        let user_db = self.users_repo.one(&mut db_conn, &user.user_id).await?;
+        let user_db = self.users_repo.one(&mut db_conn, user.user_id).await?;
         let mut user_db_copy = user_db.clone();
 
         if let Some(v) = user.email {
@@ -132,12 +132,12 @@ impl Users {
     }
     pub async fn delete(&self, item_id: Uuid) -> Result<(), UseCaseError> {
         let mut db_conn = self.transactor.conn().await?;
-        let user = self.users_repo.one(&mut db_conn, &item_id).await?;
+        let user = self.users_repo.one(&mut db_conn, item_id).await?;
 
         Ok(self
             .transactor
             .in_transaction(async |tx| {
-                self.users_repo.delete(tx, &item_id).await?;
+                self.users_repo.delete(tx, item_id).await?;
 
                 if let Some(v) = user.avatar
                     && let Err(e) = fs::remove_file(v.clone())

@@ -50,9 +50,7 @@ impl Transactor {
             .map_err(TransactionError::Database)?;
         let result = f(&mut *tx).await.map_err(TransactionError::Operation)?;
 
-        tx.commit()
-            .await
-            .map_err(|e| TransactionError::Database(e))?;
+        tx.commit().await.map_err(TransactionError::Database)?;
 
         Ok(result)
     }

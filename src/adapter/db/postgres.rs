@@ -6,7 +6,7 @@ use tables::{
     team_members::TeamMembers, teams::Teams, users::Users,
 };
 
-#[derive(Clone, Default)] // клонирование нужно для транспортного теста
+#[derive(Clone, Default)] // клонирование нужно для транспортного теста, linter требует Default
 pub struct Postgres {
     pub tbl_users: Users,
     pub tbl_teams: Teams,

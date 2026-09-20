@@ -30,7 +30,7 @@ impl TaskComments {
             .in_transaction::<_, _, UseCaseError>(async |tx| {
                 let list = self
                     .task_comments_repo
-                    .list(tx, &task_id, limit, offset)
+                    .list(tx, task_id, limit, offset)
                     .await?;
                 Ok((
                     list.0
@@ -45,7 +45,7 @@ impl TaskComments {
     pub async fn one(&self, item_id: Uuid) -> Result<TaskComment, UseCaseError> {
         let mut db_conn = self.transactor.conn().await?;
         Ok(mapper::task_comment_db_to_task_comment_uc(
-            self.task_comments_repo.one(&mut db_conn, &item_id).await?,
+            self.task_comments_repo.one(&mut db_conn, item_id).await?,
         ))
     }
     pub async fn create(&self, task_comment: TaskComment) -> Result<Uuid, UseCaseError> {
@@ -62,7 +62,7 @@ impl TaskComments {
         let mut db_conn = self.transactor.conn().await?;
         Ok(self
             .task_comments_repo
-            .delete(&mut db_conn, &item_id)
+            .delete(&mut db_conn, item_id)
             .await?)
     }
 }
