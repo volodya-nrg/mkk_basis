@@ -9,7 +9,7 @@ use std::time::Duration;
 // (Clone + Send + Sync + 'static), чтоб их не добавлять потом везде. "'static" - для Router.
 pub trait EmailSender: Clone + Send + Sync + 'static {
     fn send(&self, to: &str, subject: &str, body: &str) -> Result<(), String>;
-    fn save_code(&mut self, _email: &str, _code: &str) {}
+    fn save_code(&self, _email: &str, _code: &str) {}
     #[allow(dead_code)]
     fn get_code(&self, _email: &str) -> String {
         String::new()

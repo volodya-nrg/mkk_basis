@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use std::sync::Arc;
 use http::StatusCode;
 use reqwest::{Certificate, Identity, Response, multipart::Form};
 use std::time::Duration;
@@ -18,17 +19,17 @@ pub type StatusCodeBodyError = Result<(StatusCode, String), reqwest::Error>;
 // мутабельный объект. Если клиента отдавать по значениям, то между может быть move, что не удобно.
 // Частично сделать &mut self не получится, т.к. каждый метод по сути отдает разный тип ((не)mut).
 
-pub struct Client<'a, ES> {
+pub struct Client<ES> {
     addr: String,
     client: reqwest::Client,
-    email_service: &'a ES,
+    email_service: Arc<ES>,
 }
 
-impl<'a, ES> Client<'a, ES>
+impl<ES> Client<ES>
 where
     ES: EmailSender,
 {
-    pub fn new(addr: String, ca: String, crt: String, key: String, email_service: &'a ES) -> Self {
+    pub fn new(addr: String, ca: String, crt: String, key: String, email_service: Arc<ES>) -> Self {
         // ca-сертификат - чтоб проверить сервер
         // crt - чтоб сервер мог проверить клиента
         // key - доказательство владения crt

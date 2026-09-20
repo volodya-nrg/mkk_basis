@@ -25,7 +25,11 @@ pub struct HTTPServer<T> {
 }
 
 impl<T: EmailSender> HTTPServer<T> {
-    pub const fn new(addr: String, use_case: UseCase<T>, tls_config: Option<RustlsConfig>) -> Self {
+    pub const fn new(
+        addr: String,
+        use_case: UseCase<T>,
+        tls_config: Option<RustlsConfig>,
+    ) -> Self {
         Self {
             addr,
             use_case,

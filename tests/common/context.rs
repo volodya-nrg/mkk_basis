@@ -4,6 +4,7 @@ use chrono::{DateTime, Local};
 use sqlx::{Pool, Postgres};
 use std::net::TcpListener;
 use std::process::Command;
+use std::sync::Arc;
 use std::time::Duration;
 use testcontainers_modules::{
     postgres::Postgres as PostgresContainer,
@@ -13,6 +14,7 @@ use testcontainers_modules::{
 };
 use tokio::time::sleep;
 
+use super::{certs, consts, mocks::EmailServiceMock, rand};
 use mkk_basis::{
     adapter::{
         db::postgres::Postgres as PostgresService,
@@ -23,8 +25,6 @@ use mkk_basis::{
     usecase::UseCase,
 };
 
-use super::{certs, consts, mocks::EmailServiceMock, rand};
-
 pub struct Context {
     pub http_addr: String,
     pub ca: String,
@@ -34,7 +34,7 @@ pub struct Context {
     pub container: ContainerAsync<PostgresContainer>, // обязательно нужно, чтоб жил, иначе после выходи из ф-ии уничтожается
     pub db: PostgresService,
     pub transactor: Transactor,
-    pub email_service: EmailServiceMock,
+    pub email_service: Arc<EmailServiceMock>,
 }
 
 impl Context {
@@ -69,7 +69,7 @@ impl Context {
         let http_addr = format!("https://{}", addr_str); // явно используем https
         let postgres_service = PostgresService::new();
         let transactor = Transactor::new(pool.clone(), IsolationLevel::Serializable);
-        let email_service = EmailServiceMock::new();
+        let email_service = Arc::new(EmailServiceMock::new());
         let use_case = UseCase::new(
             "http://localhost.loc".to_string(),
             postgres_service.clone(),
@@ -102,7 +102,7 @@ impl Context {
             time_now: Local::now(),
             db: postgres_service,
             transactor,
-            email_service,
+            email_service: email_service.clone(),
         }
     }
 }

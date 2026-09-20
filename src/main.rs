@@ -2,6 +2,7 @@ use clap::Parser;
 use sqlx::postgres::PgPoolOptions;
 use std::fs;
 use std::process;
+use std::sync::Arc;
 use std::time::Duration;
 
 use mkk_basis::adapter::{
@@ -93,7 +94,15 @@ async fn run(config_filepath: String) -> Result<(), String> {
         .connect(&cfg.postgres.dsn)
         .await
         .map_err(|e| format!("failed to connect on DB: {e}"))?;
-    let transactor = Transactor::new(pool, IsolationLevel::ReadCommitted);
+    let transactor: Transactor = Transactor::new(pool, IsolationLevel::ReadCommitted);
+    let email_service = EmailService::new(
+        &cfg.email.host,
+        &cfg.email.login,
+        &cfg.email.pass,
+        &cfg.email.from_email,
+        &cfg.email.from_name,
+        Duration::from_secs(3),
+    );
     let http_server = HTTPServer::new(
         cfg.http_server.address.clone(),
         UseCase::new(
@@ -104,14 +113,7 @@ async fn run(config_filepath: String) -> Result<(), String> {
                 consts::ACCESS_TOKEN_TTL_SEC,
                 consts::REFRESH_TOKEN_TTL_SEC,
             ),
-            EmailService::new(
-                &cfg.email.host,
-                &cfg.email.login,
-                &cfg.email.pass,
-                &cfg.email.from_email,
-                &cfg.email.from_name,
-                Duration::from_secs(3),
-            ),
+            Arc::new(email_service),
             transactor,
         ),
         tls_config_for_server.clone(),

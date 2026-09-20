@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use http::StatusCode;
 use uuid::Uuid;
 
@@ -21,7 +22,7 @@ use super::{UseCaseError, helpers};
 #[derive(Clone)] // из-за axum-state
 pub struct Auth<T> {
     addr: String,
-    email_sender: T,
+    email_sender: Arc<T>,
     transactor: Transactor,
     users_repo: DBUsers,
 
@@ -32,7 +33,7 @@ impl<T: EmailSender> Auth<T> {
     pub const fn new(
         addr: String,
         jwt_service: JWTService,
-        email_sender: T,
+        email_sender: Arc<T>,
         transactor: Transactor,
         users_repo: DBUsers,
     ) -> Self {
@@ -46,27 +47,27 @@ impl<T: EmailSender> Auth<T> {
     }
     pub async fn register(
         &mut self,
-        ref_email: &str,
-        ref_password: &str,
-        ref_password_confirm: &str,
+        email: &str,
+        password: &str,
+        password_confirm: &str,
         agreement: bool,
         privacy_policy: bool,
     ) -> Result<Uuid, UseCaseError> {
-        if !HelpersService::is_valid_email(ref_email) {
+        if !HelpersService::is_valid_email(email) {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: ErrMsg::EmailNotCorrect.to_string(),
-                internal_err: Some(format!("user send bad email ({})", ref_email)),
+                internal_err: Some(format!("user send bad email ({})", email)),
             });
         }
-        if ref_password.chars().count() < consts::MIN_PASSWORD_LEN {
+        if password.chars().count() < consts::MIN_PASSWORD_LEN {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: ErrMsg::PasswordIsShort.to_string(),
                 internal_err: Default::default(),
             });
         }
-        if ref_password != ref_password_confirm {
+        if password != password_confirm {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: ErrMsg::PasswordsNotEquals.to_string(),
@@ -89,11 +90,11 @@ impl<T: EmailSender> Auth<T> {
         }
 
         let code = Uuid::new_v4().simple().to_string();
-        let password_hash = helpers::password_hash(ref_password)
+        let password_hash = helpers::password_hash(password)
             .map_err(|e| UseCaseError::Common(format!("failed to create password hash: {e}")))?;
         let link = format!(
             "{}/register/confirm?email={}&code={}",
-            self.addr, ref_email, code
+            self.addr, email, code
         );
         let email_subject = format!("Confirm email from {}", self.addr);
         let email_message = format!("Confirm email: <a href=\"{}\">{}</a>", link, link);
@@ -102,7 +103,7 @@ impl<T: EmailSender> Auth<T> {
             .transactor
             .in_transaction::<_, _, UseCaseError>(async |tx| {
                 let user_db = UserDB {
-                    email: ref_email.to_string(),
+                    email: email.to_string(),
                     password: password_hash.to_string(),
                     email_code: Some(code.clone()),
                     ..Default::default()
@@ -110,11 +111,15 @@ impl<T: EmailSender> Auth<T> {
                 let new_uuid = self.users_repo.create(tx, user_db).await?;
 
                 self.email_sender
-                    .send(ref_email, email_subject.as_str(), email_message.as_str())
+                    .send(email, email_subject.as_str(), email_message.as_str())
+                    .map_err(|e| UseCaseError::Common(format!("failed to send email: {e}")))?;
+
+                self.email_sender
+                    .send(email, email_subject.as_str(), email_message.as_str())
                     .map_err(|e| UseCaseError::Common(format!("failed to send email: {e}")))?;
 
                 // сохраним тут код для теста
-                self.email_sender.save_code(ref_email, code.as_str());
+                self.email_sender.save_code(email, code.as_str());
 
                 Ok(new_uuid)
             })
@@ -122,24 +127,24 @@ impl<T: EmailSender> Auth<T> {
     }
     pub async fn register_confirm(
         &self,
-        ref_email: &str,
-        ref_actual_code: &str,
+        email: &str,
+        actual_code: &str,
     ) -> Result<(), UseCaseError> {
-        if ref_email.is_empty() {
+        if email.is_empty() {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: ErrMsg::EmailNotBeEmpty.to_string(),
                 internal_err: None,
             });
         }
-        if ref_actual_code.is_empty() {
+        if actual_code.is_empty() {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: ErrMsg::VerifyCodeNotBeEmpty.to_string(),
                 internal_err: None,
             });
         }
-        if !HelpersService::is_valid_email(ref_email) {
+        if !HelpersService::is_valid_email(email) {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: ErrMsg::EmailNotCorrect.to_string(),
@@ -148,14 +153,14 @@ impl<T: EmailSender> Auth<T> {
         }
 
         let mut db_conn = self.transactor.conn().await?;
-        let mut user_db = self.users_repo.by_email(&mut db_conn, ref_email).await?;
+        let mut user_db = self.users_repo.by_email(&mut db_conn, email).await?;
         let expected_code = user_db.email_code.ok_or_else(|| UseCaseError::Transport {
             status_code: StatusCode::BAD_REQUEST,
             public_err: ErrMsg::EmailAlreadyConfirm.to_string(),
             internal_err: None,
         })?;
 
-        if expected_code != *ref_actual_code {
+        if expected_code != *actual_code {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: ErrMsg::NotCorrectVerifyEmailCode.to_string(),
@@ -169,17 +174,17 @@ impl<T: EmailSender> Auth<T> {
     }
     pub async fn login(
         &self,
-        ref_email: &str,
-        ref_password: &str,
+        email: &str,
+        password: &str,
     ) -> Result<(String, String), UseCaseError> {
-        if !HelpersService::is_valid_email(ref_email) {
+        if !HelpersService::is_valid_email(email) {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: ErrMsg::EmailNotCorrect.to_string(),
-                internal_err: Some(format!("user send bad email ({})", ref_email)),
+                internal_err: Some(format!("user send bad email ({})", email)),
             });
         }
-        if ref_password.chars().count() < consts::MIN_PASSWORD_LEN {
+        if password.chars().count() < consts::MIN_PASSWORD_LEN {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: ErrMsg::PasswordIsShort.to_string(),
@@ -190,7 +195,7 @@ impl<T: EmailSender> Auth<T> {
         let mut db_conn = self.transactor.conn().await?;
         let user_db = self
             .users_repo
-            .by_email(&mut db_conn, ref_email)
+            .by_email(&mut db_conn, email)
             .await
             .map_err(|e| {
                 // ! если пользователь не найден, то нужно перенаправлять его на страницу регистрации - тут исключение
@@ -208,7 +213,7 @@ impl<T: EmailSender> Auth<T> {
             });
         }
 
-        let password_is_eq = helpers::password_verify(ref_password, user_db.password.as_str())
+        let password_is_eq = helpers::password_verify(password, user_db.password.as_str())
             .map_err(|e| UseCaseError::Common(format!("failed to verify password: {e}")))?;
 
         if !password_is_eq {
@@ -226,10 +231,10 @@ impl<T: EmailSender> Auth<T> {
 
         Ok((access_token, refresh_token))
     }
-    pub async fn refresh_tokens(&self, ref_token: &str) -> Result<(String, String), UseCaseError> {
+    pub async fn refresh_tokens(&self, token: &str) -> Result<(String, String), UseCaseError> {
         let claims = self
             .jwt_service
-            .validate_refresh_token(ref_token)
+            .validate_refresh_token(token)
             .map_err(|e| match e {
                 JWTError::ExpiredToken => UseCaseError::Transport {
                     status_code: StatusCode::BAD_REQUEST,

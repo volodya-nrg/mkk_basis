@@ -7,6 +7,7 @@ use tokio::sync::OnceCell;
 use tokio::time::sleep;
 use uuid::Uuid;
 
+use mkk_basis::adapter::email::EmailSender;
 use mkk_basis::{
     adapter::{db::postgres::tables::users::Role as UsersRole, helpers as HelpersService, logger},
     consts::MIN_PASSWORD_LEN,
@@ -16,7 +17,6 @@ use mkk_basis::{
         TeamsList, User, UsersList,
     },
 };
-use mkk_basis::adapter::email::EmailSender;
 
 use common::{client::Client, consts, context::Context, rand};
 
@@ -39,7 +39,7 @@ async fn check_etc() {
         ctx.ca.to_string(),
         ctx.crt.to_string(),
         ctx.key.to_string(),
-        &ctx.email_service,
+        ctx.email_service.clone(),
     );
 
     cl.index(|result| {
@@ -84,7 +84,7 @@ async fn check_auth() {
         ctx.ca.to_string(),
         ctx.crt.to_string(),
         ctx.key.to_string(),
-        &ctx.email_service,
+        ctx.email_service.clone(),
     );
 
     let wrong_email = "abc".to_string();
@@ -196,7 +196,9 @@ async fn check_auth() {
     .await;
 
     // достанем явно код
-    let email_code = ctx.email_service.get_code(req_register2.email.as_str());
+    let email_code = ctx
+        .email_service
+        .get_code(req_register2.email.as_str());
 
     // ok
     cl.register_confirm(
@@ -278,7 +280,7 @@ async fn check_teams() {
         ctx.ca.to_string(),
         ctx.crt.to_string(),
         ctx.key.to_string(),
-        &ctx.email_service,
+        ctx.email_service.clone(),
     );
 
     let mut user_id = String::new();
@@ -608,7 +610,7 @@ async fn check_tasks() {
         ctx.ca.to_string(),
         ctx.crt.to_string(),
         ctx.key.to_string(),
-        &ctx.email_service,
+        ctx.email_service.clone(),
     );
 
     let mut user_id1 = String::new();
@@ -854,7 +856,7 @@ async fn check_task_comments() {
         ctx.ca.to_string(),
         ctx.crt.to_string(),
         ctx.key.to_string(),
-        &ctx.email_service,
+        ctx.email_service.clone(),
     );
 
     let mut user_id = String::new();
@@ -1038,7 +1040,7 @@ async fn check_users() {
         ctx.ca.to_string(),
         ctx.crt.to_string(),
         ctx.key.to_string(),
-        &ctx.email_service,
+        ctx.email_service.clone(),
     );
 
     let mut user_id = String::new();

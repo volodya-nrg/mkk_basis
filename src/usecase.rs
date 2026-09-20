@@ -8,8 +8,7 @@ pub mod tasks;
 pub mod teams;
 pub mod users;
 
-use http::StatusCode;
-
+use std::sync::Arc;
 use crate::adapter::db::postgres::transactor::TransactionError;
 use crate::adapter::{
     db::{errors::RepositoryError, postgres::Postgres, postgres::transactor::Transactor},
@@ -18,6 +17,7 @@ use crate::adapter::{
     jwt::Jwt as JWTService,
 };
 use crate::err_msg::ErrMsg;
+use http::StatusCode;
 
 #[derive(Clone)] // из-за axum-state
 pub struct UseCase<T> {
@@ -33,7 +33,7 @@ impl<T: EmailSender> UseCase<T> {
         addr: String,
         db: Postgres,
         jwt_service: JWTService,
-        email_sender: T,
+        email_sender: Arc<T>,
         transactor: Transactor,
     ) -> Self {
         Self {
@@ -63,6 +63,8 @@ impl<T: EmailSender> UseCase<T> {
         }
     }
 }
+
+// unsafe impl<T: EmailSender> Send for UseCase<T> {} // вся ответственность лежит на разработчике и надо сделать самостоятельно средства синхронизации
 
 // ------
 
