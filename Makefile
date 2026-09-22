@@ -14,7 +14,9 @@ rust_version:
 
 .PHONY: install_deps
 install_deps:
+	# brew install protobuf
 	cargo install sqlx-cli
+	cargo install --locked cargo-nextest
 
 .PHONY: build
 build:
@@ -38,9 +40,9 @@ generate-private-key:
 		echo "Generating private key..."; \
 		openssl genrsa -out $(PRIVATE_KEY) 2048; \
 		chmod 600 $(PRIVATE_KEY_FILEPATH); \
-		echo "✅ private key created in $(PRIVATE_KEY_FILEPATH)"; \
+		echo "private key created in $(PRIVATE_KEY_FILEPATH)"; \
 	else \
-		echo "⚠️ private key already exists"; \
+		echo "private key already exists"; \
 	fi
 
 .PHONY: gen_tls_certs
