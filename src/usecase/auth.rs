@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use http::StatusCode;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::{
@@ -199,7 +199,7 @@ impl<T: EmailSender> Auth<T> {
             .await
             .map_err(|e| {
                 // ! если пользователь не найден, то нужно перенаправлять его на страницу регистрации - тут исключение
-                if matches!(e, RepositoryError::NotFoundRow) {
+                if matches!(e, RepositoryError::NotFoundRow { value: _ }) {
                     return UseCaseError::UserNotExists;
                 }
                 UseCaseError::Common(e.to_string())

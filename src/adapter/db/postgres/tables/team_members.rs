@@ -50,7 +50,9 @@ impl TeamMembers {
             .fetch_optional(executor)
             .await
             .map_err(RepositoryError::FailedToQuery)?
-            .ok_or(RepositoryError::NotFoundRow)
+            .ok_or(RepositoryError::NotFoundRow {
+                value: format!("team_id: {team_id}, user_id: {user_id}"),
+            })
     }
     pub async fn create(
         &self,

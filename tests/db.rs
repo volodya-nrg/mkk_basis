@@ -1,27 +1,18 @@
 mod common;
 
-use ctor::ctor;
 use sqlx::testing::TestTermination;
 use std::assert_matches;
 use std::string::ToString;
 use tokio::sync::OnceCell;
 use uuid::Uuid;
 
-use mkk_basis::adapter::{
-    db::{
-        errors::RepositoryError,
-        models::TaskData,
-        postgres::{tables::tasks::Status as TaskStatus, tables::users::Role as UserRoles},
-    },
-    logger,
+use mkk_basis::adapter::db::{
+    errors::RepositoryError,
+    models::TaskData,
+    postgres::{tables::tasks::Status as TaskStatus, tables::users::Role as UserRoles},
 };
 
 use common::{context::Context, rand};
-
-#[ctor(unsafe)]
-fn init() {
-    logger::init(String::new(), String::new(), "", None, true).unwrap();
-}
 
 static CONTEXT: OnceCell<Context> = OnceCell::const_new();
 
@@ -37,14 +28,14 @@ async fn check_users() {
     // err: проверим что запись не находит
     assert_matches!(
         ctx.db.tbl_users.one(conn.as_mut(), Uuid::new_v4()).await,
-        Err(RepositoryError::NotFoundRow)
+        Err(RepositoryError::NotFoundRow { value: _ })
     );
     assert_matches!(
         ctx.db
             .tbl_users
             .by_email(conn.as_mut(), &rand::email())
             .await,
-        Err(RepositoryError::NotFoundRow)
+        Err(RepositoryError::NotFoundRow { value: _ })
     );
 
     // ok: проверим что запись создается
@@ -206,7 +197,7 @@ async fn check_users() {
             .tbl_users
             .one(conn.as_mut(), user_actual.user_id)
             .await,
-        Err(RepositoryError::NotFoundRow)
+        Err(RepositoryError::NotFoundRow { value: _ })
     );
 }
 
@@ -224,7 +215,7 @@ async fn check_teams() {
     // err: проверим что команду не находит
     assert_matches!(
         ctx.db.tbl_teams.one(conn.as_mut(), Uuid::new_v4()).await,
-        Err(RepositoryError::NotFoundRow)
+        Err(RepositoryError::NotFoundRow { value: _ })
     );
 
     // err: попытаемся создать команду, но такого пользователя нет
@@ -354,7 +345,7 @@ async fn check_teams() {
             .tbl_teams
             .one(conn.as_mut(), team_actual.team_id)
             .await,
-        Err(RepositoryError::NotFoundRow)
+        Err(RepositoryError::NotFoundRow { value: _ })
     );
 
     // ok: каскадно удалилась
@@ -363,7 +354,7 @@ async fn check_teams() {
             .tbl_team_members
             .one(conn.as_mut(), team_actual.team_id, team_actual.created_by)
             .await,
-        Err(RepositoryError::NotFoundRow)
+        Err(RepositoryError::NotFoundRow { value: _ })
     );
 
     // ok: почистим за собой
@@ -402,7 +393,7 @@ async fn check_team_members() {
             .tbl_team_members
             .one(conn.as_mut(), Uuid::new_v4(), Uuid::new_v4())
             .await,
-        Err(RepositoryError::NotFoundRow)
+        Err(RepositoryError::NotFoundRow { value: _ })
     );
 
     // err: попытаемся создать, но связанных данных нет
@@ -487,7 +478,7 @@ async fn check_team_members() {
                 team_member_actual.user_id
             )
             .await,
-        Err(RepositoryError::NotFoundRow)
+        Err(RepositoryError::NotFoundRow { value: _ })
     );
 
     // ok: первая запись должна еще быть
@@ -512,7 +503,7 @@ async fn check_team_members() {
             .tbl_team_members
             .one(conn.as_mut(), team_id, user_id1)
             .await,
-        Err(RepositoryError::NotFoundRow)
+        Err(RepositoryError::NotFoundRow { value: _ })
     );
 
     // почистим
@@ -548,7 +539,7 @@ async fn check_tasks() {
     // err: проверим что задачу не находит
     assert_matches!(
         ctx.db.tbl_tasks.one(conn.as_mut(), Uuid::new_v4()).await,
-        Err(RepositoryError::NotFoundRow)
+        Err(RepositoryError::NotFoundRow { value: _ })
     );
 
     // err: попытаемся создать задачу, но связанных данных нет
@@ -798,7 +789,7 @@ async fn check_tasks() {
             .tbl_tasks
             .one(conn.as_mut(), task_actual.task_id)
             .await,
-        Err(RepositoryError::NotFoundRow)
+        Err(RepositoryError::NotFoundRow { value: _ })
     );
 
     // ok: почистим за собой
@@ -848,7 +839,7 @@ async fn check_task_histories() {
             .tbl_task_histories
             .one(conn.as_mut(), Uuid::new_v4())
             .await,
-        Err(RepositoryError::NotFoundRow)
+        Err(RepositoryError::NotFoundRow { value: _ })
     );
 
     // err: попытаемся создать, но связей нет
@@ -984,7 +975,7 @@ async fn check_task_histories() {
             .tbl_task_histories
             .one(conn.as_mut(), task_history_actual.task_history_id)
             .await,
-        Err(RepositoryError::NotFoundRow)
+        Err(RepositoryError::NotFoundRow { value: _ })
     );
 
     // ok: почистим за собой
@@ -1044,7 +1035,7 @@ async fn check_task_comments() {
             .tbl_task_comments
             .one(conn.as_mut(), Uuid::new_v4())
             .await,
-        Err(RepositoryError::NotFoundRow)
+        Err(RepositoryError::NotFoundRow { value: _ })
     );
 
     // err: попытаемся создать, отсутствуют зависимости
@@ -1165,7 +1156,7 @@ async fn check_task_comments() {
             .tbl_task_comments
             .one(conn.as_mut(), task_comment_actual.task_comment_id)
             .await,
-        Err(RepositoryError::NotFoundRow)
+        Err(RepositoryError::NotFoundRow { value: _ })
     );
 
     // ok: почистим за собой
@@ -1241,7 +1232,7 @@ async fn check_task_comments() {
             .tbl_task_comments
             .one(conn.as_mut(), task_comment_id2)
             .await,
-        Err(RepositoryError::NotFoundRow)
+        Err(RepositoryError::NotFoundRow { value: _ })
     );
 
     ctx.db
@@ -1254,7 +1245,7 @@ async fn check_task_comments() {
             .tbl_task_comments
             .one(conn.as_mut(), task_comment_id1)
             .await,
-        Err(RepositoryError::NotFoundRow)
+        Err(RepositoryError::NotFoundRow { value: _ })
     );
 
     // почистим за собой

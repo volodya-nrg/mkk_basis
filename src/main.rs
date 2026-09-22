@@ -48,6 +48,11 @@ runtime:
     По умолчанию используется многопоточный runtime (multi_thread) с числом воркеров, равным количеству ядер CPU.
 */
 
+/*
+по сути "#[tokio::main]" равен:
+    let mut rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {Код асинхронной программы})
+*/
 #[tokio::main] // атрибут-макрос, создает tokio-runtime
 async fn main() {
     if let Err(e) = run(Args::parse().config).await {
@@ -90,7 +95,7 @@ async fn run(config_filepath: String) -> Result<(), String> {
     };
 
     let pool = PgPoolOptions::new()
-        .acquire_timeout(Duration::new(3, 0))
+        .acquire_timeout(Duration::from_secs(3))
         .connect(&cfg.postgres.dsn)
         .await
         .map_err(|e| format!("failed to connect on DB: {e}"))?;

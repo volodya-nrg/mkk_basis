@@ -1,7 +1,7 @@
 use axum::extract::Path;
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
+use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use std::marker::PhantomData;
 use uuid::Uuid;
@@ -29,7 +29,7 @@ where
         Path(task_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestLimitOffset>,
-    ) -> impl IntoResponse {
+    ) -> Response {
         use_case
             .task_comments
             .list(task_id, payload.limit, payload.offset)
@@ -53,7 +53,7 @@ where
         Path(task_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestTaskComment>,
-    ) -> impl IntoResponse {
+    ) -> Response {
         let result = use_case
             .task_comments
             .create(mapper::task_comment_tr_to_task_comment_uc(
@@ -82,7 +82,7 @@ where
         Extension(_user): Extension<AuthUser>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
-    ) -> impl IntoResponse {
+    ) -> Response {
         use_case.task_comments.delete(item_id).await.map_or_else(
             |e| handler_err!(e).into_response(),
             |_| StatusCode::NO_CONTENT.into_response(),

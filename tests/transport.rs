@@ -1,15 +1,16 @@
 mod common;
 
 use axum::http::StatusCode;
-use ctor::ctor;
 use std::time::Duration;
 use tokio::sync::OnceCell;
 use tokio::time::sleep;
 use uuid::Uuid;
 
-use mkk_basis::adapter::email::EmailSender;
 use mkk_basis::{
-    adapter::{db::postgres::tables::users::Role as UsersRole, helpers as HelpersService, logger},
+    adapter::{
+        db::postgres::tables::users::Role as UsersRole, email::EmailSender,
+        helpers as HelpersService,
+    },
     consts::MIN_PASSWORD_LEN,
     transport::models::{
         RequestLogin, RequestTaskData, RequestTeamInvite, RequestUserUpdate, ResponseMsg,
@@ -19,11 +20,6 @@ use mkk_basis::{
 };
 
 use common::{client::Client, consts, context::Context, rand};
-
-#[ctor(unsafe)]
-fn init() {
-    logger::init(String::new(), String::new(), "info", None, true).unwrap()
-}
 
 static CONTEXT: OnceCell<Context> = OnceCell::const_new();
 
@@ -196,9 +192,7 @@ async fn check_auth() {
     .await;
 
     // достанем явно код
-    let email_code = ctx
-        .email_service
-        .get_code(req_register2.email.as_str());
+    let email_code = ctx.email_service.get_code(req_register2.email.as_str());
 
     // ok
     cl.register_confirm(
@@ -261,7 +255,7 @@ async fn check_auth() {
     .await;
 
     sleep(Duration::from_secs(
-        consts::REFRESH_TOKEN_TTL_SEC.cast_unsigned() + 1,
+        consts::REFRESH_TOKEN_TTL_SEC + 1,
     ))
     .await;
 

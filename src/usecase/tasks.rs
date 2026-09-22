@@ -168,7 +168,7 @@ impl Tasks {
             .one(&mut db_conn, team_id, user_id)
             .await
             .map_err(|e| match e {
-                RepositoryError::NotFoundRow => UseCaseError::Transport {
+                RepositoryError::NotFoundRow { value: _ } => UseCaseError::Transport {
                     status_code: StatusCode::FORBIDDEN,
                     public_err: ErrMsg::NoAccessTeamMemberOnly.to_string(),
                     internal_err: None,

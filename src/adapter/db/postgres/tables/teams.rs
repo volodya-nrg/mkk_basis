@@ -73,7 +73,9 @@ impl Teams {
             .fetch_optional(executor)
             .await
             .map_err(RepositoryError::FailedToQuery)?
-            .ok_or(RepositoryError::NotFoundRow)
+            .ok_or(RepositoryError::NotFoundRow {
+                value: item_id.to_string(),
+            })
     }
     pub async fn create(
         &self,

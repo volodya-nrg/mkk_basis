@@ -14,16 +14,18 @@ use testcontainers_modules::{
 };
 use tokio::time::sleep;
 
-use super::{certs, consts, mocks::EmailServiceMock, rand};
 use mkk_basis::{
     adapter::{
         db::postgres::Postgres as PostgresService,
         db::postgres::transactor::{IsolationLevel, Transactor},
         jwt::Jwt as JWTService,
+        logger,
     },
     transport::{self, http_server::HTTPServer},
     usecase::UseCase,
 };
+
+use super::{certs, consts, mocks::EmailServiceMock, rand};
 
 pub struct Context {
     pub http_addr: String,
@@ -39,6 +41,8 @@ pub struct Context {
 
 impl Context {
     pub async fn new() -> Self {
+        logger::init(String::new(), String::new(), "info", None, true).unwrap();
+
         let _ = Command::new("docker")
             .args(["rm", "-f", consts::CONTAINER_NAME])
             .output();

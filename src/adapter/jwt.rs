@@ -1,12 +1,13 @@
-use chrono::{Duration, Utc};
+use chrono::{Utc};
 use jsonwebtoken::errors;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use std::time::Duration;
 
 pub const TYPE_ACCESS: &str = "access";
 pub const TYPE_REFRESH: &str = "refresh";
 
-// т.к. стоит thiserror::Error, то нет необходимости в fmt::Display
+// т.к. стоит thiserror::Error, то нет необходимости в fmt::Display. Так же генерит std::error::Error
 #[derive(Debug, thiserror::Error)]
 pub enum JWTError {
     #[error("token expired")]
@@ -45,14 +46,14 @@ pub struct RefreshClaims {
 #[derive(Clone)] // из-за usecase Auth
 pub struct Jwt {
     private_key_bytes: Vec<u8>,
-    access_expire_secs: i64,
-    refresh_expire_secs: i64,
+    access_expire_secs: u64,
+    refresh_expire_secs: u64,
 }
 impl Jwt {
     pub const fn new(
         private_key_bytes: Vec<u8>,
-        access_expire_secs: i64,
-        refresh_expire_secs: i64,
+        access_expire_secs: u64,
+        refresh_expire_secs: u64,
     ) -> Self {
         Self {
             private_key_bytes,
@@ -66,7 +67,7 @@ impl Jwt {
         role: Option<String>,
     ) -> Result<String, JWTError> {
         let now = Utc::now();
-        let expire = now + Duration::seconds(self.access_expire_secs);
+        let expire = now + Duration::from_secs(self.access_expire_secs);
         jsonwebtoken::encode(
             &jsonwebtoken::Header::default(),
             &AccessClaims {
@@ -82,7 +83,7 @@ impl Jwt {
     }
     pub fn generate_refresh_token(&self, user_id: Uuid) -> Result<String, JWTError> {
         let now = Utc::now();
-        let expire = now + Duration::seconds(self.refresh_expire_secs);
+        let expire = now + Duration::from_secs(self.refresh_expire_secs);
         jsonwebtoken::encode(
             &jsonwebtoken::Header::default(),
             &RefreshClaims {
@@ -139,7 +140,7 @@ mod tests {
         const ROLE_ADMIN: &str = "admin";
 
         let private_key = generate_private_key_bytes(32);
-        let jwt = Jwt::new(private_key, SEC as i64, SEC as i64);
+        let jwt = Jwt::new(private_key, SEC, SEC);
         let user_id = Uuid::new_v4();
 
         let access_token = jwt
@@ -161,7 +162,7 @@ mod tests {
         assert_eq!(user_id, refresh_claims.sub);
 
         // задержимся чтоб время прошло
-        sleep(std::time::Duration::from_secs(SEC + SEC));
+        sleep(Duration::from_secs(SEC + SEC));
 
         assert_matches!(
             jwt.validate_access_token(&access_token),

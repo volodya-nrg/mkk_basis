@@ -13,8 +13,8 @@ pub enum RepositoryError {
     #[error("{0}")]
     Common(sqlx::Error),
 
-    #[error("not found row")]
-    NotFoundRow,
+    #[error("not found row {value}")]
+    NotFoundRow { value: String },
     #[error("expected one row, but has {0}")]
     ExpectedOneRow(u64),
 }

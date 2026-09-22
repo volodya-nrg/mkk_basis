@@ -1,7 +1,7 @@
 use axum::extract::multipart::MultipartError;
 use axum::extract::{Multipart, Path, State};
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
+use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use chrono::Utc;
 use std::collections::HashMap;
@@ -38,7 +38,7 @@ where
         Extension(_user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestLimitOffset>,
-    ) -> impl IntoResponse {
+    ) -> Response {
         use_case
             .users
             .list(payload.limit, payload.offset)
@@ -58,7 +58,7 @@ where
         Extension(_user): Extension<AuthUser>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
-    ) -> impl IntoResponse {
+    ) -> Response {
         use_case.users.one(item_id).await.map_or_else(
             |e| handler_err!(e).into_response(),
             |v| Json(mapper::user_uc_to_user_tr(v)).into_response(),
@@ -68,7 +68,7 @@ where
         Extension(_user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         multipart: Multipart,
-    ) -> impl IntoResponse {
+    ) -> Response {
         let m = match multipart_to_map(multipart).await {
             Ok(v) => v,
             Err(e) => {
@@ -116,7 +116,7 @@ where
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
         multipart: Multipart,
-    ) -> impl IntoResponse {
+    ) -> Response {
         let m = match multipart_to_map(multipart).await {
             Ok(v) => v,
             Err(e) => {
@@ -162,7 +162,7 @@ where
         Extension(_user): Extension<AuthUser>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
-    ) -> impl IntoResponse {
+    ) -> Response {
         use_case.users.delete(item_id).await.map_or_else(
             |e| handler_err!(e).into_response(),
             |_| StatusCode::NO_CONTENT.into_response(),

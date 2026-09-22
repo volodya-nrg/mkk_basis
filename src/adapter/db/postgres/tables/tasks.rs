@@ -25,11 +25,12 @@ impl Status {
 // можно поставить "заклинание" Display, но тогда будет начинаться с большой буквы, поэтому пишем сами как надо
 impl fmt::Display for Status {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use Status::*;
         let s = match self {
-            Self::Start => "start",
-            Self::Todo => "todo",
-            Self::Done => "done",
-            Self::Cancelled => "cancelled",
+            Start => "start",
+            Todo => "todo",
+            Done => "done",
+            Cancelled => "cancelled",
         };
         write!(f, "{}", s)
     }
@@ -153,7 +154,7 @@ impl Tasks {
             .fetch_optional(executor)
             .await
             .map_err(RepositoryError::FailedToQuery)?
-            .ok_or(RepositoryError::NotFoundRow)
+            .ok_or(RepositoryError::NotFoundRow { value: item_id.to_string() })
     }
     pub async fn create(
         &self,

@@ -1,7 +1,7 @@
 use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
-use axum::response::{AppendHeaders, IntoResponse, Redirect};
+use axum::response::{AppendHeaders, IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::CookieJar;
 use http::header;
 use std::marker::PhantomData;
@@ -25,7 +25,7 @@ where
     pub async fn register(
         State(mut use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestRegister>,
-    ) -> impl IntoResponse {
+    ) -> Response {
         use_case
             .auth
             .register(
@@ -48,11 +48,11 @@ where
     }
     pub async fn register_confirm(
         State(use_case): State<UseCase<ES>>,
-        Query(query): Query<RequestRegisterConfirm>,
-    ) -> impl IntoResponse {
+        Query(req): Query<RequestRegisterConfirm>,
+    ) -> Response {
         use_case
             .auth
-            .register_confirm(&query.email, &query.code)
+            .register_confirm(&req.email, &req.code)
             .await
             .map_or_else(
                 |e| handler_err!(e).into_response(),
@@ -83,7 +83,7 @@ where
         )
             .into_response()
     }
-    pub async fn logout(jar: CookieJar, State(_use_case): State<UseCase<ES>>) -> impl IntoResponse {
+    pub async fn logout(jar: CookieJar, State(_use_case): State<UseCase<ES>>) -> Response {
         let jar = jar
             .remove(consts::ACCESS_TOKEN_NAME)
             .remove(consts::REFRESH_TOKEN_NAME);
@@ -92,7 +92,7 @@ where
     pub async fn refresh_tokens(
         jar: CookieJar,
         State(use_case): State<UseCase<ES>>,
-    ) -> impl IntoResponse {
+    ) -> Response {
         let cookie_str = match jar.get(consts::REFRESH_TOKEN_NAME) {
             Some(c) => c.to_string(),
             None => return StatusCode::UNAUTHORIZED.into_response(),

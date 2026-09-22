@@ -2,6 +2,7 @@ use axum::{
     Extension, Json, extract::Path, extract::State, http::StatusCode, response::IntoResponse,
 };
 use std::marker::PhantomData;
+use axum::response::Response;
 use uuid::Uuid;
 
 use crate::adapter::email::EmailSender;
@@ -25,7 +26,7 @@ where
         Extension(_user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestTaskData>,
-    ) -> impl IntoResponse {
+    ) -> Response {
         let request_task_data = match mapper::task_data_tr_to_task_data_uc(payload) {
             Ok(v) => v,
             Err(e) => {
@@ -52,7 +53,7 @@ where
         Extension(_user): Extension<AuthUser>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
-    ) -> impl IntoResponse {
+    ) -> Response {
         use_case.tasks.one(item_id).await.map_or_else(
             |e| handler_err!(e).into_response(),
             |v| Json(mapper::task_uc_to_task_tr(v)).into_response(),
@@ -62,7 +63,7 @@ where
         Extension(user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         Json(payload): Json<RequestTask>,
-    ) -> impl IntoResponse {
+    ) -> Response {
         let uc_task = match mapper::task_tr_to_task_uc(payload) {
             Ok(v) => v,
             Err(e) => {
@@ -88,7 +89,7 @@ where
         State(use_case): State<UseCase<ES>>,
         Path(task_id): Path<Uuid>,
         Json(payload): Json<RequestTask>,
-    ) -> impl IntoResponse {
+    ) -> Response {
         let mut uc_task = match mapper::task_tr_to_task_uc(payload) {
             Ok(v) => v,
             Err(e) => {
@@ -115,7 +116,7 @@ where
         Extension(user): Extension<AuthUser>,
         Path(item_id): Path<Uuid>,
         State(use_case): State<UseCase<ES>>,
-    ) -> impl IntoResponse {
+    ) -> Response {
         use_case
             .tasks
             .delete(item_id, user.user_id)
@@ -129,7 +130,7 @@ where
         Extension(_user): Extension<AuthUser>,
         State(use_case): State<UseCase<ES>>,
         Path(task_id): Path<Uuid>,
-    ) -> impl IntoResponse {
+    ) -> Response {
         use_case.tasks.get_history(task_id).await.map_or_else(
             |e| handler_err!(e).into_response(),
             |v| {

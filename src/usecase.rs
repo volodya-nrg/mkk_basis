@@ -8,7 +8,6 @@ pub mod tasks;
 pub mod teams;
 pub mod users;
 
-use std::sync::Arc;
 use crate::adapter::db::postgres::transactor::TransactionError;
 use crate::adapter::{
     db::{errors::RepositoryError, postgres::Postgres, postgres::transactor::Transactor},
@@ -18,6 +17,7 @@ use crate::adapter::{
 };
 use crate::err_msg::ErrMsg;
 use http::StatusCode;
+use std::sync::Arc;
 
 #[derive(Clone)] // из-за axum-state
 pub struct UseCase<T> {
@@ -79,10 +79,23 @@ pub enum UseCaseError {
     },
     UserNotExists,
 }
+
+/*
+Чтобы from не делать, можно короче написать с помощью thiserror.
+Эта аннотация говорит thiserror, что нужно сгенерировать соответствующую реализацию трэйта From.
+#[derive(Debug, Error)]
+enum PurchaseError {
+    #[error("Nested servation error: (0)")]
+    ReservationFailed(#[from] ReserveError)
+    #[error("Nested shipping error: (0)")]
+    ShippingFailed(#[from] ShipmentError)
+}
+*/
+
 impl From<RepositoryError> for UseCaseError {
     fn from(e: RepositoryError) -> Self {
         match e {
-            RepositoryError::NotFoundRow => Self::Transport {
+            RepositoryError::NotFoundRow { value: _ } => Self::Transport {
                 status_code: StatusCode::NOT_FOUND,
                 public_err: ErrMsg::NotFoundItem.to_string(),
                 internal_err: None,

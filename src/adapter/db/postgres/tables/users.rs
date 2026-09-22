@@ -16,10 +16,11 @@ pub enum Role {
 }
 impl fmt::Display for Role {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use Role::*;
         let s = match self {
-            Self::Admin => "admin",
-            Self::Moder => "moder",
-            Self::Null => "null",
+            Admin => "admin",
+            Moder => "moder",
+            Null => "null",
         };
         write!(f, "{}", s)
     }
@@ -101,7 +102,9 @@ impl Users {
             .fetch_optional(executor)
             .await
             .map_err(RepositoryError::FailedToQuery)?
-            .ok_or(RepositoryError::NotFoundRow)
+            .ok_or(RepositoryError::NotFoundRow {
+                value: item_id.to_string(),
+            })
     }
     pub async fn by_email(
         &self,
@@ -119,7 +122,9 @@ impl Users {
             .fetch_optional(executor)
             .await
             .map_err(RepositoryError::FailedToQuery)?
-            .ok_or(RepositoryError::NotFoundRow)
+            .ok_or(RepositoryError::NotFoundRow {
+                value: email.to_string(),
+            })
     }
     pub async fn create(
         &self,

@@ -113,6 +113,10 @@ cargo_check:
 cargo_bench:
 	CRITERION_DEBUG=1 cargo bench
 
+#.PHONY: cargo_expand
+#cargo_expand: - что-то не работает
+	# cargo expand # напечатает в консоль содержимое main.rs после того как все макросы обработаны (cargo install expand)
+
 .PHONY: rustup_update
 rustup_update:
 	rustup update
