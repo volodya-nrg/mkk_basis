@@ -122,7 +122,7 @@ impl Jwt {
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
     use rand::Rng;
     use std::assert_matches;

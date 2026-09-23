@@ -1,21 +1,35 @@
 pub mod handlers;
 pub mod middleware;
 
-use axum::routing::{delete, get, post};
-use axum::{Router, middleware as AxumMiddleware};
+use axum::{
+    Router,
+    extract::DefaultBodyLimit,
+    middleware as AxumMiddleware,
+    routing::{delete, get, post},
+};
+use axum_server::Handle;
 use axum_server::tls_rustls::RustlsConfig;
+use http::StatusCode;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::server::WebPkiClientVerifier;
 use rustls::{RootCertStore, ServerConfig};
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::TcpListener;
-use tower_http::cors::CorsLayer;
-use tower_http::services::{ServeDir, ServeFile};
+use tokio::signal;
+use tower_http::{
+    cors::CorsLayer,
+    limit::RequestBodyLimitLayer,
+    normalize_path::NormalizePathLayer,
+    services::{ServeDir, ServeFile},
+    timeout::TimeoutLayer,
+};
 
 use crate::adapter::email::EmailSender;
 use crate::usecase::UseCase;
+
 use handlers::{auth, etc, task_comments, tasks, teams, users};
 
 pub struct HTTPServer<T> {
@@ -25,11 +39,7 @@ pub struct HTTPServer<T> {
 }
 
 impl<T: EmailSender> HTTPServer<T> {
-    pub const fn new(
-        addr: String,
-        use_case: UseCase<T>,
-        tls_config: Option<RustlsConfig>,
-    ) -> Self {
+    pub const fn new(addr: String, use_case: UseCase<T>, tls_config: Option<RustlsConfig>) -> Self {
         Self {
             addr,
             use_case,
@@ -43,8 +53,18 @@ impl<T: EmailSender> HTTPServer<T> {
 
         match self.tls_config.clone() {
             Some(config) => {
+                let handle = Handle::new();
+                let shutdown_handle = handle.clone();
+                tokio::spawn(async move {
+                    shutdown_signal().await;
+                    // Указываем таймаут, чтобы не ждать зависшие соединения вечно.
+                    // None означает бесконечное ожидание.
+                    shutdown_handle.graceful_shutdown(Some(Duration::from_secs(10)));
+                });
+
                 log::debug!("https-server run on {}", addr);
-                axum_server::bind_rustls(addr, config) // тут внутри создается свой listener
+                axum_server::bind_rustls(addr, config)
+                    .handle(handle)
                     .serve(router.into_make_service())
                     .await
                     .map_err(|e| format!("failed to serve(https): {e}"))?;
@@ -55,6 +75,7 @@ impl<T: EmailSender> HTTPServer<T> {
                     .map_err(|e| format!("failed to create tcp listener: {e}"))?;
                 log::debug!("http-server run on {}", addr);
                 axum::serve(listener, router)
+                    .with_graceful_shutdown(shutdown_signal())
                     .await
                     .map_err(|e| format!("failed to serve(http): {e}"))?;
             }
@@ -63,22 +84,10 @@ impl<T: EmailSender> HTTPServer<T> {
         Ok(())
     }
     fn get_router(&self) -> Router {
-        /*
-        example:
-            let cors = CorsLayer::new()
-            .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
-            .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::DELETE])
-            .allow_credentials(true)
-            .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE]);
-        */
-        let cors = CorsLayer::new()
-            // .allow_origin(Any)
-            // .allow_methods(Any)
-            // .allow_headers(Any)
-            .allow_credentials(true); // нужно для куки
         let layer_auth =
-            axum::middleware::from_fn_with_state(self.use_case.clone(), middleware::auth::auth);
+            AxumMiddleware::from_fn_with_state(self.use_case.clone(), middleware::auth::auth);
         let public = Router::new()
+            //.route_service("/", ServeFile::new("../../web/index.html")) - это не вариант
             .route("/", get(etc::Handlers::index))
             .route("/health", get(etc::Handlers::health))
             .route("/register/confirm", get(auth::Handlers::register_confirm));
@@ -160,13 +169,40 @@ impl<T: EmailSender> HTTPServer<T> {
             .nest_service("/images", ServeDir::new("./web/images"))
             .nest_service("/robots.txt", ServeFile::new("./web/robots.txt"))
             .nest_service("/sitemap.xml", ServeFile::new("./web/sitemap.xml"));
+        /*
+        Router::new()
+            .route_service("/js", ServeDir::new("./web/js"))
+            .route_service("/css", ServeDir::new("./web/css"))
+            .route_service("/images", ServeDir::new("./web/images"))
+            .route_service("/robots.txt", ServeFile::new("./web/robots.txt"))
+            .route_service("/sitemap.xml", ServeFile::new("./web/sitemap.xml"));
+        */
+        /*
+        example:
+            let cors = CorsLayer::new()
+            .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
+            .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::DELETE])
+            .allow_credentials(true)
+            .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE]);
+        */
+        let cors = CorsLayer::new()
+            // .allow_origin(Any)
+            // .allow_methods(Any)
+            // .allow_headers(Any)
+            .allow_credentials(true); // нужно для куки
         Router::new()
             .merge(public)
             .merge(api)
             .merge(static_loc)
             .route_layer(AxumMiddleware::from_fn(middleware::err::err))
             .layer(cors)
-            // .layer(tower_http::limit::RequestBodyLimitLayer::new(20 * 1024 * 1024)) // 20MB лимит. Если будет больше, то обработка multipart сервером выдаст ошибку.
+            .layer(NormalizePathLayer::trim_trailing_slash())
+            .layer(DefaultBodyLimit::disable()) // надо именно выключить
+            .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024)) // 20MB лимит. Если будет больше, то обработка multipart сервером выдаст ошибку.
+            .layer(TimeoutLayer::with_status_code(
+                StatusCode::REQUEST_TIMEOUT,
+                Duration::from_secs(10),
+            ))
             .fallback(etc::Handlers::page404)
             .with_state(self.use_case.clone())
     }
@@ -215,4 +251,31 @@ fn convert_private_key_from_file(data: Vec<u8>) -> Result<PrivateKeyDer<'static>
     rustls_pemfile::private_key(&mut data.as_slice())
         .map_err(|e| format!("failed to parse data: {e}"))?
         .ok_or_else(|| "no private key found".to_string())
+}
+#[cfg(unix)]
+async fn wait_for_signal(kind: signal::unix::SignalKind) {
+    match signal::unix::signal(kind) {
+        Ok(mut stream) => {
+            stream.recv().await;
+        }
+        Err(e) => {
+            log::error!("Failed to install signal handler {kind:?}: {e}");
+            std::future::pending::<()>().await; // не завершаем работу ложно — просто ждем
+        }
+    }
+}
+
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        tokio::select! {
+            _ = wait_for_signal(signal::unix::SignalKind::interrupt()) => log::info!("Received SIGINT"),
+            _ = wait_for_signal(signal::unix::SignalKind::terminate()) => log::info!("Received SIGTERM"),
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        signal::ctrl_c().await.ok();
+        info!("Received Ctrl+C");
+    }
 }

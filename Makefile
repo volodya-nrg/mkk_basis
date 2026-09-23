@@ -28,6 +28,7 @@ run_server: build
 
 .PHONY: migration_up
 migration_up:
+	# cargo sqlx migrate add NAME -r --sequential
 	sqlx migrate run --database-url "${POSTGRES_DSN}"
 
 .PHONY: migration_down
@@ -67,19 +68,6 @@ gen_tls_certs:
 .PHONY: check_version_certs
 check_version_certs:
 	openssl x509 -in ./data/httpServer.crt -text -noout | grep "Version"
-
-.PHONY: test_db
-test_db: # запуск интеграционного теста
-	RUST_BACKTRACE=1 cargo test --test db -- --nocapture # --include-ignored; "RUST_BACKTRACE=1" - нормальная степень развернутости
-
-.PHONY: test_transport
-test_transport: # запуск интеграционного теста
-	# export RUST_MIN_STACK=8388608  # 8 МБ - по дефолту 2 МБ
-	RUST_BACKTRACE=1 cargo test --test transport -- --nocapture # --include-ignored
-
-.PHONY: test_units
-test_units: # запуск модульного теста(ов)
-	cargo test adapter::jwt
 
 .PHONY: nextest_db
 nextest_db:
