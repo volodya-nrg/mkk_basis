@@ -56,8 +56,9 @@ impl<T: EmailSender> HTTPServer<T> {
     pub async fn run(&self) -> Result<(), String> {
         let addr = SocketAddr::from_str(self.addr.as_str())
             .map_err(|e| format!("failed to create socket addr: {e}"))?;
-        let open_api = OpenApiRouter::with_openapi(MyApiDoc::openapi())
-            .merge(OpenApiRouter::from(self.get_router()));
+        let router0 = self.get_router();
+        let open_api =
+            OpenApiRouter::with_openapi(MyApiDoc::openapi()).merge(OpenApiRouter::from(router0));
         let (router, api) = open_api.split_for_parts();
         let app =
             router.merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api.clone()));
