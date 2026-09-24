@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
-use std::sync::Arc;
 use http::StatusCode;
 use reqwest::{Certificate, Identity, Response, multipart::Form};
+use std::sync::Arc;
 use std::time::Duration;
 
 use mkk_basis::adapter::email::EmailSender;
@@ -104,6 +104,32 @@ where
             let response = self
                 .client
                 .get(format!("{}/{}", self.addr, url_filepath))
+                .send()
+                .await?;
+            self.parse_response(response).await
+        }
+        .await;
+        cb(result);
+        self
+    }
+    pub async fn swagger_ui(&mut self, mut cb: impl FnMut(StatusCodeBodyError)) -> &mut Self {
+        let result = async {
+            let response = self
+                .client
+                .get(format!("{}/swagger-ui", self.addr))
+                .send()
+                .await?;
+            self.parse_response(response).await
+        }
+        .await;
+        cb(result);
+        self
+    }
+    pub async fn openapi(&mut self, mut cb: impl FnMut(StatusCodeBodyError)) -> &mut Self {
+        let result = async {
+            let response = self
+                .client
+                .get(format!("{}/api-docs/openapi.json", self.addr))
                 .send()
                 .await?;
             self.parse_response(response).await

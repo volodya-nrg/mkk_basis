@@ -7,12 +7,12 @@ use chrono::Utc;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
-use std::marker::PhantomData;
 use uuid::Uuid;
 
 use crate::adapter::{email::EmailSender, helpers};
 use crate::err_msg::ErrMsg;
 use crate::transport::http_server::handlers::{HandlerError, handler_err};
+use crate::transport::models::User;
 use crate::transport::{
     mapper,
     models::{
@@ -26,148 +26,205 @@ struct UploadErr {
     msg: String,
 }
 
-pub struct Handlers<ES> {
-    _marker_es: PhantomData<ES>,
+#[utoipa::path(
+    get,
+    path = "/api/v1/users",
+    request_body = RequestLimitOffset,
+    responses(
+        (status = 200, description = "Получение списка", body = UsersList),
+        (status = 400, description = "Некорректный запрос"),
+        (status = 500, description = "Внутренняя ошибка сервера"),
+    ),
+    tag = "users"
+)]
+pub async fn list<ES: EmailSender>(
+    Extension(_user): Extension<AuthUser>,
+    State(use_case): State<UseCase<ES>>,
+    Json(payload): Json<RequestLimitOffset>,
+) -> Response {
+    use_case
+        .users
+        .list(payload.limit, payload.offset)
+        .await
+        .map_or_else(
+            |e| handler_err!(e).into_response(),
+            |(items, total)| {
+                Json(UsersList {
+                    items: items.into_iter().map(mapper::user_uc_to_user_tr).collect(),
+                    total: total as u32,
+                })
+                .into_response()
+            },
+        )
 }
 
-impl<ES> Handlers<ES>
-where
-    ES: EmailSender,
-{
-    pub async fn list(
-        Extension(_user): Extension<AuthUser>,
-        State(use_case): State<UseCase<ES>>,
-        Json(payload): Json<RequestLimitOffset>,
-    ) -> Response {
-        use_case
-            .users
-            .list(payload.limit, payload.offset)
-            .await
-            .map_or_else(
-                |e| handler_err!(e).into_response(),
-                |(items, total)| {
-                    Json(UsersList {
-                        items: items.into_iter().map(mapper::user_uc_to_user_tr).collect(),
-                        total: total as u32,
-                    })
-                    .into_response()
-                },
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/{id}",
+    params(
+        ("id" = String, Path, description = "uuid"),
+    ),
+    responses(
+        (status = 200, description = "Получение пользователя", body = User),
+        (status = 400, description = "Некорректный запрос"),
+        (status = 500, description = "Внутренняя ошибка сервера"),
+    ),
+    tag = "users"
+)]
+pub async fn one<ES: EmailSender>(
+    Extension(_user): Extension<AuthUser>,
+    Path(item_id): Path<Uuid>,
+    State(use_case): State<UseCase<ES>>,
+) -> Response {
+    use_case.users.one(item_id).await.map_or_else(
+        |e| handler_err!(e).into_response(),
+        |v| Json(mapper::user_uc_to_user_tr(v)).into_response(),
+    )
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/users",
+    request_body = RequestUserCreate,
+    responses(
+        (status = 201, description = "Создание пользователя", body = User),
+        (status = 400, description = "Некорректный запрос", body = ResponseMsg),
+        (status = 500, description = "Внутренняя ошибка сервера"),
+    ),
+    tag = "users"
+)]
+pub async fn create<ES: EmailSender>(
+    Extension(_user): Extension<AuthUser>,
+    State(use_case): State<UseCase<ES>>,
+    multipart: Multipart,
+) -> Response {
+    let m = match multipart_to_map(multipart).await {
+        Ok(v) => v,
+        Err(e) => {
+            log::error!("failed to execute multipart (create user): {:?}", e);
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ResponseMsg {
+                    msg: ErrMsg::NotCorrectMultipartForm.to_string(),
+                }),
             )
-    }
-    pub async fn one(
-        Extension(_user): Extension<AuthUser>,
-        Path(item_id): Path<Uuid>,
-        State(use_case): State<UseCase<ES>>,
-    ) -> Response {
-        use_case.users.one(item_id).await.map_or_else(
-            |e| handler_err!(e).into_response(),
-            |v| Json(mapper::user_uc_to_user_tr(v)).into_response(),
-        )
-    }
-    pub async fn create(
-        Extension(_user): Extension<AuthUser>,
-        State(use_case): State<UseCase<ES>>,
-        multipart: Multipart,
-    ) -> Response {
-        let m = match multipart_to_map(multipart).await {
-            Ok(v) => v,
-            Err(e) => {
-                log::error!("failed to execute multipart (create user): {:?}", e);
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(ResponseMsg {
-                        msg: ErrMsg::NotCorrectMultipartForm.to_string(),
-                    }),
-                )
-                    .into_response();
-            }
-        };
-        let mut req_user = RequestUserCreate {
-            email: get_string_from_map(&m, "email"),
-            password: get_string_from_map(&m, "password"),
-            name: get_string_option_from_map(&m, "name"),
-            role: get_string_option_from_map(&m, "role"),
-            avatar: None,
-        };
-
-        if let Some(avatar_bytes) = m.get("avatar").cloned() {
-            match upload_file(avatar_bytes) {
-                Ok(v) => req_user.avatar = Some(v),
-                Err(e) => return (e.status_code, Json(ResponseMsg { msg: e.msg })).into_response(),
-            }
+                .into_response();
         }
+    };
+    let mut req_user = RequestUserCreate {
+        email: get_string_from_map(&m, "email"),
+        password: get_string_from_map(&m, "password"),
+        name: get_string_option_from_map(&m, "name"),
+        role: get_string_option_from_map(&m, "role"),
+        avatar: None,
+    };
 
-        let result = use_case
-            .users
-            .create(mapper::user_create_tr_to_user_create_uc(req_user))
-            .await;
-        let new_uuid = match result {
-            Ok(v) => v,
-            Err(e) => return handler_err!(e).into_response(),
-        };
-
-        use_case.users.one(new_uuid).await.map_or_else(
-            |e| handler_err!(e).into_response(),
-            |v| (StatusCode::CREATED, Json(mapper::user_uc_to_user_tr(v))).into_response(),
-        )
-    }
-    pub async fn update(
-        Extension(_user): Extension<AuthUser>,
-        Path(item_id): Path<Uuid>,
-        State(use_case): State<UseCase<ES>>,
-        multipart: Multipart,
-    ) -> Response {
-        let m = match multipart_to_map(multipart).await {
-            Ok(v) => v,
-            Err(e) => {
-                log::error!("failed to execute multipart (update user): {:?}", e);
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(ResponseMsg {
-                        msg: ErrMsg::NotCorrectMultipartForm.to_string(),
-                    }),
-                )
-                    .into_response();
-            }
-        };
-        let mut req_user = RequestUserUpdate {
-            email: get_string_option_from_map(&m, "email"),
-            password: get_string_option_from_map(&m, "password"),
-            name: get_string_option_from_map(&m, "name"),
-            role: get_string_option_from_map(&m, "role"),
-            avatar: None,
-            is_remove_avatar: get_string_from_map(&m, "is_remove_avatar").to_lowercase() == "true",
-        };
-
-        if let Some(avatar_bytes) = m.get("avatar").cloned() {
-            match upload_file(avatar_bytes) {
-                Ok(v) => req_user.avatar = Some(v),
-                Err(e) => return (e.status_code, Json(ResponseMsg { msg: e.msg })).into_response(),
-            }
+    if let Some(avatar_bytes) = m.get("avatar").cloned() {
+        match upload_file(avatar_bytes) {
+            Ok(v) => req_user.avatar = Some(v),
+            Err(e) => return (e.status_code, Json(ResponseMsg { msg: e.msg })).into_response(),
         }
+    }
 
-        let mut user_uc = mapper::user_tr_update_to_user_uc_update(req_user);
-        user_uc.user_id = item_id;
+    let result = use_case
+        .users
+        .create(mapper::user_create_tr_to_user_create_uc(req_user))
+        .await;
+    let new_uuid = match result {
+        Ok(v) => v,
+        Err(e) => return handler_err!(e).into_response(),
+    };
 
-        if let Err(e) = use_case.users.update(user_uc).await {
-            return handler_err!(e).into_response();
+    use_case.users.one(new_uuid).await.map_or_else(
+        |e| handler_err!(e).into_response(),
+        |v| (StatusCode::CREATED, Json(mapper::user_uc_to_user_tr(v))).into_response(),
+    )
+}
+
+#[utoipa::path(
+    patch,
+    path = "/api/v1/users/{id}",
+    params(
+        ("id" = String, Path, description = "uuid"),
+    ),
+    request_body = RequestUserUpdate,
+    responses(
+        (status = 200, description = "Обновление пользователя", body = User),
+        (status = 400, description = "Некорректный запрос", body = ResponseMsg),
+        (status = 500, description = "Внутренняя ошибка сервера"),
+    ),
+    tag = "users"
+)]
+pub async fn update<ES: EmailSender>(
+    Extension(_user): Extension<AuthUser>,
+    Path(item_id): Path<Uuid>,
+    State(use_case): State<UseCase<ES>>,
+    multipart: Multipart,
+) -> Response {
+    let m = match multipart_to_map(multipart).await {
+        Ok(v) => v,
+        Err(e) => {
+            log::error!("failed to execute multipart (update user): {:?}", e);
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ResponseMsg {
+                    msg: ErrMsg::NotCorrectMultipartForm.to_string(),
+                }),
+            )
+                .into_response();
         }
+    };
+    let mut req_user = RequestUserUpdate {
+        email: get_string_option_from_map(&m, "email"),
+        password: get_string_option_from_map(&m, "password"),
+        name: get_string_option_from_map(&m, "name"),
+        role: get_string_option_from_map(&m, "role"),
+        avatar: None,
+        is_remove_avatar: get_string_from_map(&m, "is_remove_avatar").to_lowercase() == "true",
+    };
 
-        use_case.users.one(item_id).await.map_or_else(
-            |e| handler_err!(e).into_response(),
-            |v| Json(mapper::user_uc_to_user_tr(v)).into_response(),
-        )
+    if let Some(avatar_bytes) = m.get("avatar").cloned() {
+        match upload_file(avatar_bytes) {
+            Ok(v) => req_user.avatar = Some(v),
+            Err(e) => return (e.status_code, Json(ResponseMsg { msg: e.msg })).into_response(),
+        }
     }
-    pub async fn delete(
-        Extension(_user): Extension<AuthUser>,
-        Path(item_id): Path<Uuid>,
-        State(use_case): State<UseCase<ES>>,
-    ) -> Response {
-        use_case.users.delete(item_id).await.map_or_else(
-            |e| handler_err!(e).into_response(),
-            |_| StatusCode::NO_CONTENT.into_response(),
-        )
+
+    let mut user_uc = mapper::user_tr_update_to_user_uc_update(req_user);
+    user_uc.user_id = item_id;
+
+    if let Err(e) = use_case.users.update(user_uc).await {
+        return handler_err!(e).into_response();
     }
+
+    use_case.users.one(item_id).await.map_or_else(
+        |e| handler_err!(e).into_response(),
+        |v| Json(mapper::user_uc_to_user_tr(v)).into_response(),
+    )
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/users/{id}",
+    params(
+        ("id" = String, Path, description = "uuid"),
+    ),
+    responses(
+        (status = 204, description = "Удаление пользователя"),
+        (status = 400, description = "Некорректный запрос"),
+        (status = 500, description = "Внутренняя ошибка сервера"),
+    ),
+    tag = "users"
+)]
+pub async fn delete<ES: EmailSender>(
+    Extension(_user): Extension<AuthUser>,
+    Path(item_id): Path<Uuid>,
+    State(use_case): State<UseCase<ES>>,
+) -> Response {
+    use_case.users.delete(item_id).await.map_or_else(
+        |e| handler_err!(e).into_response(),
+        |_| StatusCode::NO_CONTENT.into_response(),
+    )
 }
 
 async fn multipart_to_map(

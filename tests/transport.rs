@@ -69,6 +69,18 @@ async fn check_etc() {
         assert_eq!(StatusCode::OK, status_code);
         assert!(!body_str.is_empty());
     })
+    .await
+    .openapi(|result| {
+        let (status_code, body_str) = result.unwrap();
+        assert_eq!(StatusCode::OK, status_code);
+        assert!(!body_str.is_empty());
+    })
+    .await
+    .swagger_ui(|result| {
+        let (status_code, body_str) = result.unwrap();
+        assert_eq!(StatusCode::OK, status_code);
+        assert!(!body_str.is_empty());
+    })
     .await;
 }
 
@@ -254,10 +266,7 @@ async fn check_auth() {
     })
     .await;
 
-    sleep(Duration::from_secs(
-        consts::REFRESH_TOKEN_TTL_SEC + 1,
-    ))
-    .await;
+    sleep(Duration::from_secs(consts::REFRESH_TOKEN_TTL_SEC + 1)).await;
 
     cl.refresh_tokens(|result| {
         let (status_code, _body_str) = result.unwrap();

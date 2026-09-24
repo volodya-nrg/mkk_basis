@@ -26,11 +26,18 @@ use tower_http::{
     services::{ServeDir, ServeFile},
     timeout::TimeoutLayer,
 };
+use utoipa::OpenApi;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_swagger_ui::SwaggerUi;
 
 use crate::adapter::email::EmailSender;
 use crate::usecase::UseCase;
 
 use handlers::{auth, etc, task_comments, tasks, teams, users};
+
+#[derive(OpenApi)]
+#[openapi(info(description = "Описание сервиса MKK_BASIS"))]
+struct MyApiDoc;
 
 pub struct HTTPServer<T> {
     addr: String,
@@ -49,7 +56,11 @@ impl<T: EmailSender> HTTPServer<T> {
     pub async fn run(&self) -> Result<(), String> {
         let addr = SocketAddr::from_str(self.addr.as_str())
             .map_err(|e| format!("failed to create socket addr: {e}"))?;
-        let router = self.get_router();
+        let open_api = OpenApiRouter::with_openapi(MyApiDoc::openapi())
+            .merge(OpenApiRouter::from(self.get_router()));
+        let (router, api) = open_api.split_for_parts();
+        let app =
+            router.merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api.clone()));
 
         match self.tls_config.clone() {
             Some(config) => {
@@ -65,7 +76,7 @@ impl<T: EmailSender> HTTPServer<T> {
                 log::debug!("https-server run on {}", addr);
                 axum_server::bind_rustls(addr, config)
                     .handle(handle)
-                    .serve(router.into_make_service())
+                    .serve(app.into_make_service())
                     .await
                     .map_err(|e| format!("failed to serve(https): {e}"))?;
             }
@@ -74,7 +85,7 @@ impl<T: EmailSender> HTTPServer<T> {
                     .await
                     .map_err(|e| format!("failed to create tcp listener: {e}"))?;
                 log::debug!("http-server run on {}", addr);
-                axum::serve(listener, router)
+                axum::serve(listener, app)
                     .with_graceful_shutdown(shutdown_signal())
                     .await
                     .map_err(|e| format!("failed to serve(http): {e}"))?;
@@ -88,79 +99,76 @@ impl<T: EmailSender> HTTPServer<T> {
             AxumMiddleware::from_fn_with_state(self.use_case.clone(), middleware::auth::auth);
         let public = Router::new()
             //.route_service("/", ServeFile::new("../../web/index.html")) - это не вариант
-            .route("/", get(etc::Handlers::index))
-            .route("/health", get(etc::Handlers::health))
-            .route("/register/confirm", get(auth::Handlers::register_confirm));
+            .route("/", get(etc::index))
+            .route("/health", get(etc::health))
+            .route("/register/confirm", get(auth::register_confirm));
         let api = Router::new()
             // auth
-            .route("/api/v1/register", post(auth::Handlers::register))
-            .route("/api/v1/login", post(auth::Handlers::login))
+            .route("/api/v1/register", post(auth::register))
+            .route("/api/v1/login", post(auth::login))
             .route(
                 "/api/v1/logout",
-                post(auth::Handlers::logout).layer(layer_auth.clone()), // проверка на auth все равно стоит
+                post(auth::logout).layer(layer_auth.clone()), // проверка на auth все равно стоит
             )
-            .route(
-                "/api/v1/refresh_tokens",
-                post(auth::Handlers::refresh_tokens),
-            )
+            .route("/api/v1/refresh_tokens", post(auth::refresh_tokens))
             // teams
             .route(
                 "/api/v1/teams",
-                get(teams::Handlers::list)
-                    .post(teams::Handlers::create)
+                get(teams::list)
+                    .post(teams::create)
                     .layer(layer_auth.clone()),
             )
             .route(
                 "/api/v1/teams/{id}",
-                get(teams::Handlers::one)
-                    .put(teams::Handlers::update)
-                    .delete(teams::Handlers::delete)
+                get(teams::one)
+                    .put(teams::update)
+                    .delete(teams::delete)
                     .layer(layer_auth.clone()),
             )
             .route(
                 "/api/v1/teams/{id}/invite",
-                post(teams::Handlers::invite).layer(layer_auth.clone()),
+                post(teams::invite).layer(layer_auth.clone()),
             )
             // tasks
             .route(
                 "/api/v1/tasks",
-                get(tasks::Handlers::list)
-                    .post(tasks::Handlers::create)
+                get(tasks::list)
+                    .post(tasks::create)
                     .layer(layer_auth.clone()),
             )
             .route(
                 "/api/v1/tasks/{id}",
-                get(tasks::Handlers::one)
-                    .put(tasks::Handlers::update)
-                    .delete(tasks::Handlers::delete)
+                get(tasks::one)
+                    .put(tasks::update)
+                    .delete(tasks::delete)
                     .layer(layer_auth.clone()),
             )
             .route(
                 "/api/v1/tasks/{id}/history",
-                get(tasks::Handlers::history).layer(layer_auth.clone()),
+                get(tasks::history).layer(layer_auth.clone()),
             )
             .route(
                 "/api/v1/tasks/{id}/comments",
-                get(task_comments::Handlers::list)
-                    .post(task_comments::Handlers::create)
+                get(task_comments::list)
+                    .post(task_comments::create)
                     .layer(layer_auth.clone()),
             )
             .route(
                 "/api/v1/tasks/comment/{id}",
-                delete(task_comments::Handlers::delete).layer(layer_auth.clone()),
+                delete(task_comments::delete).layer(layer_auth.clone()),
             )
             // users
             .route(
                 "/api/v1/users",
-                get(users::Handlers::list)
-                    .post(users::Handlers::create)
+                get(users::list)
+                    .post(users::create)
                     .layer(layer_auth.clone()),
             )
             .route(
                 "/api/v1/users/{id}",
-                get(users::Handlers::one)
-                    .patch(users::Handlers::update)
-                    .delete(users::Handlers::delete)
+                get(users::one)
+                    .patch(users::update)
+                    .delete(users::delete)
                     .layer(layer_auth),
             );
         let static_loc = Router::new()
@@ -203,7 +211,7 @@ impl<T: EmailSender> HTTPServer<T> {
                 StatusCode::REQUEST_TIMEOUT,
                 Duration::from_secs(10),
             ))
-            .fallback(etc::Handlers::page404)
+            .fallback(etc::page404)
             .with_state(self.use_case.clone())
     }
 }
