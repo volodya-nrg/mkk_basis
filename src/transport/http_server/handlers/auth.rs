@@ -119,6 +119,7 @@ pub async fn login<ES: EmailSender>(
         (status = 400, description = "Некорректный запрос"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
+    security(("cookie_auth" = [])),
     tag = "auth"
 )]
 pub async fn logout<ES: EmailSender>(

@@ -23,6 +23,7 @@ use crate::usecase::UseCase;
         (status = 400, description = "Некорректный запрос"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
+    security(("cookie_auth" = [])),
     tag = "teams"
 )]
 pub async fn list<ES: EmailSender>(
@@ -57,6 +58,7 @@ pub async fn list<ES: EmailSender>(
         (status = 400, description = "Некорректный запрос"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
+    security(("cookie_auth" = [])),
     tag = "teams"
 )]
 pub async fn one<ES: EmailSender>(
@@ -79,6 +81,7 @@ pub async fn one<ES: EmailSender>(
         (status = 400, description = "Некорректный запрос"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
+    security(("cookie_auth" = [])),
     tag = "teams"
 )]
 pub async fn create<ES: EmailSender>(
@@ -112,6 +115,7 @@ pub async fn create<ES: EmailSender>(
         (status = 400, description = "Некорректный запрос"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
+    security(("cookie_auth" = [])),
     tag = "teams"
 )]
 pub async fn update<ES: EmailSender>(
@@ -144,6 +148,7 @@ pub async fn update<ES: EmailSender>(
         (status = 400, description = "Некорректный запрос"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
+    security(("cookie_auth" = [])),
     tag = "teams"
 )]
 pub async fn delete<ES: EmailSender>(
@@ -169,6 +174,7 @@ pub async fn delete<ES: EmailSender>(
         (status = 400, description = "Некорректный запрос", body = ResponseMsg),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
+    security(("cookie_auth" = [])),
     tag = "teams"
 )]
 pub async fn invite<ES: EmailSender>(

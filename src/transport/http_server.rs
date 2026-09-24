@@ -2,7 +2,6 @@ pub mod handlers;
 pub mod middleware;
 
 use axum::{
-    Router,
     extract::DefaultBodyLimit,
     middleware as AxumMiddleware,
     routing::{delete, get, post},
@@ -26,7 +25,8 @@ use tower_http::{
     services::{ServeDir, ServeFile},
     timeout::TimeoutLayer,
 };
-use utoipa::OpenApi;
+use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
+use utoipa::{Modify, OpenApi};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -35,8 +35,59 @@ use crate::usecase::UseCase;
 
 use handlers::{auth, etc, task_comments, tasks, teams, users};
 
+struct SecurityAddon;
+
+impl Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "cookie_auth",
+                SecurityScheme::ApiKey(ApiKey::Cookie(ApiKeyValue::new("access_token"))),
+            );
+        }
+    }
+}
+
 #[derive(OpenApi)]
-#[openapi(info(description = "Описание сервиса MKK_BASIS"))]
+#[openapi(info(description = "Сервис предоставляет api"))]
+#[openapi(
+    paths(
+        auth::register,
+        auth::register_confirm,
+        auth::login,
+        auth::logout,
+        auth::refresh_tokens,
+        //
+        etc::index,
+        etc::health,
+        etc::page404,
+        //
+        task_comments::list,
+        task_comments::create,
+        task_comments::delete,
+        //
+        tasks::list,
+        tasks::one,
+        tasks::create,
+        tasks::update,
+        tasks::delete,
+        tasks::history,
+        //
+        teams::list,
+        teams::one,
+        teams::create,
+        teams::update,
+        teams::delete,
+        teams::invite,
+        //
+        users::list,
+        users::one,
+        users::create,
+        users::update,
+        users::delete,
+    ),
+    modifiers(&SecurityAddon),
+)]
 struct MyApiDoc;
 
 pub struct HTTPServer<T> {
@@ -56,12 +107,10 @@ impl<T: EmailSender> HTTPServer<T> {
     pub async fn run(&self) -> Result<(), String> {
         let addr = SocketAddr::from_str(self.addr.as_str())
             .map_err(|e| format!("failed to create socket addr: {e}"))?;
-        let router0 = self.get_router();
-        let open_api =
-            OpenApiRouter::with_openapi(MyApiDoc::openapi()).merge(OpenApiRouter::from(router0));
-        let (router, api) = open_api.split_for_parts();
-        let app =
-            router.merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api.clone()));
+        let (router, api) = OpenApiRouter::with_openapi(MyApiDoc::openapi())
+            .merge(self.get_router())
+            .split_for_parts();
+        let app = router.merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api));
 
         match self.tls_config.clone() {
             Some(config) => {
@@ -95,15 +144,15 @@ impl<T: EmailSender> HTTPServer<T> {
 
         Ok(())
     }
-    fn get_router(&self) -> Router {
+    fn get_router(&self) -> OpenApiRouter {
         let layer_auth =
             AxumMiddleware::from_fn_with_state(self.use_case.clone(), middleware::auth::auth);
-        let public = Router::new()
+        let public = OpenApiRouter::new()
             //.route_service("/", ServeFile::new("../../web/index.html")) - это не вариант
             .route("/", get(etc::index))
             .route("/health", get(etc::health))
             .route("/register/confirm", get(auth::register_confirm));
-        let api = Router::new()
+        let api = OpenApiRouter::new()
             // auth
             .route("/api/v1/register", post(auth::register))
             .route("/api/v1/login", post(auth::login))
@@ -172,7 +221,7 @@ impl<T: EmailSender> HTTPServer<T> {
                     .delete(users::delete)
                     .layer(layer_auth),
             );
-        let static_loc = Router::new()
+        let static_loc = OpenApiRouter::new()
             .nest_service("/js", ServeDir::new("./web/js"))
             .nest_service("/css", ServeDir::new("./web/css"))
             .nest_service("/images", ServeDir::new("./web/images"))
@@ -199,7 +248,7 @@ impl<T: EmailSender> HTTPServer<T> {
             // .allow_methods(Any)
             // .allow_headers(Any)
             .allow_credentials(true); // нужно для куки
-        Router::new()
+        OpenApiRouter::new()
             .merge(public)
             .merge(api)
             .merge(static_loc)
