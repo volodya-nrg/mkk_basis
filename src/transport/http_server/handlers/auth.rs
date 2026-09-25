@@ -180,6 +180,8 @@ pub async fn refresh_tokens<ES: EmailSender>(
     (StatusCode::NO_CONTENT, updated_jar).into_response()
 }
 
+// В итоге ниже две ф-ии сделать так чтоб отдавали структуру Cookie. Path(Domain) при удалении надо
+// чтоб совпадали, иначе куки не удалятся.
 fn new_cookie_for_access(token: String, ttl: u64) -> Cookie<'static> {
     // Lax - менее строгая проверка, но хороший компрамис.
     // Кука может отправляется и с др. доменов (Telegram/почты/Google), но только для GET-запросов
