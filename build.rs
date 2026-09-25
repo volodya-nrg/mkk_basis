@@ -22,7 +22,7 @@ fn main() -> Result<(), std::io::Error> {
 
     Ok(())
 }
-fn query_param_attrs(path: &str) -> (&str, &'static str) {
+const fn query_param_attrs(path: &str) -> (&str, &'static str) {
     (
         path,
         "#[derive(utoipa::IntoParams)]\n#[into_params(parameter_in = Query)]",

@@ -36,7 +36,6 @@ struct UploadErr {
         (status = 400, description = "Некорректный запрос"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
-    security(("cookie_auth" = [])),
     tag = "users",
 )]
 pub async fn list<ES: EmailSender>(
@@ -46,7 +45,7 @@ pub async fn list<ES: EmailSender>(
 ) -> Response {
     use_case
         .users
-        .list(payload.limit, payload.offset)
+        .list(payload.limit.unwrap_or(0), payload.offset.unwrap_or(0))
         .await
         .map_or_else(
             |e| handler_err!(e).into_response(),
@@ -72,7 +71,6 @@ pub async fn list<ES: EmailSender>(
         (status = 400, description = "Некорректный запрос"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
-    security(("cookie_auth" = [])),
     tag = "users",
 )]
 pub async fn one<ES: EmailSender>(
@@ -96,7 +94,6 @@ pub async fn one<ES: EmailSender>(
         (status = 400, description = "Некорректный запрос", body = ResponseMsg),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
-    security(("cookie_auth" = [])),
     tag = "users",
 )]
 pub async fn create<ES: EmailSender>(
@@ -160,7 +157,6 @@ pub async fn create<ES: EmailSender>(
         (status = 400, description = "Некорректный запрос", body = ResponseMsg),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
-    security(("cookie_auth" = [])),
     tag = "users",
 )]
 pub async fn update<ES: EmailSender>(
@@ -223,7 +219,6 @@ pub async fn update<ES: EmailSender>(
         (status = 400, description = "Некорректный запрос"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
-    security(("cookie_auth" = [])),
     tag = "users",
 )]
 pub async fn delete<ES: EmailSender>(

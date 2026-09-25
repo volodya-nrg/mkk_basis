@@ -1,8 +1,8 @@
-use chrono::{Utc};
+use chrono::Utc;
 use jsonwebtoken::errors;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use std::time::Duration;
+use uuid::Uuid;
 
 pub const TYPE_ACCESS: &str = "access";
 pub const TYPE_REFRESH: &str = "refresh";

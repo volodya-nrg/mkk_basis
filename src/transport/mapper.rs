@@ -76,8 +76,8 @@ pub fn task_data_tr_to_task_data_uc(req: RequestTaskData) -> Result<TaskData, uu
         .transpose()?;
 
     Ok(TaskData {
-        limit: req.limit,
-        offset: req.offset,
+        limit: req.limit.unwrap_or(0),
+        offset: req.offset.unwrap_or(0),
         team_id: team_id_parsed,
         assignee_id: assignee_id_parsed,
         status: req.status,

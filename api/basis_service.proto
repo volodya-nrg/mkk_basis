@@ -65,15 +65,15 @@ message RequestLogin {
   string password = 2;
 }
 message RequestLimitOffset{
-  int32 limit = 1;
-  int32 offset = 2;
+  optional int32 limit = 1; // optional!
+  optional int32 offset = 2; // optional!
 }
 message RequestTaskComment{
   string msg = 1;
 }
 message RequestTaskData{
-  int32 limit = 1;
-  int32 offset = 2;
+  optional int32 limit = 1; // optional!
+  optional int32 offset = 2; // optional!
   optional string team_id = 3;
   optional string assignee_id = 4;
   optional string status = 5;

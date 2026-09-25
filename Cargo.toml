@@ -35,9 +35,10 @@ prost = "0.14"
 utoipa = { version = "6.0.0", features = ["axum_extras"] }
 utoipa-axum = "0.3.0"
 utoipa-swagger-ui = { version = "10.0.1", features = ["axum"] }
+time = "0.3.55"
 
 [dev-dependencies] # Зависимости для примеров, тестов и бенчмарков
-reqwest = { version = "0.13.4", features = ["form", "json", "multipart", "stream", "cookies"] }
+reqwest = { version = "0.13.4", features = ["form", "json", "multipart", "stream", "cookies", "query"] }
 testcontainers-modules = { version = "0.15.0", features = ["postgres"] }
 criterion = "0.8.2"
 

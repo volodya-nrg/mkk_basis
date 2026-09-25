@@ -603,6 +603,13 @@ async fn check_teams() {
         assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await;
+
+    // проверим что после выхода доступа нет
+    cl.teams_list(10, 0, |result| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
+    })
+    .await;
 }
 
 #[tokio::test]
@@ -634,8 +641,8 @@ async fn check_tasks() {
         password: req_register2.password.clone(),
     };
     let mut reg_list = RequestTaskData {
-        limit: -1,
-        offset: -1,
+        limit: Some(-1),
+        offset: Some(-1),
         ..Default::default()
     };
 
@@ -771,8 +778,8 @@ async fn check_tasks() {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::NO_CONTENT, status_code);
 
-        reg_list.limit = 100;
-        reg_list.offset = 0;
+        reg_list.limit = Some(100);
+        reg_list.offset = Some(0);
     })
     .await // ok
     .tasks_list(reg_list.clone(), |result| {
@@ -783,8 +790,8 @@ async fn check_tasks() {
         assert!(!resp.items.is_empty());
         assert!(resp.total > 0);
 
-        reg_list.limit = 0;
-        reg_list.offset = 0;
+        reg_list.limit = Some(0);
+        reg_list.offset = Some(0);
     })
     .await // ok
     .tasks_list(reg_list.clone(), |result| {
@@ -795,8 +802,8 @@ async fn check_tasks() {
         assert!(resp.items.is_empty());
         assert!(resp.total > 0);
 
-        reg_list.limit = -1;
-        reg_list.offset = -1;
+        reg_list.limit = Some(-1);
+        reg_list.offset = Some(-1);
         reg_list.team_id = Some(Uuid::new_v4().to_string());
     })
     .await // ok: применим фильтрацию
@@ -847,6 +854,23 @@ async fn check_tasks() {
 
         let resp: TaskHistories = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(3, resp.items.len());
+    })
+    .await
+    .logout(|result| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
+    })
+    .await;
+
+    // проверим что после выхода доступа нет
+    reg_list = RequestTaskData {
+        limit: Some(10),
+        offset: Some(0),
+        ..Default::default()
+    };
+    cl.tasks_list(reg_list, |result| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await;
 }
@@ -1024,13 +1048,25 @@ async fn check_task_comments() {
         assert_eq!(StatusCode::NO_CONTENT, status_code);
     })
     .await // ok
-    .task_comments_list(task_id, 100, 0, |result| {
+    .task_comments_list(task_id.clone(), 100, 0, |result| {
         let (status_code, body_str) = result.unwrap();
         assert_eq!(StatusCode::OK, status_code);
 
         let resp: TaskCommentsList = serde_json::from_str(body_str.as_str()).unwrap();
         assert_eq!(0, resp.items.len());
         assert_eq!(0, resp.total);
+    })
+    .await
+    .logout(|result| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
+    })
+    .await;
+
+    // проверим что после выхода доступа нет
+    cl.task_comments_list(task_id, 10, 0, |result| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await;
 }
@@ -1198,6 +1234,18 @@ async fn check_users() {
     .users_one(user_id, |result| {
         let (status_code, _body_str) = result.unwrap();
         assert_eq!(StatusCode::NOT_FOUND, status_code);
+    })
+    .await
+    .logout(|result| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::NO_CONTENT, status_code);
+    })
+    .await;
+
+    // проверим что после выхода доступа нет
+    cl.users_list(10, 0, |result| {
+        let (status_code, _body_str) = result.unwrap();
+        assert_eq!(StatusCode::UNAUTHORIZED, status_code);
     })
     .await;
 }

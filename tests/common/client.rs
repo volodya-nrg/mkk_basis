@@ -263,7 +263,10 @@ where
             let response = self
                 .client
                 .get(format!("{}/api/v1/teams", self.addr))
-                .json(&RequestLimitOffset { limit, offset })
+                .query(&RequestLimitOffset {
+                    limit: Some(limit),
+                    offset: Some(offset),
+                })
                 .send()
                 .await?;
             self.parse_response(response).await
@@ -377,7 +380,7 @@ where
             let response = self
                 .client
                 .get(format!("{}/api/v1/tasks", self.addr))
-                .json(&req)
+                .query(&req)
                 .send()
                 .await?;
             self.parse_response(response).await
@@ -492,7 +495,10 @@ where
             let response = self
                 .client
                 .get(format!("{}/api/v1/users", self.addr))
-                .json(&RequestLimitOffset { limit, offset })
+                .query(&RequestLimitOffset {
+                    limit: Some(limit),
+                    offset: Some(offset),
+                })
                 .send()
                 .await?;
             self.parse_response(response).await
@@ -625,7 +631,10 @@ where
             let response = self
                 .client
                 .get(format!("{}/api/v1/tasks/{}/comments", self.addr, task_id))
-                .json(&RequestLimitOffset { limit, offset })
+                .query(&RequestLimitOffset {
+                    limit: Some(limit),
+                    offset: Some(offset),
+                })
                 .send()
                 .await?;
             self.parse_response(response).await

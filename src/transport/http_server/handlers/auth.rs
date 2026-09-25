@@ -1,9 +1,9 @@
 use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
-use axum::response::{AppendHeaders, IntoResponse, Redirect, Response};
-use axum_extra::extract::cookie::CookieJar;
-use http::header;
+use axum::response::{IntoResponse, Redirect, Response};
+use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
+use time::Duration;
 
 use crate::adapter::email::EmailSender;
 use crate::consts;
@@ -90,6 +90,7 @@ pub async fn register_confirm<ES: EmailSender>(
     tag = "auth",
 )]
 pub async fn login<ES: EmailSender>(
+    jar: CookieJar,
     State(use_case): State<UseCase<ES>>,
     Json(payload): Json<RequestLogin>,
 ) -> impl IntoResponse {
@@ -103,15 +104,17 @@ pub async fn login<ES: EmailSender>(
             };
         }
     };
+    let updated_jar = jar
+        .add(new_cookie_for_access(
+            access_token,
+            consts::ACCESS_TOKEN_TTL_SEC,
+        ))
+        .add(new_cookie_for_refresh(
+            refresh_token,
+            consts::REFRESH_TOKEN_TTL_SEC,
+        ));
 
-    (
-        StatusCode::NO_CONTENT,
-        AppendHeaders([
-            (header::SET_COOKIE, new_cookie_for_access(access_token)),
-            (header::SET_COOKIE, new_cookie_for_refresh(refresh_token)),
-        ]),
-    )
-        .into_response()
+    (StatusCode::NO_CONTENT, updated_jar).into_response()
 }
 
 #[utoipa::path(
@@ -123,17 +126,16 @@ pub async fn login<ES: EmailSender>(
         (status = 400, description = "Некорректный запрос"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
-    security(("cookie_auth" = [])),
     tag = "auth",
 )]
 pub async fn logout<ES: EmailSender>(
-    jar: CookieJar,
+    jar: CookieJar, // CookieJar не хранит Path и Domain, нужно указывать явно из оригинального Set-Cookie заголовка
     State(_use_case): State<UseCase<ES>>,
 ) -> Response {
-    let jar = jar
-        .remove(consts::ACCESS_TOKEN_NAME)
-        .remove(consts::REFRESH_TOKEN_NAME);
-    (StatusCode::NO_CONTENT, jar).into_response()
+    let updated_jar = jar
+        .add(new_cookie_for_access(String::new(), 0))
+        .add(new_cookie_for_refresh(String::new(), 0));
+    (StatusCode::NO_CONTENT, updated_jar).into_response()
 }
 
 #[utoipa::path(
@@ -165,33 +167,38 @@ pub async fn refresh_tokens<ES: EmailSender>(
         Ok(v) => v,
         Err(e) => return handler_err!(e).into_response(),
     };
-    (
-        StatusCode::NO_CONTENT,
-        AppendHeaders([
-            (header::SET_COOKIE, new_cookie_for_access(access_token)),
-            (header::SET_COOKIE, new_cookie_for_refresh(refresh_token)),
-        ]),
-    )
-        .into_response()
+    let updated_jar = jar
+        .add(new_cookie_for_access(
+            access_token,
+            consts::ACCESS_TOKEN_TTL_SEC,
+        ))
+        .add(new_cookie_for_refresh(
+            refresh_token,
+            consts::REFRESH_TOKEN_TTL_SEC,
+        ));
+
+    (StatusCode::NO_CONTENT, updated_jar).into_response()
 }
 
-fn new_cookie_for_access(token: String) -> String {
+fn new_cookie_for_access(token: String, ttl: u64) -> Cookie<'static> {
     // Lax - менее строгая проверка, но хороший компрамис.
     // Кука может отправляется и с др. доменов (Telegram/почты/Google), но только для GET-запросов
     // (переходе по ссылке).
-    format!(
-        "{}={}; HttpOnly; Secure; SameSite=Lax; Path=/api; Max-Age={}",
-        consts::ACCESS_TOKEN_NAME,
-        token,
-        consts::ACCESS_TOKEN_TTL_SEC,
-    )
+    Cookie::build((consts::ACCESS_TOKEN_NAME, token))
+        .max_age(Duration::new(ttl as i64, 0))
+        .same_site(SameSite::Lax)
+        .secure(true)
+        .http_only(true)
+        .path("/api")
+        .build()
 }
-fn new_cookie_for_refresh(token: String) -> String {
+fn new_cookie_for_refresh(token: String, ttl: u64) -> Cookie<'static> {
     // Strict - строгая проверка. Данная куки шлется только с данного домена и ни какого с другого.
-    format!(
-        "{}={}; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/refresh_tokens; Max-Age={}",
-        consts::REFRESH_TOKEN_NAME,
-        token,
-        consts::REFRESH_TOKEN_TTL_SEC,
-    )
+    Cookie::build((consts::REFRESH_TOKEN_NAME, token))
+        .max_age(Duration::new(ttl as i64, 0))
+        .same_site(SameSite::Strict)
+        .secure(true)
+        .http_only(true)
+        .path("/api/v1/refresh_tokens")
+        .build()
 }

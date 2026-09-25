@@ -25,8 +25,7 @@ use tower_http::{
     services::{ServeDir, ServeFile},
     timeout::TimeoutLayer,
 };
-use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
-use utoipa::{Modify, OpenApi};
+use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -34,19 +33,6 @@ use crate::adapter::email::EmailSender;
 use crate::usecase::UseCase;
 
 use handlers::{auth, etc, task_comments, tasks, teams, users};
-
-struct SecurityAddon;
-
-impl Modify for SecurityAddon {
-    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
-        if let Some(components) = openapi.components.as_mut() {
-            components.add_security_scheme(
-                "cookie_auth",
-                SecurityScheme::ApiKey(ApiKey::Cookie(ApiKeyValue::new("access_token"))),
-            );
-        }
-    }
-}
 
 #[derive(OpenApi)]
 #[openapi(info(description = "Сервис предоставляет api"))]
@@ -86,7 +72,6 @@ impl Modify for SecurityAddon {
         users::update,
         users::delete,
     ),
-    modifiers(&SecurityAddon),
 )]
 struct MyApiDoc;
 

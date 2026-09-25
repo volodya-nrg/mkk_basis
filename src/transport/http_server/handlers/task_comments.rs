@@ -27,7 +27,6 @@ use crate::usecase::UseCase;
         (status = 400, description = "Некорректный запрос"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
-    security(("cookie_auth" = [])),
     tag = "task_comments",
 )]
 pub async fn list<ES: EmailSender>(
@@ -39,7 +38,7 @@ pub async fn list<ES: EmailSender>(
 ) -> Response {
     use_case
         .task_comments
-        .list(task_id, payload.limit, payload.offset)
+        .list(task_id, payload.limit.unwrap_or(0), payload.offset.unwrap_or(0))
         .await
         .map_or_else(
             |e| handler_err!(e).into_response(),
@@ -69,7 +68,6 @@ pub async fn list<ES: EmailSender>(
         (status = 400, description = "Некорректный запрос"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
-    security(("cookie_auth" = [])),
     tag = "task_comments",
 )]
 pub async fn create<ES: EmailSender>(
@@ -115,7 +113,6 @@ pub async fn create<ES: EmailSender>(
         (status = 400, description = "Некорректный запрос"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
-    security(("cookie_auth" = [])),
     tag = "task_comments",
 )]
 pub async fn delete<ES: EmailSender>(
