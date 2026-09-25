@@ -1,5 +1,5 @@
 use axum::extract::multipart::MultipartError;
-use axum::extract::{Multipart, Path, State};
+use axum::extract::{Multipart, Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
@@ -29,19 +29,19 @@ struct UploadErr {
 #[utoipa::path(
     get,
     path = "/api/v1/users",
-    request_body = RequestLimitOffset,
+    params(RequestLimitOffset),
     responses(
         (status = 200, description = "Получение списка", body = UsersList),
         (status = 400, description = "Некорректный запрос"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "users"
+    tag = "users",
 )]
 pub async fn list<ES: EmailSender>(
     Extension(_user): Extension<AuthUser>,
     State(use_case): State<UseCase<ES>>,
-    Json(payload): Json<RequestLimitOffset>,
+    Query(payload): Query<RequestLimitOffset>,
 ) -> Response {
     use_case
         .users
@@ -71,7 +71,7 @@ pub async fn list<ES: EmailSender>(
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "users"
+    tag = "users",
 )]
 pub async fn one<ES: EmailSender>(
     Extension(_user): Extension<AuthUser>,
@@ -94,7 +94,7 @@ pub async fn one<ES: EmailSender>(
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "users"
+    tag = "users",
 )]
 pub async fn create<ES: EmailSender>(
     Extension(_user): Extension<AuthUser>,
@@ -157,7 +157,7 @@ pub async fn create<ES: EmailSender>(
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "users"
+    tag = "users",
 )]
 pub async fn update<ES: EmailSender>(
     Extension(_user): Extension<AuthUser>,
@@ -219,7 +219,7 @@ pub async fn update<ES: EmailSender>(
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "users"
+    tag = "users",
 )]
 pub async fn delete<ES: EmailSender>(
     Extension(_user): Extension<AuthUser>,

@@ -9,7 +9,7 @@ use crate::adapter::email::EmailSender;
 use crate::consts;
 use crate::transport::{
     http_server::handlers::{HandlerError, handler_err},
-    models::{RequestLogin, RequestRegister, RequestRegisterConfirmQuery, ResponseUuid},
+    models::{RequestLogin, RequestRegister, RequestRegisterConfirm, ResponseUuid},
 };
 use crate::usecase::{UseCase, UseCaseError};
 
@@ -22,7 +22,7 @@ use crate::usecase::{UseCase, UseCaseError};
         (status = 400, description = "Некорректный запрос"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
-    tag = "auth"
+    tag = "auth",
 )]
 pub async fn register<ES: EmailSender>(
     State(mut use_case): State<UseCase<ES>>,
@@ -52,17 +52,17 @@ pub async fn register<ES: EmailSender>(
 #[utoipa::path(
     get,
     path = "/register/confirm",
-    params(RequestRegisterConfirmQuery),
+    params(RequestRegisterConfirm),
     responses(
         (status = 204, description = "Подтверждение е-мэйла на валидность и завершение регистрации"),
         (status = 400, description = "Некорректный запрос"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
-    tag = "auth"
+    tag = "auth",
 )]
 pub async fn register_confirm<ES: EmailSender>(
     State(use_case): State<UseCase<ES>>,
-    Query(req): Query<RequestRegisterConfirmQuery>,
+    Query(req): Query<RequestRegisterConfirm>,
 ) -> Response {
     use_case
         .auth
@@ -84,7 +84,7 @@ pub async fn register_confirm<ES: EmailSender>(
         (status = 400, description = "Некорректный запрос"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
-    tag = "auth"
+    tag = "auth",
 )]
 pub async fn login<ES: EmailSender>(
     State(use_case): State<UseCase<ES>>,
@@ -120,7 +120,7 @@ pub async fn login<ES: EmailSender>(
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "auth"
+    tag = "auth",
 )]
 pub async fn logout<ES: EmailSender>(
     jar: CookieJar,
@@ -141,7 +141,7 @@ pub async fn logout<ES: EmailSender>(
         (status = 401, description = "Не аутентифицирован"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
-    tag = "auth"
+    tag = "auth",
 )]
 pub async fn refresh_tokens<ES: EmailSender>(
     jar: CookieJar,

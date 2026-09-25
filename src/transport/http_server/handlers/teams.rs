@@ -1,5 +1,5 @@
-use axum::extract::Path;
 use axum::extract::State;
+use axum::extract::{Path, Query};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
@@ -17,19 +17,19 @@ use crate::usecase::UseCase;
 #[utoipa::path(
     get,
     path = "/api/v1/teams",
-    request_body = RequestLimitOffset,
+    params(RequestLimitOffset),
     responses(
         (status = 200, description = "Получение списка", body = TeamsList),
         (status = 400, description = "Некорректный запрос"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "teams"
+    tag = "teams",
 )]
 pub async fn list<ES: EmailSender>(
     Extension(_user): Extension<AuthUser>,
     State(use_case): State<UseCase<ES>>,
-    Json(payload): Json<RequestLimitOffset>,
+    Query(payload): Query<RequestLimitOffset>,
 ) -> Response {
     use_case
         .teams
@@ -59,7 +59,7 @@ pub async fn list<ES: EmailSender>(
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "teams"
+    tag = "teams",
 )]
 pub async fn one<ES: EmailSender>(
     Extension(_user): Extension<AuthUser>,
@@ -82,7 +82,7 @@ pub async fn one<ES: EmailSender>(
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "teams"
+    tag = "teams",
 )]
 pub async fn create<ES: EmailSender>(
     Extension(user): Extension<AuthUser>,
@@ -116,7 +116,7 @@ pub async fn create<ES: EmailSender>(
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "teams"
+    tag = "teams",
 )]
 pub async fn update<ES: EmailSender>(
     Extension(_user): Extension<AuthUser>,
@@ -149,7 +149,7 @@ pub async fn update<ES: EmailSender>(
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "teams"
+    tag = "teams",
 )]
 pub async fn delete<ES: EmailSender>(
     Extension(_user): Extension<AuthUser>,
@@ -175,7 +175,7 @@ pub async fn delete<ES: EmailSender>(
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "teams"
+    tag = "teams",
 )]
 pub async fn invite<ES: EmailSender>(
     Extension(user): Extension<AuthUser>,

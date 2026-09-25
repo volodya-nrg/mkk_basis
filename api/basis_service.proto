@@ -8,7 +8,7 @@ import "google/protobuf/wrappers.proto";
 // services
 service AuthService {
   rpc Register(RequestRegister) returns (ResponseUUID) {}
-  rpc RegisterConfirm(RequestRegisterConfirmQuery) returns (google.protobuf.Empty) {}
+  rpc RegisterConfirm(RequestRegisterConfirm) returns (google.protobuf.Empty) {}
   rpc Login(RequestLogin) returns (google.protobuf.Empty) {}
   rpc Logout(google.protobuf.Empty) returns (google.protobuf.Empty) {}
   rpc RefreshTokens(google.protobuf.Empty) returns (google.protobuf.Empty) {}
@@ -56,7 +56,7 @@ message RequestRegister {
   bool agreement = 4;
   bool privacy_policy = 5;
 }
-message RequestRegisterConfirmQuery {
+message RequestRegisterConfirm {
   string email = 1;
   string code = 2;
 }

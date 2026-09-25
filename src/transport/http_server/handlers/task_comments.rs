@@ -1,4 +1,4 @@
-use axum::extract::Path;
+use axum::extract::{Path, Query};
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -19,22 +19,22 @@ use crate::usecase::UseCase;
     path = "/api/v1/tasks/{id}/comments",
     params(
         ("id" = String, Path, description = "uuid"),
+        RequestLimitOffset,
     ),
-    request_body = RequestLimitOffset,
     responses(
         (status = 200, description = "Получение списка", body = TaskCommentsList),
         (status = 400, description = "Некорректный запрос"),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "task_comments"
+    tag = "task_comments",
 )]
 pub async fn list<ES: EmailSender>(
     // _user: AuthenticatedUser<ES>,
     Extension(_user): Extension<AuthUser>,
     Path(task_id): Path<Uuid>,
     State(use_case): State<UseCase<ES>>,
-    Json(payload): Json<RequestLimitOffset>,
+    Query(payload): Query<RequestLimitOffset>,
 ) -> Response {
     use_case
         .task_comments
@@ -68,7 +68,7 @@ pub async fn list<ES: EmailSender>(
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "task_comments"
+    tag = "task_comments",
 )]
 pub async fn create<ES: EmailSender>(
     Extension(user): Extension<AuthUser>,
@@ -113,7 +113,7 @@ pub async fn create<ES: EmailSender>(
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "task_comments"
+    tag = "task_comments",
 )]
 pub async fn delete<ES: EmailSender>(
     Extension(_user): Extension<AuthUser>,

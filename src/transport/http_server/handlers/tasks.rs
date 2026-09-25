@@ -1,3 +1,4 @@
+use axum::extract::Query;
 use axum::response::Response;
 use axum::{
     Extension, Json, extract::Path, extract::State, http::StatusCode, response::IntoResponse,
@@ -16,19 +17,19 @@ use crate::usecase::UseCase;
 #[utoipa::path(
     get,
     path = "/api/v1/tasks",
-    request_body = RequestTaskData,
+    params(RequestTaskData),
     responses(
         (status = 200, description = "Получение списка", body = TasksList),
         (status = 400, description = "Некорректный запрос", body = ResponseMsg),
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "tasks"
+    tag = "tasks",
 )]
 pub async fn list<ES: EmailSender>(
     Extension(_user): Extension<AuthUser>,
     State(use_case): State<UseCase<ES>>,
-    Json(payload): Json<RequestTaskData>,
+    Query(payload): Query<RequestTaskData>,
 ) -> Response {
     let request_task_data = match mapper::task_data_tr_to_task_data_uc(payload) {
         Ok(v) => v,
@@ -65,7 +66,7 @@ pub async fn list<ES: EmailSender>(
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "tasks"
+    tag = "tasks",
 )]
 pub async fn one<ES: EmailSender>(
     Extension(_user): Extension<AuthUser>,
@@ -88,7 +89,7 @@ pub async fn one<ES: EmailSender>(
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "tasks"
+    tag = "tasks",
 )]
 pub async fn create<ES: EmailSender>(
     Extension(user): Extension<AuthUser>,
@@ -129,7 +130,7 @@ pub async fn create<ES: EmailSender>(
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "tasks"
+    tag = "tasks",
 )]
 pub async fn update<ES: EmailSender>(
     Extension(user): Extension<AuthUser>,
@@ -172,7 +173,7 @@ pub async fn update<ES: EmailSender>(
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "tasks"
+    tag = "tasks",
 )]
 pub async fn delete<ES: EmailSender>(
     Extension(user): Extension<AuthUser>,
@@ -201,7 +202,7 @@ pub async fn delete<ES: EmailSender>(
         (status = 500, description = "Внутренняя ошибка сервера"),
     ),
     security(("cookie_auth" = [])),
-    tag = "tasks"
+    tag = "tasks",
 )]
 pub async fn history<ES: EmailSender>(
     Extension(_user): Extension<AuthUser>,
