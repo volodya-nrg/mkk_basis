@@ -17,6 +17,7 @@ use crate::usecase::UseCase;
 #[utoipa::path(
     get,
     path = "/api/v1/teams",
+    operation_id = "teams_list",
     params(RequestLimitOffset),
     responses(
         (status = 200, description = "Получение списка", body = TeamsList),
@@ -50,6 +51,7 @@ pub async fn list<ES: EmailSender>(
 #[utoipa::path(
     get,
     path = "/api/v1/teams/{id}",
+    operation_id = "teams_one",
     params(
         ("id" = String, Path, description = "uuid"),
     ),
@@ -75,6 +77,7 @@ pub async fn one<ES: EmailSender>(
 #[utoipa::path(
     post,
     path = "/api/v1/teams",
+    operation_id = "teams_create",
     request_body = RequestTeam,
     responses(
         (status = 201, description = "Создание команды", body = Team),
@@ -106,6 +109,7 @@ pub async fn create<ES: EmailSender>(
 #[utoipa::path(
     put,
     path = "/api/v1/teams/{id}",
+    operation_id = "teams_update",
     params(
         ("id" = String, Path, description = "uuid"),
     ),
@@ -140,6 +144,7 @@ pub async fn update<ES: EmailSender>(
 #[utoipa::path(
     delete,
     path = "/api/v1/teams/{id}",
+    operation_id = "teams_delete",
     params(
         ("id" = String, Path, description = "uuid"),
     ),
@@ -165,6 +170,7 @@ pub async fn delete<ES: EmailSender>(
 #[utoipa::path(
     post,
     path = "/api/v1/teams/{id}/invite",
+    operation_id = "teams_invite",
     params(
         ("id" = String, Path, description = "uuid"),
     ),

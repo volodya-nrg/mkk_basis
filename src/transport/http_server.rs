@@ -106,7 +106,7 @@ impl<T: EmailSender> HTTPServer<T> {
     }
     pub async fn run(&self) -> Result<(), String> {
         let addr = SocketAddr::from_str(self.addr.as_str())
-            .map_err(|e| format!("failed to create socket addr: {e}"))?;
+            .map_err(|e| format!("failed to create socket-addr: {e}"))?;
         let (router, api) = OpenApiRouter::with_openapi(MyApiDoc::openapi())
             .merge(self.get_router())
             .split_for_parts();

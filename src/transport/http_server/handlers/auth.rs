@@ -16,6 +16,7 @@ use crate::usecase::{UseCase, UseCaseError};
 #[utoipa::path(
     post,
     path = "/api/v1/register",
+    operation_id = "auth_register",
     request_body = RequestRegister,
     responses(
         (status = 200, description = "Пользователь зарегистрирован", body = ResponseUuid),
@@ -52,6 +53,7 @@ pub async fn register<ES: EmailSender>(
 #[utoipa::path(
     get,
     path = "/register/confirm",
+    operation_id = "auth_register_confirm",
     params(RequestRegisterConfirm),
     responses(
         (status = 204, description = "Подтверждение е-мэйла на валидность и завершение регистрации"),
@@ -77,6 +79,7 @@ pub async fn register_confirm<ES: EmailSender>(
 #[utoipa::path(
     post,
     path = "/api/v1/login",
+    operation_id = "auth_login",
     request_body = RequestLogin,
     responses(
         (status = 204, description = "Аутентификация в системе"),
@@ -114,6 +117,7 @@ pub async fn login<ES: EmailSender>(
 #[utoipa::path(
     post,
     path = "/api/v1/logout",
+    operation_id = "auth_logout",
     responses(
         (status = 204, description = "Выход из системы"),
         (status = 400, description = "Некорректный запрос"),
@@ -135,6 +139,7 @@ pub async fn logout<ES: EmailSender>(
 #[utoipa::path(
     post,
     path = "/api/v1/refresh_tokens",
+    operation_id = "auth_refresh_tokens",
     responses(
         (status = 204, description = "Обновление токенов"),
         (status = 400, description = "Некорректный запрос"),

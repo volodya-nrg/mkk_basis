@@ -17,6 +17,7 @@ use crate::usecase::UseCase;
 #[utoipa::path(
     get,
     path = "/api/v1/tasks/{id}/comments",
+    operation_id = "task_comments_list",
     params(
         ("id" = String, Path, description = "uuid"),
         RequestLimitOffset,
@@ -58,6 +59,7 @@ pub async fn list<ES: EmailSender>(
 #[utoipa::path(
     post,
     path = "/api/v1/tasks/{id}/comments",
+    operation_id = "task_comments_create",
     params(
         ("id" = String, Path, description = "uuid"),
     ),
@@ -104,6 +106,7 @@ pub async fn create<ES: EmailSender>(
 #[utoipa::path(
     delete,
     path = "/api/v1/tasks/comment/{id}",
+    operation_id = "task_comments_delete",
     params(
         ("id" = String, Path, description = "uuid"),
     ),

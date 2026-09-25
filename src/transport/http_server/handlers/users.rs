@@ -29,6 +29,7 @@ struct UploadErr {
 #[utoipa::path(
     get,
     path = "/api/v1/users",
+    operation_id = "users_list",
     params(RequestLimitOffset),
     responses(
         (status = 200, description = "Получение списка", body = UsersList),
@@ -62,6 +63,7 @@ pub async fn list<ES: EmailSender>(
 #[utoipa::path(
     get,
     path = "/api/v1/users/{id}",
+    operation_id = "users_one",
     params(
         ("id" = String, Path, description = "uuid"),
     ),
@@ -87,6 +89,7 @@ pub async fn one<ES: EmailSender>(
 #[utoipa::path(
     post,
     path = "/api/v1/users",
+    operation_id = "users_create",
     request_body = RequestUserCreate,
     responses(
         (status = 201, description = "Создание пользователя", body = User),
@@ -147,6 +150,7 @@ pub async fn create<ES: EmailSender>(
 #[utoipa::path(
     patch,
     path = "/api/v1/users/{id}",
+    operation_id = "users_update",
     params(
         ("id" = String, Path, description = "uuid"),
     ),
@@ -210,6 +214,7 @@ pub async fn update<ES: EmailSender>(
 #[utoipa::path(
     delete,
     path = "/api/v1/users/{id}",
+    operation_id = "users_delete",
     params(
         ("id" = String, Path, description = "uuid"),
     ),

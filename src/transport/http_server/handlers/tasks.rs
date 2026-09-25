@@ -18,6 +18,7 @@ use crate::usecase::UseCase;
     get,
     path = "/api/v1/tasks",
     params(RequestTaskData),
+    operation_id = "tasks_list",
     responses(
         (status = 200, description = "Получение списка", body = TasksList),
         (status = 400, description = "Некорректный запрос", body = ResponseMsg),
@@ -57,6 +58,7 @@ pub async fn list<ES: EmailSender>(
 #[utoipa::path(
     get,
     path = "/api/v1/tasks/{id}",
+    operation_id = "tasks_one",
     params(
         ("id" = String, Path, description = "uuid"),
     ),
@@ -82,6 +84,7 @@ pub async fn one<ES: EmailSender>(
 #[utoipa::path(
     post,
     path = "/api/v1/tasks",
+    operation_id = "tasks_create",
     request_body = RequestTask,
     responses(
         (status = 201, description = "Создание задачи", body = Task),
@@ -120,6 +123,7 @@ pub async fn create<ES: EmailSender>(
 #[utoipa::path(
     put,
     path = "/api/v1/tasks/{id}",
+    operation_id = "tasks_update",
     params(
         ("id" = String, Path, description = "uuid"),
     ),
@@ -164,6 +168,7 @@ pub async fn update<ES: EmailSender>(
 #[utoipa::path(
     delete,
     path = "/api/v1/tasks/{id}",
+    operation_id = "tasks_delete",
     params(
         ("id" = String, Path, description = "uuid"),
     ),
@@ -193,6 +198,7 @@ pub async fn delete<ES: EmailSender>(
 #[utoipa::path(
     get,
     path = "/api/v1/tasks/{id}/history",
+    operation_id = "tasks_history",
     params(
         ("id" = String, Path, description = "uuid"),
     ),

@@ -7,6 +7,7 @@ use crate::transport::models::ResponseMsg;
 #[utoipa::path(
     get,
     path = "/",
+    operation_id = "etc_index",
     responses(
         (status = 200, description = "Главная страница", body = String, content_type = "text/html")
     ),
@@ -19,6 +20,7 @@ pub async fn index() -> Html<&'static str> {
 #[utoipa::path(
     get,
     path = "/health",
+    operation_id = "etc_health",
     responses(
         (status = 200, description = "Проверка 'здоровья' сервиса", body = ResponseMsg)
     ),
@@ -33,6 +35,7 @@ pub async fn health() -> Json<ResponseMsg> {
 #[utoipa::path(
     get,
     path = "/404", // Или любой другой путь, на который она вешается
+    operation_id = "etc_page404",
     responses(
         (status = 404, description = "Страница не найдена", body = String, content_type = "text/html")
     ),
