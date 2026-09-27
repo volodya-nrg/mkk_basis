@@ -104,7 +104,7 @@ impl Users {
     pub async fn by_email(
         &self,
         executor: &mut PgConnection,
-        email: &str, // чтение, но не владение
+        email: &str,
     ) -> Result<User, RepositoryError> {
         let query = format!(
             "SELECT {} FROM {} WHERE email=$1",
