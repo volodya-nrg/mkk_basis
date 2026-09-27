@@ -7,7 +7,6 @@ use uuid::Uuid;
 pub const TYPE_ACCESS: &str = "access";
 pub const TYPE_REFRESH: &str = "refresh";
 
-// т.к. стоит thiserror::Error, то нет необходимости в fmt::Display. Так же генерит std::error::Error
 #[derive(Debug, thiserror::Error)]
 pub enum JWTError {
     #[error("token expired")]
@@ -43,7 +42,7 @@ pub struct RefreshClaims {
     pub token_type: String,
 }
 
-#[derive(Clone)] // из-за usecase Auth
+#[derive(Clone)] // clone из-за axum
 pub struct Jwt {
     private_key_bytes: Vec<u8>,
     access_expire_secs: u64,
@@ -122,7 +121,7 @@ impl Jwt {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use rand::Rng;
     use std::assert_matches;

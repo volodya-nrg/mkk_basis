@@ -4,10 +4,8 @@ use uuid::Uuid;
 pub struct User {
     pub user_id: Uuid,
     pub email: String,
-    #[allow(dead_code)]
     pub password: String,
     pub name: Option<String>,
-    #[allow(dead_code)]
     pub email_code: Option<String>,
     pub avatar: Option<String>,
     pub role: Option<String>,

@@ -1,4 +1,5 @@
 use http::StatusCode;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::{
@@ -9,7 +10,7 @@ use crate::{
         },
         transactor::Transactor,
     },
-    err_msg::ErrMsg,
+    app_errors::AppErr,
 };
 
 use super::{
@@ -17,18 +18,18 @@ use super::{
     models::{Team, TeamMember},
 };
 
-#[derive(Clone)] // из-за axum-state
+#[derive(Clone)] // clone из-за axum
 pub struct Teams {
-    transactor: Transactor,
-    teams_repo: DBTeams,
-    team_members_repo: DBTeamMembers,
+    transactor: Arc<Transactor>,
+    teams_repo: Arc<DBTeams>,
+    team_members_repo: Arc<DBTeamMembers>,
 }
 
 impl Teams {
     pub const fn new(
-        transactor: Transactor,
-        teams_repo: DBTeams,
-        team_members_repo: DBTeamMembers,
+        transactor: Arc<Transactor>,
+        teams_repo: Arc<DBTeams>,
+        team_members_repo: Arc<DBTeamMembers>,
     ) -> Self {
         Self {
             transactor,
@@ -86,17 +87,13 @@ impl Teams {
         {
             true
         } else {
-            self.teams_repo
-                .one(&mut db_conn, team_id)
-                .await?
-                .created_by
-                == profile_id
+            self.teams_repo.one(&mut db_conn, team_id).await?.created_by == profile_id
         };
 
         if !is_has_access {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::FORBIDDEN,
-                public_err: ErrMsg::NoRules.to_string(),
+                public_err: AppErr::NoRules.to_string(),
                 internal_err: None,
             });
         }

@@ -1,5 +1,6 @@
 use http::StatusCode;
 use std::fs;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::adapter::db::{
@@ -12,14 +13,14 @@ use super::{
     models::{User, UserCreate, UserUpdate},
 };
 
-#[derive(Clone)] // из-за axum-state
+#[derive(Clone)] // clone из-за axum
 pub struct Users {
-    transactor: Transactor,
-    users_repo: DBUsers,
+    transactor: Arc<Transactor>,
+    users_repo: Arc<DBUsers>,
 }
 
 impl Users {
-    pub const fn new(transactor: Transactor, users_repo: DBUsers) -> Self {
+    pub const fn new(transactor: Arc<Transactor>, users_repo: Arc<DBUsers>) -> Self {
         Self {
             transactor,
             users_repo,

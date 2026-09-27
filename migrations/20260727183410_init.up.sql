@@ -1,5 +1,5 @@
 CREATE TYPE task_status_enum AS ENUM ('start', 'todo', 'done', 'cancelled');
-CREATE TYPE user_role_enum AS ENUM ('admin', 'moder');
+CREATE TYPE user_role_enum AS ENUM ('admin');
 
 CREATE OR REPLACE FUNCTION update_updated_at_column()
     RETURNS TRIGGER AS

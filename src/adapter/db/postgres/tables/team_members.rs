@@ -1,11 +1,11 @@
-use sqlx::QueryBuilder;
+use sqlx::{PgConnection, QueryBuilder};
 use uuid::Uuid;
 
-use crate::adapter::db::{errors::RepositoryError, models::TeamMember, traits::NameAndFields};
+use crate::adapter::db::{errors::RepositoryError, internal::Table, models::TeamMember};
 
-#[derive(Clone, Default)]
+#[derive(Default)] // Default - требует линтер
 pub struct TeamMembers {}
-impl NameAndFields for TeamMembers {
+impl Table for TeamMembers {
     fn get_name(&self) -> &str {
         "team_members"
     }
@@ -17,10 +17,9 @@ impl TeamMembers {
     pub const fn new() -> Self {
         Self {}
     }
-    #[allow(dead_code)]
     pub async fn all(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
     ) -> Result<Vec<TeamMember>, RepositoryError> {
         QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
@@ -34,7 +33,7 @@ impl TeamMembers {
     }
     pub async fn one(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         team_id: Uuid,
         user_id: Uuid,
     ) -> Result<TeamMember, RepositoryError> {
@@ -50,13 +49,11 @@ impl TeamMembers {
             .fetch_optional(executor)
             .await
             .map_err(RepositoryError::FailedToQuery)?
-            .ok_or(RepositoryError::NotFoundRow {
-                value: format!("team_id: {team_id}, user_id: {user_id}"),
-            })
+            .ok_or(RepositoryError::NotFoundRow)
     }
     pub async fn create(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item: TeamMember,
     ) -> Result<(), RepositoryError> {
         let query = format!(
@@ -72,10 +69,9 @@ impl TeamMembers {
             .map_err(RepositoryError::FailedToInsert)
             .map(|_| ())
     }
-    #[allow(dead_code)]
     pub async fn delete(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         team_id: Uuid,
         user_id: Uuid,
     ) -> Result<(), RepositoryError> {

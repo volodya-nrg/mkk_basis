@@ -3,16 +3,16 @@ use axum::response::Response;
 use axum::{
     Extension, Json, extract::Path, extract::State, http::StatusCode, response::IntoResponse,
 };
+use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::adapter::email::EmailSender;
+use crate::transport::http_server::TransportState;
 use crate::transport::http_server::handlers::{HandlerError, handler_err};
 use crate::transport::models::{AuthUser, Task};
 use crate::transport::{
     mapper,
     models::{RequestTask, RequestTaskData, ResponseMsg, TaskHistories, TasksList},
 };
-use crate::usecase::UseCase;
 
 #[utoipa::path(
     get,
@@ -26,9 +26,9 @@ use crate::usecase::UseCase;
     ),
     tag = "tasks",
 )]
-pub async fn list<ES: EmailSender>(
+pub async fn list(
     Extension(_user): Extension<AuthUser>,
-    State(use_case): State<UseCase<ES>>,
+    State(state): State<Arc<TransportState>>,
     Query(payload): Query<RequestTaskData>,
 ) -> Response {
     let request_task_data = match mapper::task_data_tr_to_task_data_uc(payload) {
@@ -42,16 +42,21 @@ pub async fn list<ES: EmailSender>(
         }
     };
 
-    use_case.tasks.list(request_task_data).await.map_or_else(
-        |e| handler_err!(e).into_response(),
-        |(items, total)| {
-            Json(TasksList {
-                items: items.into_iter().map(mapper::task_uc_to_task_tr).collect(),
-                total: total as u32,
-            })
-            .into_response()
-        },
-    )
+    state
+        .use_case
+        .tasks
+        .list(request_task_data)
+        .await
+        .map_or_else(
+            |e| handler_err!(e).into_response(),
+            |(items, total)| {
+                Json(TasksList {
+                    items: items.into_iter().map(mapper::task_uc_to_task_tr).collect(),
+                    total: total as u32,
+                })
+                .into_response()
+            },
+        )
 }
 
 #[utoipa::path(
@@ -68,12 +73,12 @@ pub async fn list<ES: EmailSender>(
     ),
     tag = "tasks",
 )]
-pub async fn one<ES: EmailSender>(
+pub async fn one(
     Extension(_user): Extension<AuthUser>,
     Path(item_id): Path<Uuid>,
-    State(use_case): State<UseCase<ES>>,
+    State(state): State<Arc<TransportState>>,
 ) -> Response {
-    use_case.tasks.one(item_id).await.map_or_else(
+    state.use_case.tasks.one(item_id).await.map_or_else(
         |e| handler_err!(e).into_response(),
         |v| Json(mapper::task_uc_to_task_tr(v)).into_response(),
     )
@@ -91,9 +96,9 @@ pub async fn one<ES: EmailSender>(
     ),
     tag = "tasks",
 )]
-pub async fn create<ES: EmailSender>(
+pub async fn create(
     Extension(user): Extension<AuthUser>,
-    State(use_case): State<UseCase<ES>>,
+    State(state): State<Arc<TransportState>>,
     Json(payload): Json<RequestTask>,
 ) -> Response {
     let uc_task = match mapper::task_tr_to_task_uc(payload) {
@@ -106,12 +111,12 @@ pub async fn create<ES: EmailSender>(
                 .into_response();
         }
     };
-    let new_uuid = match use_case.tasks.create(uc_task, user.user_id).await {
+    let new_uuid = match state.use_case.tasks.create(uc_task, user.user_id).await {
         Ok(v) => v,
         Err(e) => return handler_err!(e).into_response(),
     };
 
-    use_case.tasks.one(new_uuid).await.map_or_else(
+    state.use_case.tasks.one(new_uuid).await.map_or_else(
         |e| handler_err!(e).into_response(),
         |v| (StatusCode::CREATED, Json(mapper::task_uc_to_task_tr(v))).into_response(),
     )
@@ -132,10 +137,10 @@ pub async fn create<ES: EmailSender>(
     ),
     tag = "tasks",
 )]
-pub async fn update<ES: EmailSender>(
+pub async fn update(
     Extension(user): Extension<AuthUser>,
-    State(use_case): State<UseCase<ES>>,
     Path(task_id): Path<Uuid>,
+    State(state): State<Arc<TransportState>>,
     Json(payload): Json<RequestTask>,
 ) -> Response {
     let mut uc_task = match mapper::task_tr_to_task_uc(payload) {
@@ -151,11 +156,11 @@ pub async fn update<ES: EmailSender>(
 
     uc_task.task_id = task_id;
 
-    if let Err(e) = use_case.tasks.update(uc_task, user.user_id).await {
+    if let Err(e) = state.use_case.tasks.update(uc_task, user.user_id).await {
         return handler_err!(e).into_response();
     };
 
-    use_case.tasks.one(task_id).await.map_or_else(
+    state.use_case.tasks.one(task_id).await.map_or_else(
         |e| handler_err!(e).into_response(),
         |v| Json(mapper::task_uc_to_task_tr(v)).into_response(),
     )
@@ -175,12 +180,13 @@ pub async fn update<ES: EmailSender>(
     ),
     tag = "tasks",
 )]
-pub async fn delete<ES: EmailSender>(
+pub async fn delete(
     Extension(user): Extension<AuthUser>,
     Path(item_id): Path<Uuid>,
-    State(use_case): State<UseCase<ES>>,
+    State(state): State<Arc<TransportState>>,
 ) -> Response {
-    use_case
+    state
+        .use_case
         .tasks
         .delete(item_id, user.user_id)
         .await
@@ -204,12 +210,12 @@ pub async fn delete<ES: EmailSender>(
     ),
     tag = "tasks",
 )]
-pub async fn history<ES: EmailSender>(
+pub async fn history(
     Extension(_user): Extension<AuthUser>,
-    State(use_case): State<UseCase<ES>>,
     Path(task_id): Path<Uuid>,
+    State(state): State<Arc<TransportState>>,
 ) -> Response {
-    use_case.tasks.get_history(task_id).await.map_or_else(
+    state.use_case.tasks.get_history(task_id).await.map_or_else(
         |e| handler_err!(e).into_response(),
         |v| {
             Json(TaskHistories {

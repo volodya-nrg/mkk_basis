@@ -1,4 +1,5 @@
 use http::StatusCode;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::adapter::db::{
@@ -11,27 +12,27 @@ use crate::adapter::db::{
         transactor::Transactor,
     },
 };
-use crate::err_msg::ErrMsg;
+use crate::app_errors::AppErr;
 
 use super::{
     UseCaseError, mapper,
     models::{Task, TaskData, TaskHistory},
 };
 
-#[derive(Clone)] // из-за axum-state
+#[derive(Clone)] // clone из-за axum
 pub struct Tasks {
-    transactor: Transactor,
-    tasks_repo: DBTasks,
-    task_histories_repo: DBTaskHistories,
-    team_members_repo: DBTeamMembers,
+    transactor: Arc<Transactor>,
+    tasks_repo: Arc<DBTasks>,
+    task_histories_repo: Arc<DBTaskHistories>,
+    team_members_repo: Arc<DBTeamMembers>,
 }
 
 impl Tasks {
     pub const fn new(
-        transactor: Transactor,
-        tasks_repo: DBTasks,
-        task_histories_repo: DBTaskHistories,
-        team_members_repo: DBTeamMembers,
+        transactor: Arc<Transactor>,
+        tasks_repo: Arc<DBTasks>,
+        task_histories_repo: Arc<DBTaskHistories>,
+        team_members_repo: Arc<DBTeamMembers>,
     ) -> Self {
         Self {
             transactor,
@@ -94,7 +95,7 @@ impl Tasks {
         // обновить задачу может только член команды
         self.check_access(task.team_id, user_id).await?;
 
-        let task_id = task.task_id; // copy-semantic
+        let task_id = task.task_id;
         let _ = self
             .transactor
             .in_transaction(async |tx| {
@@ -168,9 +169,9 @@ impl Tasks {
             .one(&mut db_conn, team_id, user_id)
             .await
             .map_err(|e| match e {
-                RepositoryError::NotFoundRow { value: _ } => UseCaseError::Transport {
+                RepositoryError::NotFoundRow => UseCaseError::Transport {
                     status_code: StatusCode::FORBIDDEN,
-                    public_err: ErrMsg::NoAccessTeamMemberOnly.to_string(),
+                    public_err: AppErr::NoAccessTeamMemberOnly.to_string(),
                     internal_err: None,
                 },
                 other => UseCaseError::Common(other.to_string()),

@@ -4,12 +4,11 @@ use sqlx::{AssertSqlSafe, PgConnection, Pool, Postgres};
 // thiserror тут не нужен, т.к. берутся непосредственно их данные
 #[derive(Debug)]
 pub enum TransactionError<E> {
-    Database(sqlx::Error), // Database(#[from] sqlx::Error),
+    Database(sqlx::Error), // Database(#[from] sqlx::Error), (тут требует thiserror)
     Operation(E),
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
 pub enum IsolationLevel {
     ReadUncommitted,
     ReadCommitted, // default
@@ -29,7 +28,6 @@ impl IsolationLevel {
     }
 }
 
-#[derive(Clone)]
 pub struct Transactor {
     pool: Pool<Postgres>,
     level: IsolationLevel,
@@ -48,6 +46,7 @@ impl Transactor {
             .begin_with(AssertSqlSafe(format!("BEGIN{}", self.level.as_sql())))
             .await
             .map_err(TransactionError::Database)?;
+        // let level = self.show_level(tx.as_mut()).await.unwrap();
         let result = f(&mut *tx).await.map_err(TransactionError::Operation)?;
 
         tx.commit().await.map_err(TransactionError::Database)?;
@@ -56,5 +55,12 @@ impl Transactor {
     }
     pub async fn conn(&self) -> Result<PoolConnection<Postgres>, sqlx::Error> {
         self.pool.acquire().await
+    }
+    #[allow(dead_code)]
+    async fn show_level(&self, tx: &mut PgConnection) -> Result<String, sqlx::Error> {
+        let level: (String,) = sqlx::query_as("SHOW transaction_isolation")
+            .fetch_one(tx)
+            .await?;
+        Ok(level.0)
     }
 }

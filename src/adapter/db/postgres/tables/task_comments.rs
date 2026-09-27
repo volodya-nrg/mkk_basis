@@ -1,15 +1,15 @@
-use sqlx::{AssertSqlSafe, QueryBuilder, Row};
+use sqlx::{AssertSqlSafe, PgConnection, QueryBuilder, Row};
 use uuid::Uuid;
 
 use crate::adapter::db::{
     errors::RepositoryError,
+    internal::Table,
     models::{List, TaskComment},
-    traits::NameAndFields,
 };
 
-#[derive(Clone, Default)] // Clone из-за axum-state, linter nребует Default
+#[derive(Default)] // Default - требует линтер
 pub struct TaskComments {}
-impl NameAndFields for TaskComments {
+impl Table for TaskComments {
     fn get_name(&self) -> &str {
         "task_comments"
     }
@@ -30,29 +30,11 @@ impl TaskComments {
     }
     pub async fn list(
         &self,
-        executor: &mut sqlx::PgConnection, // везде стоит это, Executor не подходит, тк нужно executor иногда использовать несколько раз
+        executor: &mut PgConnection, // везде стоит это, Executor не подходит, тк нужно executor иногда использовать несколько раз
         task_id: Uuid,
         limit: i32,
         offset: i32,
     ) -> Result<List<TaskComment>, RepositoryError> {
-        /*
-            fn main() {
-                let mut a = 5;
-                unsafe {
-                    let r1: &mut i32 = &mut a; // первая мутабельная ссылка
-                    let ptr: *mut i32 = r1 as *mut i32; // мутабельный указатель
-                    let r2: &mut i32 = ptr.as_mut().unwrap(); // указатель во вторую ссылку
-                    inc(r1);
-                    inc(r2);
-                }
-                println!("{a}"); // 7
-            }
-
-            fn inc(a: &mut i32) {
-                *a = *a + 1;
-            }
-        */
-
         let mut query_common = format!(
             "SELECT {} FROM {}",
             self.get_fields().join(","),
@@ -113,7 +95,7 @@ impl TaskComments {
     }
     pub async fn one(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item_id: Uuid,
     ) -> Result<TaskComment, RepositoryError> {
         let query = format!(
@@ -127,11 +109,11 @@ impl TaskComments {
             .fetch_optional(executor)
             .await
             .map_err(RepositoryError::FailedToQuery)?
-            .ok_or(RepositoryError::NotFoundRow { value: item_id.to_string() })
+            .ok_or(RepositoryError::NotFoundRow)
     }
     pub async fn create(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item: TaskComment,
     ) -> Result<Uuid, RepositoryError> {
         let query = format!(
@@ -149,10 +131,9 @@ impl TaskComments {
             .try_get(0)
             .map_err(RepositoryError::Common)
     }
-    #[allow(dead_code)]
     pub async fn update(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item: TaskComment,
     ) -> Result<(), RepositoryError> {
         let query = format!(
@@ -180,7 +161,7 @@ impl TaskComments {
     }
     pub async fn delete(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item_id: Uuid,
     ) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE task_comment_id=$1", self.get_name());
@@ -200,3 +181,22 @@ impl TaskComments {
             })
     }
 }
+
+/*
+    пример как два раза получить мутабильную ссылку
+    fn main() {
+        let mut a = 5;
+        unsafe {
+            let r1: &mut i32 = &mut a; // первая мутабельная ссылка
+            let ptr: *mut i32 = r1 as *mut i32; // мутабельный указатель
+            let r2: &mut i32 = ptr.as_mut().unwrap(); // указатель во вторую ссылку
+            inc(r1);
+            inc(r2);
+        }
+        println!("{a}"); // 7
+    }
+
+    fn inc(a: &mut i32) {
+        *a = *a + 1;
+    }
+*/

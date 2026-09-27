@@ -29,7 +29,6 @@ use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::adapter::email::EmailSender;
 use crate::usecase::UseCase;
 
 use handlers::{auth, etc, task_comments, tasks, teams, users};
@@ -75,14 +74,20 @@ use handlers::{auth, etc, task_comments, tasks, teams, users};
 )]
 struct MyApiDoc;
 
-pub struct HTTPServer<T> {
+// TransportState. State-ом нельзя называть, т.к. внутри используется другой State
+#[derive(Clone)]
+pub struct TransportState {
+    pub use_case: UseCase,
+}
+
+pub struct HTTPServer {
     addr: String,
-    use_case: UseCase<T>,
+    use_case: UseCase,
     tls_config: Option<RustlsConfig>,
 }
 
-impl<T: EmailSender> HTTPServer<T> {
-    pub const fn new(addr: String, use_case: UseCase<T>, tls_config: Option<RustlsConfig>) -> Self {
+impl HTTPServer {
+    pub const fn new(addr: String, use_case: UseCase, tls_config: Option<RustlsConfig>) -> Self {
         Self {
             addr,
             use_case,
@@ -130,11 +135,14 @@ impl<T: EmailSender> HTTPServer<T> {
         Ok(())
     }
     fn get_router(&self) -> OpenApiRouter {
+        let state = TransportState {
+            use_case: self.use_case.clone(),
+        };
+        let arc_state = Arc::new(state);
         let layer_auth =
-            AxumMiddleware::from_fn_with_state(self.use_case.clone(), middleware::auth::auth);
+            AxumMiddleware::from_fn_with_state(arc_state.clone(), middleware::auth::auth);
         let public = OpenApiRouter::new()
-            //.route_service("/", ServeFile::new("../../web/index.html")) - это не вариант
-            .route("/", get(etc::index))
+            .route("/", get(etc::index)) // .route_service("/", ServeFile::new("../../web/index.html")) - это не вариант
             .route("/health", get(etc::health))
             .route("/register/confirm", get(auth::register_confirm));
         let api = OpenApiRouter::new()
@@ -212,26 +220,11 @@ impl<T: EmailSender> HTTPServer<T> {
             .nest_service("/images", ServeDir::new("./web/images"))
             .nest_service("/robots.txt", ServeFile::new("./web/robots.txt"))
             .nest_service("/sitemap.xml", ServeFile::new("./web/sitemap.xml"));
-        /*
-        Router::new()
-            .route_service("/js", ServeDir::new("./web/js"))
-            .route_service("/css", ServeDir::new("./web/css"))
-            .route_service("/images", ServeDir::new("./web/images"))
-            .route_service("/robots.txt", ServeFile::new("./web/robots.txt"))
-            .route_service("/sitemap.xml", ServeFile::new("./web/sitemap.xml"));
-        */
-        /*
-        example:
-            let cors = CorsLayer::new()
-            .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
-            .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::DELETE])
-            .allow_credentials(true)
-            .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE]);
-        */
+
         let cors = CorsLayer::new()
-            // .allow_origin(Any)
-            // .allow_methods(Any)
-            // .allow_headers(Any)
+            // .allow_origin(Any) // "http://localhost:3000".parse::<HeaderValue>().unwrap()
+            // .allow_methods(Any) // [Method::GET, Method::POST, Method::PATCH, Method::DELETE]
+            // .allow_headers(Any) // [AUTHORIZATION, ACCEPT, CONTENT_TYPE]
             .allow_credentials(true); // нужно для куки
         OpenApiRouter::new()
             .merge(public)
@@ -247,7 +240,7 @@ impl<T: EmailSender> HTTPServer<T> {
                 Duration::from_secs(10),
             ))
             .fallback(etc::page404)
-            .with_state(self.use_case.clone())
+            .with_state(arc_state)
     }
 }
 

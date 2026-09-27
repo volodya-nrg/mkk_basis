@@ -8,68 +8,63 @@ pub mod tasks;
 pub mod teams;
 pub mod users;
 
-use crate::adapter::db::postgres::transactor::TransactionError;
 use crate::adapter::{
-    db::{errors::RepositoryError, postgres::Postgres, postgres::transactor::Transactor},
+    db::{
+        errors::RepositoryError,
+        postgres::{Postgres, transactor::TransactionError},
+    },
     email::EmailSender,
     jwt::JWTError,
     jwt::Jwt as JWTService,
 };
-use crate::err_msg::ErrMsg;
+use crate::app_errors::AppErr;
 use http::StatusCode;
 use std::sync::Arc;
 
-#[derive(Clone)] // из-за axum-state
-pub struct UseCase<T> {
-    pub auth: auth::Auth<T>,
+#[derive(Clone)] // clone из-за axum
+pub struct UseCase {
+    pub auth: auth::Auth,
     pub teams: teams::Teams,
     pub tasks: tasks::Tasks,
     pub task_comments: task_comments::TaskComments,
     pub users: users::Users,
 }
 
-impl<T: EmailSender> UseCase<T> {
+impl UseCase {
     pub fn new(
         addr: String,
-        db: Postgres,
+        db: Arc<Postgres>,
         jwt_service: JWTService,
-        email_sender: Arc<T>,
-        transactor: Transactor,
+        email_sender: Arc<dyn EmailSender>,
     ) -> Self {
         Self {
             auth: auth::Auth::new(
                 addr,
                 jwt_service,
                 email_sender,
-                transactor.clone(),
+                db.transactor.clone(),
                 db.tbl_users.clone(),
             ),
             teams: teams::Teams::new(
-                transactor.clone(),
-                db.tbl_teams,
+                db.transactor.clone(),
+                db.tbl_teams.clone(),
                 db.tbl_team_members.clone(),
             ),
             tasks: tasks::Tasks::new(
-                transactor.clone(),
-                db.tbl_tasks,
-                db.tbl_task_histories,
-                db.tbl_team_members,
+                db.transactor.clone(),
+                db.tbl_tasks.clone(),
+                db.tbl_task_histories.clone(),
+                db.tbl_team_members.clone(),
             ),
             task_comments: task_comments::TaskComments::new(
-                transactor.clone(),
-                db.tbl_task_comments,
+                db.transactor.clone(),
+                db.tbl_task_comments.clone(),
             ),
-            users: users::Users::new(transactor, db.tbl_users),
+            users: users::Users::new(db.transactor.clone(), db.tbl_users.clone()),
         }
     }
 }
 
-// unsafe impl<T: EmailSender> Send for UseCase<T> {} // вся ответственность лежит на разработчике и надо сделать самостоятельно средства синхронизации
-
-// ------
-
-// тут thiserror не нужен, т.к. конвертация в строку ни где не происходит, а берутся их значения
-#[derive(Debug)]
 pub enum UseCaseError {
     Common(String),
     Transport {
@@ -95,9 +90,9 @@ enum PurchaseError {
 impl From<RepositoryError> for UseCaseError {
     fn from(e: RepositoryError) -> Self {
         match e {
-            RepositoryError::NotFoundRow { value: _ } => Self::Transport {
+            RepositoryError::NotFoundRow => Self::Transport {
                 status_code: StatusCode::NOT_FOUND,
-                public_err: ErrMsg::NotFoundItem.to_string(),
+                public_err: AppErr::NotFoundItem.to_string(),
                 internal_err: None,
             },
             other => Self::Common(other.to_string()),

@@ -3,16 +3,16 @@ use axum::extract::{Path, Query};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::adapter::email::EmailSender;
+use crate::transport::http_server::TransportState;
 use crate::transport::http_server::handlers::{HandlerError, handler_err};
 use crate::transport::models::{AuthUser, ResponseMsg, Team};
 use crate::transport::{
     mapper,
     models::{RequestLimitOffset, RequestTeam, RequestTeamInvite, TeamsList},
 };
-use crate::usecase::UseCase;
 
 #[utoipa::path(
     get,
@@ -26,12 +26,13 @@ use crate::usecase::UseCase;
     ),
     tag = "teams",
 )]
-pub async fn list<ES: EmailSender>(
+pub async fn list(
     Extension(_user): Extension<AuthUser>,
-    State(use_case): State<UseCase<ES>>,
+    State(state): State<Arc<TransportState>>,
     Query(payload): Query<RequestLimitOffset>,
 ) -> Response {
-    use_case
+    state
+        .use_case
         .teams
         .list(payload.limit.unwrap_or(0), payload.offset.unwrap_or(0))
         .await
@@ -61,12 +62,12 @@ pub async fn list<ES: EmailSender>(
     ),
     tag = "teams",
 )]
-pub async fn one<ES: EmailSender>(
+pub async fn one(
     Extension(_user): Extension<AuthUser>,
     Path(item_id): Path<Uuid>,
-    State(use_case): State<UseCase<ES>>,
+    State(state): State<Arc<TransportState>>,
 ) -> Response {
-    use_case.teams.one(item_id).await.map_or_else(
+    state.use_case.teams.one(item_id).await.map_or_else(
         |e| handler_err!(e).into_response(),
         |v| Json(mapper::team_uc_to_team_tr(v)).into_response(),
     )
@@ -84,20 +85,20 @@ pub async fn one<ES: EmailSender>(
     ),
     tag = "teams",
 )]
-pub async fn create<ES: EmailSender>(
+pub async fn create(
     Extension(user): Extension<AuthUser>,
-    State(use_case): State<UseCase<ES>>,
+    State(state): State<Arc<TransportState>>,
     Json(payload): Json<RequestTeam>,
 ) -> Response {
     let mut team_uc = mapper::team_tr_to_team_uc(payload);
     team_uc.created_by = user.user_id; // зададим id профиля
 
-    let new_uuid = match use_case.teams.create(team_uc).await {
+    let new_uuid = match state.use_case.teams.create(team_uc).await {
         Ok(v) => v,
         Err(e) => return handler_err!(e).into_response(),
     };
 
-    use_case.teams.one(new_uuid).await.map_or_else(
+    state.use_case.teams.one(new_uuid).await.map_or_else(
         |e| handler_err!(e).into_response(),
         |v| (StatusCode::CREATED, Json(mapper::team_uc_to_team_tr(v))).into_response(),
     )
@@ -118,20 +119,20 @@ pub async fn create<ES: EmailSender>(
     ),
     tag = "teams",
 )]
-pub async fn update<ES: EmailSender>(
+pub async fn update(
     Extension(_user): Extension<AuthUser>,
-    State(use_case): State<UseCase<ES>>,
     Path(item_id): Path<Uuid>,
+    State(state): State<Arc<TransportState>>,
     Json(payload): Json<RequestTeam>,
 ) -> Response {
     let mut uc_team = mapper::team_tr_to_team_uc(payload);
     uc_team.team_id = item_id;
 
-    if let Err(e) = use_case.teams.update(uc_team).await {
+    if let Err(e) = state.use_case.teams.update(uc_team).await {
         return handler_err!(e).into_response();
     };
 
-    use_case.teams.one(item_id).await.map_or_else(
+    state.use_case.teams.one(item_id).await.map_or_else(
         |e| handler_err!(e).into_response(),
         |v| Json(mapper::team_uc_to_team_tr(v)).into_response(),
     )
@@ -151,12 +152,12 @@ pub async fn update<ES: EmailSender>(
     ),
     tag = "teams",
 )]
-pub async fn delete<ES: EmailSender>(
+pub async fn delete(
     Extension(_user): Extension<AuthUser>,
     Path(item_id): Path<Uuid>,
-    State(use_case): State<UseCase<ES>>,
+    State(state): State<Arc<TransportState>>,
 ) -> Response {
-    use_case.teams.delete(item_id).await.map_or_else(
+    state.use_case.teams.delete(item_id).await.map_or_else(
         |e| handler_err!(e).into_response(),
         |_| StatusCode::NO_CONTENT.into_response(),
     )
@@ -177,10 +178,10 @@ pub async fn delete<ES: EmailSender>(
     ),
     tag = "teams",
 )]
-pub async fn invite<ES: EmailSender>(
+pub async fn invite(
     Extension(user): Extension<AuthUser>,
-    State(use_case): State<UseCase<ES>>,
     Path(team_id): Path<Uuid>,
+    State(state): State<Arc<TransportState>>,
     Json(payload): Json<RequestTeamInvite>,
 ) -> Response {
     let user_id = match Uuid::parse_str(payload.user_id.as_str()) {
@@ -194,7 +195,8 @@ pub async fn invite<ES: EmailSender>(
         }
     };
 
-    use_case
+    state
+        .use_case
         .teams
         .invite(user.user_id, user.role, team_id, user_id)
         .await

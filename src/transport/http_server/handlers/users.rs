@@ -7,10 +7,12 @@ use chrono::Utc;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
+use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::adapter::{email::EmailSender, helpers};
-use crate::err_msg::ErrMsg;
+use crate::adapter::helpers;
+use crate::app_errors::AppErr;
+use crate::transport::http_server::TransportState;
 use crate::transport::http_server::handlers::{HandlerError, handler_err};
 use crate::transport::models::User;
 use crate::transport::{
@@ -19,7 +21,6 @@ use crate::transport::{
         AuthUser, RequestLimitOffset, RequestUserCreate, RequestUserUpdate, ResponseMsg, UsersList,
     },
 };
-use crate::usecase::UseCase;
 
 struct UploadErr {
     status_code: StatusCode,
@@ -38,12 +39,13 @@ struct UploadErr {
     ),
     tag = "users",
 )]
-pub async fn list<ES: EmailSender>(
+pub async fn list(
     Extension(_user): Extension<AuthUser>,
-    State(use_case): State<UseCase<ES>>,
+    State(state): State<Arc<TransportState>>,
     Query(payload): Query<RequestLimitOffset>,
 ) -> Response {
-    use_case
+    state
+        .use_case
         .users
         .list(payload.limit.unwrap_or(0), payload.offset.unwrap_or(0))
         .await
@@ -73,12 +75,12 @@ pub async fn list<ES: EmailSender>(
     ),
     tag = "users",
 )]
-pub async fn one<ES: EmailSender>(
+pub async fn one(
     Extension(_user): Extension<AuthUser>,
     Path(item_id): Path<Uuid>,
-    State(use_case): State<UseCase<ES>>,
+    State(state): State<Arc<TransportState>>,
 ) -> Response {
-    use_case.users.one(item_id).await.map_or_else(
+    state.use_case.users.one(item_id).await.map_or_else(
         |e| handler_err!(e).into_response(),
         |v| Json(mapper::user_uc_to_user_tr(v)).into_response(),
     )
@@ -96,9 +98,9 @@ pub async fn one<ES: EmailSender>(
     ),
     tag = "users",
 )]
-pub async fn create<ES: EmailSender>(
+pub async fn create(
     Extension(_user): Extension<AuthUser>,
-    State(use_case): State<UseCase<ES>>,
+    State(state): State<Arc<TransportState>>,
     multipart: Multipart,
 ) -> Response {
     let m = match multipart_to_map(multipart).await {
@@ -108,7 +110,7 @@ pub async fn create<ES: EmailSender>(
             return (
                 StatusCode::BAD_REQUEST,
                 Json(ResponseMsg {
-                    msg: ErrMsg::NotCorrectMultipartForm.to_string(),
+                    msg: AppErr::NotCorrectMultipartForm.to_string(),
                 }),
             )
                 .into_response();
@@ -129,7 +131,8 @@ pub async fn create<ES: EmailSender>(
         }
     }
 
-    let result = use_case
+    let result = state
+        .use_case
         .users
         .create(mapper::user_create_tr_to_user_create_uc(req_user))
         .await;
@@ -138,7 +141,7 @@ pub async fn create<ES: EmailSender>(
         Err(e) => return handler_err!(e).into_response(),
     };
 
-    use_case.users.one(new_uuid).await.map_or_else(
+    state.use_case.users.one(new_uuid).await.map_or_else(
         |e| handler_err!(e).into_response(),
         |v| (StatusCode::CREATED, Json(mapper::user_uc_to_user_tr(v))).into_response(),
     )
@@ -159,10 +162,10 @@ pub async fn create<ES: EmailSender>(
     ),
     tag = "users",
 )]
-pub async fn update<ES: EmailSender>(
+pub async fn update(
     Extension(_user): Extension<AuthUser>,
     Path(item_id): Path<Uuid>,
-    State(use_case): State<UseCase<ES>>,
+    State(state): State<Arc<TransportState>>,
     multipart: Multipart,
 ) -> Response {
     let m = match multipart_to_map(multipart).await {
@@ -172,7 +175,7 @@ pub async fn update<ES: EmailSender>(
             return (
                 StatusCode::BAD_REQUEST,
                 Json(ResponseMsg {
-                    msg: ErrMsg::NotCorrectMultipartForm.to_string(),
+                    msg: AppErr::NotCorrectMultipartForm.to_string(),
                 }),
             )
                 .into_response();
@@ -197,11 +200,11 @@ pub async fn update<ES: EmailSender>(
     let mut user_uc = mapper::user_tr_update_to_user_uc_update(req_user);
     user_uc.user_id = item_id;
 
-    if let Err(e) = use_case.users.update(user_uc).await {
+    if let Err(e) = state.use_case.users.update(user_uc).await {
         return handler_err!(e).into_response();
     }
 
-    use_case.users.one(item_id).await.map_or_else(
+    state.use_case.users.one(item_id).await.map_or_else(
         |e| handler_err!(e).into_response(),
         |v| Json(mapper::user_uc_to_user_tr(v)).into_response(),
     )
@@ -221,12 +224,12 @@ pub async fn update<ES: EmailSender>(
     ),
     tag = "users",
 )]
-pub async fn delete<ES: EmailSender>(
+pub async fn delete(
     Extension(_user): Extension<AuthUser>,
     Path(item_id): Path<Uuid>,
-    State(use_case): State<UseCase<ES>>,
+    State(state): State<Arc<TransportState>>,
 ) -> Response {
-    use_case.users.delete(item_id).await.map_or_else(
+    state.use_case.users.delete(item_id).await.map_or_else(
         |e| handler_err!(e).into_response(),
         |_| StatusCode::NO_CONTENT.into_response(),
     )
@@ -272,7 +275,7 @@ fn upload_file(file_data: Vec<u8>) -> Result<String, UploadErr> {
             .first()
             .ok_or_else(|| UploadErr {
                 status_code: StatusCode::BAD_REQUEST,
-                msg: ErrMsg::UndefinedTypeImage.to_string(),
+                msg: AppErr::UndefinedTypeImage.to_string(),
             })?;
         let new_filename = format!(
             "{}_{}.{}",
@@ -296,7 +299,7 @@ fn upload_file(file_data: Vec<u8>) -> Result<String, UploadErr> {
             log::error!("failed to write file-data: {}", e);
             UploadErr {
                 status_code: StatusCode::BAD_REQUEST,
-                msg: ErrMsg::BadFileData.to_string(),
+                msg: AppErr::BadFileData.to_string(),
             }
         })?;
 

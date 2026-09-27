@@ -14,28 +14,28 @@ use crate::{
         jwt::{JWTError, Jwt as JWTService, TYPE_REFRESH},
     },
     consts,
-    err_msg::ErrMsg,
+    app_errors::AppErr,
 };
 
 use super::{UseCaseError, helpers};
 
-#[derive(Clone)] // из-за axum-state
-pub struct Auth<T> {
+// Используется "dyn EmailSender", потому что может приходить как mock-а, так и структура для prod-а.
+#[derive(Clone)] // clone из-за axum
+pub struct Auth {
     addr: String,
-    email_sender: Arc<T>,
-    transactor: Transactor,
-    users_repo: DBUsers,
-
-    pub jwt_service: JWTService, // публичен для экстрактора или middleware
+    email_sender: Arc<dyn EmailSender>,
+    transactor: Arc<Transactor>,
+    users_repo: Arc<DBUsers>,
+    pub jwt_service: JWTService, // публичен для экстрактора или middleware. Передаем его по значению, поэтому Arc не нужен.
 }
 
-impl<T: EmailSender> Auth<T> {
+impl Auth {
     pub const fn new(
         addr: String,
         jwt_service: JWTService,
-        email_sender: Arc<T>,
-        transactor: Transactor,
-        users_repo: DBUsers,
+        email_sender: Arc<dyn EmailSender>,
+        transactor: Arc<Transactor>,
+        users_repo: Arc<DBUsers>,
     ) -> Self {
         Self {
             addr,
@@ -46,7 +46,7 @@ impl<T: EmailSender> Auth<T> {
         }
     }
     pub async fn register(
-        &mut self,
+        &self,
         email: &str,
         password: &str,
         password_confirm: &str,
@@ -56,35 +56,35 @@ impl<T: EmailSender> Auth<T> {
         if !HelpersService::is_valid_email(email) {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::EmailNotCorrect.to_string(),
+                public_err: AppErr::EmailNotCorrect.to_string(),
                 internal_err: Some(format!("user send bad email ({})", email)),
             });
         }
         if password.chars().count() < consts::MIN_PASSWORD_LEN {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::PasswordIsShort.to_string(),
+                public_err: AppErr::PasswordIsShort.to_string(),
                 internal_err: Default::default(),
             });
         }
         if password != password_confirm {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::PasswordsNotEquals.to_string(),
+                public_err: AppErr::PasswordsNotEquals.to_string(),
                 internal_err: Default::default(),
             });
         }
         if !agreement {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::NeedAcceptAgreement.to_string(),
+                public_err: AppErr::NeedAcceptAgreement.to_string(),
                 internal_err: Default::default(),
             });
         }
         if !privacy_policy {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::NeedAcceptPrivacyPolicy.to_string(),
+                public_err: AppErr::NeedAcceptPrivacyPolicy.to_string(),
                 internal_err: Default::default(),
             });
         }
@@ -118,9 +118,6 @@ impl<T: EmailSender> Auth<T> {
                     .send(email, email_subject.as_str(), email_message.as_str())
                     .map_err(|e| UseCaseError::Common(format!("failed to send email: {e}")))?;
 
-                // сохраним тут код для теста
-                self.email_sender.save_code(email, code.as_str());
-
                 Ok(new_uuid)
             })
             .await?)
@@ -133,21 +130,21 @@ impl<T: EmailSender> Auth<T> {
         if email.is_empty() {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::EmailNotBeEmpty.to_string(),
+                public_err: AppErr::EmailNotBeEmpty.to_string(),
                 internal_err: None,
             });
         }
         if actual_code.is_empty() {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::VerifyCodeNotBeEmpty.to_string(),
+                public_err: AppErr::VerifyCodeNotBeEmpty.to_string(),
                 internal_err: None,
             });
         }
         if !HelpersService::is_valid_email(email) {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::EmailNotCorrect.to_string(),
+                public_err: AppErr::EmailNotCorrect.to_string(),
                 internal_err: None,
             });
         }
@@ -156,14 +153,14 @@ impl<T: EmailSender> Auth<T> {
         let mut user_db = self.users_repo.by_email(&mut db_conn, email).await?;
         let expected_code = user_db.email_code.ok_or_else(|| UseCaseError::Transport {
             status_code: StatusCode::BAD_REQUEST,
-            public_err: ErrMsg::EmailAlreadyConfirm.to_string(),
+            public_err: AppErr::EmailAlreadyConfirm.to_string(),
             internal_err: None,
         })?;
 
         if expected_code != *actual_code {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::NotCorrectVerifyEmailCode.to_string(),
+                public_err: AppErr::NotCorrectVerifyEmailCode.to_string(),
                 internal_err: None,
             });
         }
@@ -180,14 +177,14 @@ impl<T: EmailSender> Auth<T> {
         if !HelpersService::is_valid_email(email) {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::EmailNotCorrect.to_string(),
+                public_err: AppErr::EmailNotCorrect.to_string(),
                 internal_err: Some(format!("user send bad email ({})", email)),
             });
         }
         if password.chars().count() < consts::MIN_PASSWORD_LEN {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::PasswordIsShort.to_string(),
+                public_err: AppErr::PasswordIsShort.to_string(),
                 internal_err: None,
             });
         }
@@ -199,7 +196,7 @@ impl<T: EmailSender> Auth<T> {
             .await
             .map_err(|e| {
                 // ! если пользователь не найден, то нужно перенаправлять его на страницу регистрации - тут исключение
-                if matches!(e, RepositoryError::NotFoundRow { value: _ }) {
+                if matches!(e, RepositoryError::NotFoundRow) {
                     return UseCaseError::UserNotExists;
                 }
                 UseCaseError::Common(e.to_string())
@@ -208,7 +205,7 @@ impl<T: EmailSender> Auth<T> {
         if user_db.email_code.is_some() {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::VerifyYourEmail.to_string(),
+                public_err: AppErr::VerifyYourEmail.to_string(),
                 internal_err: None,
             });
         }
@@ -219,7 +216,7 @@ impl<T: EmailSender> Auth<T> {
         if !password_is_eq {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::LoginOrPasswordNotCorrect.to_string(),
+                public_err: AppErr::LoginOrPasswordNotCorrect.to_string(),
                 internal_err: None,
             });
         }
@@ -238,19 +235,19 @@ impl<T: EmailSender> Auth<T> {
             .map_err(|e| match e {
                 JWTError::ExpiredToken => UseCaseError::Transport {
                     status_code: StatusCode::BAD_REQUEST,
-                    public_err: ErrMsg::TokenExpired.to_string(),
+                    public_err: AppErr::TokenExpired.to_string(),
                     internal_err: None,
                 },
                 _ => UseCaseError::Transport {
                     status_code: StatusCode::BAD_REQUEST,
-                    public_err: ErrMsg::TokenNotValid.to_string(),
+                    public_err: AppErr::TokenNotValid.to_string(),
                     internal_err: None,
                 },
             })?;
         if claims.token_type != TYPE_REFRESH {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
-                public_err: ErrMsg::TokenIsNotRefresh.to_string(),
+                public_err: AppErr::TokenIsNotRefresh.to_string(),
                 internal_err: None,
             });
         }

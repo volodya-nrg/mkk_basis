@@ -9,7 +9,7 @@ use axum::Json;
 use axum::response::{IntoResponse, Response};
 use http::StatusCode;
 
-use crate::err_msg::ErrMsg;
+use crate::app_errors::AppErr;
 use crate::transport::models::ResponseMsg;
 use crate::usecase::UseCaseError;
 
@@ -50,7 +50,7 @@ impl IntoResponse for HandlerError {
                 }
             }
             UseCaseError::UserNotExists => {
-                public_error_result = ErrMsg::NotFoundUser.to_string();
+                public_error_result = AppErr::NotFoundUser.to_string();
                 status_code_result = StatusCode::NOT_FOUND;
             }
         }

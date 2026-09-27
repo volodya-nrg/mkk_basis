@@ -1,15 +1,15 @@
-use sqlx::{QueryBuilder, Row};
+use sqlx::{PgConnection, QueryBuilder, Row};
 use uuid::Uuid;
 
 use crate::adapter::db::{
     errors::RepositoryError,
+    internal::Table,
     models::{List, TaskHistory},
-    traits::NameAndFields,
 };
 
-#[derive(Clone, Default)]
+#[derive(Default)] // Default - требует линтер
 pub struct TaskHistories {}
-impl NameAndFields for TaskHistories {
+impl Table for TaskHistories {
     fn get_name(&self) -> &str {
         "task_histories"
     }
@@ -21,10 +21,9 @@ impl TaskHistories {
     pub const fn new() -> Self {
         Self {}
     }
-    #[allow(dead_code)]
     pub async fn list(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         limit: i32,
         offset: i32,
     ) -> Result<List<TaskHistory>, RepositoryError> {
@@ -58,10 +57,9 @@ impl TaskHistories {
 
         Ok(List(items, total))
     }
-    #[allow(dead_code)]
     pub async fn one(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item_id: Uuid,
     ) -> Result<TaskHistory, RepositoryError> {
         let query = format!(
@@ -75,11 +73,11 @@ impl TaskHistories {
             .fetch_optional(executor)
             .await
             .map_err(RepositoryError::FailedToQuery)?
-            .ok_or(RepositoryError::NotFoundRow { value: item_id.to_string() })
+            .ok_or(RepositoryError::NotFoundRow)
     }
     pub async fn by_task_id(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         task_id: Uuid,
     ) -> Result<Vec<TaskHistory>, RepositoryError> {
         QueryBuilder::new(format!(
@@ -95,7 +93,7 @@ impl TaskHistories {
     }
     pub async fn create(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item: TaskHistory,
     ) -> Result<Uuid, RepositoryError> {
         let query = format!(
@@ -113,10 +111,9 @@ impl TaskHistories {
             .try_get(0)
             .map_err(RepositoryError::Common)
     }
-    #[allow(dead_code)]
     pub async fn update(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item: TaskHistory,
     ) -> Result<(), RepositoryError> {
         let query = format!(
@@ -141,10 +138,9 @@ impl TaskHistories {
                 }
             })
     }
-    #[allow(dead_code)]
     pub async fn delete(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item_id: Uuid,
     ) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE task_history_id=$1", self.get_name());

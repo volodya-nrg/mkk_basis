@@ -1,35 +1,35 @@
 #![allow(dead_code)]
 
+use super::rand;
+use crate::common::mocks::EmailServiceMock;
 use http::StatusCode;
-use reqwest::{Certificate, Identity, Response, multipart::Form};
-use std::sync::Arc;
-use std::time::Duration;
-
-use mkk_basis::adapter::email::EmailSender;
 use mkk_basis::transport::models::{
     RequestLimitOffset, RequestLogin, RequestRegister, RequestTask, RequestTaskComment,
     RequestTaskData, RequestTeam, RequestTeamInvite, RequestUserCreate, RequestUserUpdate,
 };
-
-use super::rand;
+use reqwest::{Certificate, Identity, Response, multipart::Form};
+use std::sync::Arc;
+use std::time::Duration;
 
 pub type StatusCodeBodyError = Result<(StatusCode, String), reqwest::Error>;
 
-// Client - клиент в некоторых методах имеет "mut self", поэтому удобней везде так объявить и возвращать
-// мутабельный объект. Если клиента отдавать по значениям, то между может быть move, что не удобно.
+// Клиент в некоторых методах имеет "mut self", поэтому удобней везде так объявить и возвращать
+// mut-объект. Если клиента отдавать по значениям, то между может быть move, что не удобно.
 // Частично сделать &mut self не получится, т.к. каждый метод по сути отдает разный тип ((не)mut).
-
-pub struct Client<ES> {
+pub struct Client {
     addr: String,
     client: reqwest::Client,
-    email_service: Arc<ES>,
+    email_service: Arc<EmailServiceMock>,
 }
 
-impl<ES> Client<ES>
-where
-    ES: EmailSender,
-{
-    pub fn new(addr: String, ca: String, crt: String, key: String, email_service: Arc<ES>) -> Self {
+impl Client {
+    pub fn new(
+        addr: String,
+        ca: String,
+        crt: String,
+        key: String,
+        email_service: Arc<EmailServiceMock>,
+    ) -> Self {
         // ca-сертификат - чтоб проверить сервер
         // crt - чтоб сервер мог проверить клиента
         // key - доказательство владения crt
@@ -158,7 +158,7 @@ where
         .await;
 
         if is_full {
-            let email_code = self.email_service.get_code(&req.email);
+            let email_code = self.email_service.get_code(req.email.clone());
             let result2 = self
                 .register_confirm_common(Some(req.email), Some(email_code))
                 .await;

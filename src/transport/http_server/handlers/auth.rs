@@ -3,15 +3,16 @@ use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
+use std::sync::Arc;
 use time::Duration;
 
-use crate::adapter::email::EmailSender;
 use crate::consts;
+use crate::transport::http_server::TransportState;
 use crate::transport::{
     http_server::handlers::{HandlerError, handler_err},
     models::{RequestLogin, RequestRegister, RequestRegisterConfirm, ResponseUuid},
 };
-use crate::usecase::{UseCase, UseCaseError};
+use crate::usecase::UseCaseError;
 
 #[utoipa::path(
     post,
@@ -25,11 +26,12 @@ use crate::usecase::{UseCase, UseCaseError};
     ),
     tag = "auth",
 )]
-pub async fn register<ES: EmailSender>(
-    State(mut use_case): State<UseCase<ES>>,
+pub async fn register(
+    State(state): State<Arc<TransportState>>,
     Json(payload): Json<RequestRegister>,
 ) -> Response {
-    use_case
+    state
+        .use_case
         .auth
         .register(
             &payload.email,
@@ -62,11 +64,12 @@ pub async fn register<ES: EmailSender>(
     ),
     tag = "auth",
 )]
-pub async fn register_confirm<ES: EmailSender>(
-    State(use_case): State<UseCase<ES>>,
+pub async fn register_confirm(
+    State(state): State<Arc<TransportState>>,
     Query(req): Query<RequestRegisterConfirm>,
 ) -> Response {
-    use_case
+    state
+        .use_case
         .auth
         .register_confirm(&req.email, &req.code)
         .await
@@ -89,12 +92,16 @@ pub async fn register_confirm<ES: EmailSender>(
     ),
     tag = "auth",
 )]
-pub async fn login<ES: EmailSender>(
+pub async fn login(
     jar: CookieJar,
-    State(use_case): State<UseCase<ES>>,
+    State(state): State<Arc<TransportState>>,
     Json(payload): Json<RequestLogin>,
 ) -> impl IntoResponse {
-    let result = use_case.auth.login(&payload.email, &payload.password).await;
+    let result = state
+        .use_case
+        .auth
+        .login(&payload.email, &payload.password)
+        .await;
     let (access_token, refresh_token) = match result {
         Ok(v) => v,
         Err(e) => {
@@ -128,9 +135,8 @@ pub async fn login<ES: EmailSender>(
     ),
     tag = "auth",
 )]
-pub async fn logout<ES: EmailSender>(
+pub async fn logout(
     jar: CookieJar, // CookieJar не хранит Path и Domain, нужно указывать явно из оригинального Set-Cookie заголовка
-    State(_use_case): State<UseCase<ES>>,
 ) -> Response {
     let updated_jar = jar
         .add(new_cookie_for_access(String::new(), 0))
@@ -150,10 +156,7 @@ pub async fn logout<ES: EmailSender>(
     ),
     tag = "auth",
 )]
-pub async fn refresh_tokens<ES: EmailSender>(
-    jar: CookieJar,
-    State(use_case): State<UseCase<ES>>,
-) -> Response {
+pub async fn refresh_tokens(jar: CookieJar, State(state): State<Arc<TransportState>>) -> Response {
     let cookie_str = match jar.get(consts::REFRESH_TOKEN_NAME) {
         Some(c) => c.to_string(),
         None => return StatusCode::UNAUTHORIZED.into_response(),
@@ -162,11 +165,11 @@ pub async fn refresh_tokens<ES: EmailSender>(
         Some(v) => v,
         None => return StatusCode::UNAUTHORIZED.into_response(),
     };
-    let (access_token, refresh_token) = match use_case.auth.refresh_tokens(refresh_token_src).await
-    {
-        Ok(v) => v,
-        Err(e) => return handler_err!(e).into_response(),
-    };
+    let (access_token, refresh_token) =
+        match state.use_case.auth.refresh_tokens(refresh_token_src).await {
+            Ok(v) => v,
+            Err(e) => return handler_err!(e).into_response(),
+        };
     let updated_jar = jar
         .add(new_cookie_for_access(
             access_token,

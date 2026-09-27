@@ -14,6 +14,8 @@ use testcontainers_modules::{
 };
 use tokio::time::sleep;
 
+use super::{certs, consts, mocks::EmailServiceMock, rand};
+
 use mkk_basis::{
     adapter::{
         db::postgres::Postgres as PostgresService,
@@ -25,8 +27,6 @@ use mkk_basis::{
     usecase::UseCase,
 };
 
-use super::{certs, consts, mocks::EmailServiceMock, rand};
-
 pub struct Context {
     pub http_addr: String,
     pub ca: String,
@@ -34,9 +34,9 @@ pub struct Context {
     pub key: String,
     pub time_now: DateTime<Local>,
     pub container: ContainerAsync<PostgresContainer>, // обязательно нужно, чтоб жил, иначе после выходи из ф-ии уничтожается
-    pub db: PostgresService,
-    pub transactor: Transactor,
-    pub email_service: Arc<EmailServiceMock>,
+    pub db: Arc<PostgresService>,
+    pub transactor: Arc<Transactor>,
+    pub email_service: Arc<EmailServiceMock>, // явно ставим mock-у, а не трейт, потому что надо надо достать отсылаемые данные
 }
 
 impl Context {
@@ -71,19 +71,18 @@ impl Context {
             .unwrap();
         let addr_str = addr_socket.to_string();
         let http_addr = format!("https://{}", addr_str); // явно используем https
-        let postgres_service = PostgresService::new();
-        let transactor = Transactor::new(pool.clone(), IsolationLevel::Serializable);
-        let email_service = Arc::new(EmailServiceMock::new());
+        let arc_transactor = Arc::new(Transactor::new(pool.clone(), IsolationLevel::Serializable));
+        let arc_postgres_service = Arc::new(PostgresService::new(arc_transactor.clone()));
+        let arc_email_sender = Arc::new(EmailServiceMock::new());
         let use_case = UseCase::new(
             "http://localhost.loc".to_string(),
-            postgres_service.clone(),
+            arc_postgres_service.clone(),
             JWTService::new(
                 rand::private_key(32),
                 consts::ACCESS_TOKEN_TTL_SEC,
                 consts::REFRESH_TOKEN_TTL_SEC,
             ),
-            email_service.clone(),
-            transactor.clone(),
+            arc_email_sender.clone(),
         );
         let certs = certs::gen_certs().unwrap(); // создадим серты
         let tls_config = transport::http_server::configure_tls(
@@ -104,9 +103,9 @@ impl Context {
             key: certs.client_key.serialize_pem(),
             container,
             time_now: Local::now(),
-            db: postgres_service,
-            transactor,
-            email_service: email_service.clone(),
+            db: arc_postgres_service,
+            transactor: arc_transactor,
+            email_service: arc_email_sender,
         }
     }
 }

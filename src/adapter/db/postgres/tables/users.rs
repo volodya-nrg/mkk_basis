@@ -1,17 +1,15 @@
-use sqlx::{QueryBuilder, Row};
+use sqlx::{PgConnection, QueryBuilder, Row};
 use std::fmt;
 use uuid::Uuid;
 
 use crate::adapter::db::{
     errors::RepositoryError,
+    internal::Table,
     models::{List, User},
-    traits::NameAndFields,
 };
 
 pub enum Role {
     Admin,
-    #[allow(dead_code)]
-    Moder,
     Null, // при обновлении пользователя нужно иметь возможность выставить как-то в NULL
 }
 impl fmt::Display for Role {
@@ -19,16 +17,15 @@ impl fmt::Display for Role {
         use Role::*;
         let s = match self {
             Admin => "admin",
-            Moder => "moder",
             Null => "null",
         };
         write!(f, "{}", s)
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Default)] // Default - требует линтер
 pub struct Users {}
-impl NameAndFields for Users {
+impl Table for Users {
     fn get_name(&self) -> &str {
         "users"
     }
@@ -52,7 +49,7 @@ impl Users {
     }
     pub async fn list(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         limit: i32,
         offset: i32,
     ) -> Result<List<User>, RepositoryError> {
@@ -88,7 +85,7 @@ impl Users {
     }
     pub async fn one(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item_id: Uuid,
     ) -> Result<User, RepositoryError> {
         let query = format!(
@@ -102,13 +99,11 @@ impl Users {
             .fetch_optional(executor)
             .await
             .map_err(RepositoryError::FailedToQuery)?
-            .ok_or(RepositoryError::NotFoundRow {
-                value: item_id.to_string(),
-            })
+            .ok_or(RepositoryError::NotFoundRow)
     }
     pub async fn by_email(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         email: &str, // чтение, но не владение
     ) -> Result<User, RepositoryError> {
         let query = format!(
@@ -122,13 +117,11 @@ impl Users {
             .fetch_optional(executor)
             .await
             .map_err(RepositoryError::FailedToQuery)?
-            .ok_or(RepositoryError::NotFoundRow {
-                value: email.to_string(),
-            })
+            .ok_or(RepositoryError::NotFoundRow)
     }
     pub async fn create(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item: User,
     ) -> Result<Uuid, RepositoryError> {
         let query = format!(
@@ -151,7 +144,7 @@ impl Users {
     }
     pub async fn update(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item: User,
     ) -> Result<(), RepositoryError> {
         let query = format!(
@@ -181,7 +174,7 @@ impl Users {
     }
     pub async fn delete(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item_id: Uuid,
     ) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE user_id=$1", self.get_name());

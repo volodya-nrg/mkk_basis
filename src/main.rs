@@ -5,6 +5,8 @@ use std::process;
 use std::sync::Arc;
 use std::time::Duration;
 
+// Тут обращаемся через mkk_basis, они указаны в lib.rs, тем самым при интеграционном тестировании
+// запускается только один бинарник для проверки, а не два.
 use mkk_basis::adapter::{
     config::Config,
     db::postgres::{
@@ -16,8 +18,7 @@ use mkk_basis::adapter::{
     logger,
 };
 use mkk_basis::consts;
-use mkk_basis::transport;
-use mkk_basis::transport::http_server::HTTPServer;
+use mkk_basis::transport::{self, http_server::HTTPServer};
 use mkk_basis::usecase::UseCase;
 
 #[derive(Parser)]
@@ -54,6 +55,7 @@ runtime:
     rt.block_on(async {Код асинхронной программы})
 */
 #[tokio::main] // атрибут-макрос, создает tokio-runtime
+// чистый main, удобно выходить с кодом 1, в случае ошибки
 async fn main() {
     if let Err(e) = run(Args::parse().config).await {
         log::error!("failed to run app: {e}");
@@ -62,7 +64,7 @@ async fn main() {
 }
 
 async fn run(config_filepath: String) -> Result<(), String> {
-    // возвращаешься тип Unit ("()")
+    // возвращаешься тип Unit "()"
     let cfg = Config::new(&config_filepath).map_err(|e| {
         let str = format!("failed to create new config: {e}");
         eprint!("{}", str);
@@ -99,7 +101,8 @@ async fn run(config_filepath: String) -> Result<(), String> {
         .connect(&cfg.postgres.dsn)
         .await
         .map_err(|e| format!("failed to connect on DB: {e}"))?;
-    let transactor: Transactor = Transactor::new(pool, IsolationLevel::ReadCommitted);
+    let transactor = Transactor::new(pool, IsolationLevel::RepeatableRead);
+    let postgres_service = PostgresService::new(Arc::new(transactor));
     let email_service = EmailService::new(
         &cfg.email.host,
         &cfg.email.login,
@@ -109,19 +112,18 @@ async fn run(config_filepath: String) -> Result<(), String> {
         Duration::from_secs(3),
     );
     let http_server = HTTPServer::new(
-        cfg.http_server.address.clone(),
+        cfg.http_server.address,
         UseCase::new(
             cfg.addr,
-            PostgresService::new(),
+            Arc::new(postgres_service),
             JWTService::new(
                 private_key_bytes,
                 consts::ACCESS_TOKEN_TTL_SEC,
                 consts::REFRESH_TOKEN_TTL_SEC,
             ),
             Arc::new(email_service),
-            transactor,
         ),
-        tls_config_for_server.clone(),
+        tls_config_for_server,
     );
 
     http_server

@@ -205,7 +205,7 @@ pub fn create_image(ext: &str) -> Result<PathBuf, ImageError> {
     let mut bytes: Vec<u8> = Vec::new();
     img.write_to(&mut Cursor::new(&mut bytes), format)?;
 
-    let temp_dir = env::temp_dir(); // PathBuf::new(); - направим лучше в корень проекта, чтоб видеть
+    let temp_dir = env::temp_dir(); // "PathBuf::new();" - направляет в корень проекта, чтоб видеть
     let filename = format!(
         "{}_{}.{}",
         Utc::now().timestamp(),
@@ -229,6 +229,6 @@ fn get_random_task_status() -> String {
     statuses[int_range(0, statuses.len() - 1)].to_string()
 }
 fn get_random_user_role() -> String {
-    let statuses = [UserRoles::Admin, UserRoles::Moder, UserRoles::Null];
+    let statuses = [UserRoles::Admin]; // тут UserRoles::Null не нужен
     statuses[int_range(0, statuses.len() - 1)].to_string()
 }

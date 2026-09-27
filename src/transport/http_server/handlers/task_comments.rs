@@ -1,18 +1,18 @@
-use axum::extract::{Path, Query};
+use std::sync::Arc;
 use axum::extract::State;
+use axum::extract::{Path, Query};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use uuid::Uuid;
 
-use crate::adapter::email::EmailSender;
+use crate::transport::http_server::TransportState;
 use crate::transport::http_server::handlers::{HandlerError, handler_err};
 use crate::transport::models::{AuthUser, TaskComment};
 use crate::transport::{
     mapper,
     models::{RequestLimitOffset, RequestTaskComment, TaskCommentsList},
 };
-use crate::usecase::UseCase;
 
 #[utoipa::path(
     get,
@@ -29,16 +29,21 @@ use crate::usecase::UseCase;
     ),
     tag = "task_comments",
 )]
-pub async fn list<ES: EmailSender>(
+pub async fn list(
     // _user: AuthenticatedUser<ES>,
     Extension(_user): Extension<AuthUser>,
     Path(task_id): Path<Uuid>,
-    State(use_case): State<UseCase<ES>>,
+    State(state): State<Arc<TransportState>>,
     Query(payload): Query<RequestLimitOffset>,
 ) -> Response {
-    use_case
+    state
+        .use_case
         .task_comments
-        .list(task_id, payload.limit.unwrap_or(0), payload.offset.unwrap_or(0))
+        .list(
+            task_id,
+            payload.limit.unwrap_or(0),
+            payload.offset.unwrap_or(0),
+        )
         .await
         .map_or_else(
             |e| handler_err!(e).into_response(),
@@ -70,13 +75,14 @@ pub async fn list<ES: EmailSender>(
     ),
     tag = "task_comments",
 )]
-pub async fn create<ES: EmailSender>(
+pub async fn create(
     Extension(user): Extension<AuthUser>,
     Path(task_id): Path<Uuid>,
-    State(use_case): State<UseCase<ES>>,
+    State(state): State<Arc<TransportState>>,
     Json(payload): Json<RequestTaskComment>,
 ) -> Response {
-    let result = use_case
+    let result = state
+        .use_case
         .task_comments
         .create(mapper::task_comment_tr_to_task_comment_uc(
             payload.msg,
@@ -89,16 +95,21 @@ pub async fn create<ES: EmailSender>(
         Err(e) => return handler_err!(e).into_response(),
     };
 
-    use_case.task_comments.one(new_uuid).await.map_or_else(
-        |e| handler_err!(e).into_response(),
-        |v| {
-            (
-                StatusCode::CREATED,
-                Json(mapper::task_comment_uc_to_task_comment_tr(v)),
-            )
-                .into_response()
-        },
-    )
+    state
+        .use_case
+        .task_comments
+        .one(new_uuid)
+        .await
+        .map_or_else(
+            |e| handler_err!(e).into_response(),
+            |v| {
+                (
+                    StatusCode::CREATED,
+                    Json(mapper::task_comment_uc_to_task_comment_tr(v)),
+                )
+                    .into_response()
+            },
+        )
 }
 
 #[utoipa::path(
@@ -115,13 +126,18 @@ pub async fn create<ES: EmailSender>(
     ),
     tag = "task_comments",
 )]
-pub async fn delete<ES: EmailSender>(
+pub async fn delete(
     Extension(_user): Extension<AuthUser>,
     Path(item_id): Path<Uuid>,
-    State(use_case): State<UseCase<ES>>,
+    State(state): State<Arc<TransportState>>,
 ) -> Response {
-    use_case.task_comments.delete(item_id).await.map_or_else(
-        |e| handler_err!(e).into_response(),
-        |_| StatusCode::NO_CONTENT.into_response(),
-    )
+    state
+        .use_case
+        .task_comments
+        .delete(item_id)
+        .await
+        .map_or_else(
+            |e| handler_err!(e).into_response(),
+            |_| StatusCode::NO_CONTENT.into_response(),
+        )
 }

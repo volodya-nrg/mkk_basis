@@ -1,3 +1,5 @@
+// thiserror так же реализует и стандартную ошибку (см. ниже). Debug необходим.
+// После этого нашу ошибку можно будет связывать в цепочку с другими ошибками из std-библиотеки.
 #[derive(Debug, thiserror::Error)]
 pub enum RepositoryError {
     #[error("failed to query: {0}")]
@@ -13,8 +15,9 @@ pub enum RepositoryError {
     #[error("{0}")]
     Common(sqlx::Error),
 
-    #[error("not found row {value}")]
-    NotFoundRow { value: String },
+    #[error("not found row")]
+    NotFoundRow,
     #[error("expected one row, but has {0}")]
     ExpectedOneRow(u64),
 }
+// impl std::error::Error for RepositoryError {}

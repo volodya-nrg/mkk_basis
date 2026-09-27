@@ -7,10 +7,7 @@ use tokio::time::sleep;
 use uuid::Uuid;
 
 use mkk_basis::{
-    adapter::{
-        db::postgres::tables::users::Role as UsersRole, email::EmailSender,
-        helpers as HelpersService,
-    },
+    adapter::{db::postgres::tables::users::Role as UsersRole, helpers as HelpersService},
     consts::MIN_PASSWORD_LEN,
     transport::models::{
         RequestLogin, RequestTaskData, RequestTeamInvite, RequestUserUpdate, ResponseMsg,
@@ -204,7 +201,7 @@ async fn check_auth() {
     .await;
 
     // достанем явно код
-    let email_code = ctx.email_service.get_code(req_register2.email.as_str());
+    let email_code = ctx.email_service.get_code(req_register2.email.clone());
 
     // ok
     cl.register_confirm(

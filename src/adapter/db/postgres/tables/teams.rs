@@ -1,15 +1,15 @@
-use sqlx::{QueryBuilder, Row};
+use sqlx::{PgConnection, QueryBuilder, Row};
 use uuid::Uuid;
 
 use crate::adapter::db::{
     errors::RepositoryError,
+    internal::Table,
     models::{List, Team},
-    traits::NameAndFields,
 };
 
-#[derive(Clone, Default)]
+#[derive(Default)] // Default - требует линтер
 pub struct Teams {}
-impl NameAndFields for Teams {
+impl Table for Teams {
     fn get_name(&self) -> &str {
         "teams"
     }
@@ -23,7 +23,7 @@ impl Teams {
     }
     pub async fn list(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         limit: i32,
         offset: i32,
     ) -> Result<List<Team>, RepositoryError> {
@@ -59,7 +59,7 @@ impl Teams {
     }
     pub async fn one(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item_id: Uuid,
     ) -> Result<Team, RepositoryError> {
         let query = format!(
@@ -73,13 +73,11 @@ impl Teams {
             .fetch_optional(executor)
             .await
             .map_err(RepositoryError::FailedToQuery)?
-            .ok_or(RepositoryError::NotFoundRow {
-                value: item_id.to_string(),
-            })
+            .ok_or(RepositoryError::NotFoundRow)
     }
     pub async fn create(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item: Team,
     ) -> Result<Uuid, RepositoryError> {
         let query = format!(
@@ -98,7 +96,7 @@ impl Teams {
     }
     pub async fn update(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item: Team,
     ) -> Result<(), RepositoryError> {
         let query = format!(
@@ -123,7 +121,7 @@ impl Teams {
     }
     pub async fn delete(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item_id: Uuid,
     ) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE team_id=$1", self.get_name());

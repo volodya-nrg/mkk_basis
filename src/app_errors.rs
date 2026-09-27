@@ -1,7 +1,7 @@
 use super::consts;
 
 #[derive(Debug, thiserror::Error)]
-pub enum ErrMsg {
+pub enum AppErr {
     #[error("не верные данные файла")]
     BadFileData,
     #[error("е-мэйл уже подтверждён")]
@@ -48,7 +48,3 @@ pub enum ErrMsg {
     #[error("е-мэйл необходимо верифицировать")]
     VerifyYourEmail,
 }
-
-// После этого нашу ошибку можно будет связывать в цепочку с другими ошибками из стандартной библиотеки.
-// Debug необходим.
-// impl std::error::Error for ErrMsg {}

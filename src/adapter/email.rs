@@ -5,18 +5,13 @@ use lettre::{
 };
 use std::time::Duration;
 
-// EmailSender. Трейт для подмены (прод, тест). Сразу добавим ограничения
-// (Clone + Send + Sync + 'static), чтоб их не добавлять потом везде. "'static" - для Router.
-pub trait EmailSender: Clone + Send + Sync + 'static {
+// Crate "async_trait" упрощает объявление Pin<Box>, внутренних vtable у трейтов и разных lifetime.
+// Укажем сразу поддержку "Send + Sync + 'static", чтоб не писать подобное в других местах.
+#[async_trait::async_trait]
+pub trait EmailSender: Send + Sync + 'static {
     fn send(&self, to: &str, subject: &str, body: &str) -> Result<(), String>;
-    fn save_code(&self, _email: &str, _code: &str) {}
-    #[allow(dead_code)]
-    fn get_code(&self, _email: &str) -> String {
-        String::new()
-    }
 }
 
-#[derive(Clone)] // из-за usecase-auth
 pub struct Email {
     host: String,
     login: String,
@@ -46,6 +41,7 @@ impl Email {
     }
 }
 
+#[async_trait::async_trait]
 impl EmailSender for Email {
     fn send(&self, ref_to: &str, ref_subject: &str, ref_body: &str) -> Result<(), String> {
         let (local_from_email, domain_from_email) = self
@@ -82,7 +78,7 @@ impl EmailSender for Email {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[test]
@@ -90,7 +86,7 @@ mod test {
         let result = Email::new(
             "smtp.yandex.ru",
             "support@altair.uz",
-            "",
+            "x",
             "support@altair.uz",
             "support",
             Duration::from_secs(3),

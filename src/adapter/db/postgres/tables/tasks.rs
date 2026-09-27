@@ -1,4 +1,4 @@
-use sqlx::{AssertSqlSafe, QueryBuilder, Row};
+use sqlx::{AssertSqlSafe, PgConnection, QueryBuilder, Row};
 use std::fmt;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -6,8 +6,8 @@ use uuid::Uuid;
 
 use crate::adapter::db::{
     errors::RepositoryError,
+    internal::Table,
     models::{List, Task, TaskData},
-    traits::NameAndFields,
 };
 
 #[derive(Debug, EnumIter, PartialEq, Eq)]
@@ -22,7 +22,7 @@ impl Status {
         Self::iter().any(|s| s.to_string() == v)
     }
 }
-// можно поставить "заклинание" Display, но тогда будет начинаться с большой буквы, поэтому пишем сами как надо
+// если указать trait Display, тогда статусы будут в том же регистре как и написаны. Пишем по своему.
 impl fmt::Display for Status {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Status::*;
@@ -36,9 +36,9 @@ impl fmt::Display for Status {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Default)] // Default - требует линтер
 pub struct Tasks {}
-impl NameAndFields for Tasks {
+impl Table for Tasks {
     fn get_name(&self) -> &str {
         "tasks"
     }
@@ -62,7 +62,7 @@ impl Tasks {
     }
     pub async fn list(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         data: TaskData,
     ) -> Result<List<Task>, RepositoryError> {
         let mut query_common = format!(
@@ -140,7 +140,7 @@ impl Tasks {
     }
     pub async fn one(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item_id: Uuid,
     ) -> Result<Task, RepositoryError> {
         let query = format!(
@@ -154,11 +154,11 @@ impl Tasks {
             .fetch_optional(executor)
             .await
             .map_err(RepositoryError::FailedToQuery)?
-            .ok_or(RepositoryError::NotFoundRow { value: item_id.to_string() })
+            .ok_or(RepositoryError::NotFoundRow)
     }
     pub async fn create(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item: Task,
     ) -> Result<Uuid, RepositoryError> {
         let query = format!(
@@ -181,7 +181,7 @@ impl Tasks {
     }
     pub async fn update(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item: Task,
     ) -> Result<(), RepositoryError> {
         let query = format!(
@@ -209,10 +209,9 @@ impl Tasks {
                 }
             })
     }
-    #[allow(dead_code)]
     pub async fn delete(
         &self,
-        executor: &mut sqlx::PgConnection,
+        executor: &mut PgConnection,
         item_id: Uuid,
     ) -> Result<(), RepositoryError> {
         let query = format!("DELETE FROM {} WHERE task_id=$1", self.get_name());

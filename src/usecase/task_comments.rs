@@ -1,19 +1,19 @@
 use crate::adapter::db::postgres::{
-    tables::task_comments::TaskComments as DBTaskComments,
-    transactor::{Transactor},
+    tables::task_comments::TaskComments as DBTaskComments, transactor::Transactor,
 };
+use std::sync::Arc;
 use uuid::Uuid;
 
 use super::{UseCaseError, mapper, models::TaskComment};
 
-#[derive(Clone)] // из-за axum-state
+#[derive(Clone)] // clone из-за axum
 pub struct TaskComments {
-    transactor: Transactor,
-    task_comments_repo: DBTaskComments,
+    transactor: Arc<Transactor>,
+    task_comments_repo: Arc<DBTaskComments>,
 }
 
 impl TaskComments {
-    pub const fn new(transactor: Transactor, task_comments_repo: DBTaskComments) -> Self {
+    pub const fn new(transactor: Arc<Transactor>, task_comments_repo: Arc<DBTaskComments>) -> Self {
         Self {
             transactor,
             task_comments_repo,
