@@ -16,6 +16,7 @@ use tokio::time::sleep;
 
 use super::{certs, consts, mocks::EmailServiceMock, rand};
 
+use crate::common::mocks::ConfirmationCodeStoreMock;
 use mkk_basis::{
     adapter::{
         db::postgres::MyPostgres, db::storage::IsolationLevel, jwt::Jwt as JWTService, logger,
@@ -32,7 +33,7 @@ pub struct Context {
     pub time_now: DateTime<Local>,
     pub container: ContainerAsync<PostgresContainer>, // обязательно нужно, чтоб жил, иначе после выходи из ф-ии уничтожается
     pub db: Arc<MyPostgres>,
-    pub email_service: Arc<EmailServiceMock>, // явно ставим mock-у, а не трейт, потому что надо надо достать отсылаемые данные
+    pub code_store: Arc<ConfirmationCodeStoreMock>,
 }
 
 impl Context {
@@ -67,18 +68,22 @@ impl Context {
             .unwrap();
         let addr_str = addr_socket.to_string();
         let http_addr = format!("https://{}", addr_str); // явно используем https
-        let arc_postgres_service =
-            Arc::new(MyPostgres::new(pool.clone(), IsolationLevel::Serializable));
-        let arc_email_sender = Arc::new(EmailServiceMock::new());
+        let arc_storage_service = Arc::new(
+            MyPostgres::new(pool.clone(), IsolationLevel::Serializable)
+                .await
+                .unwrap(),
+        );
+        let arc_coder = Arc::new(ConfirmationCodeStoreMock::new());
         let use_case = UseCase::new(
             "http://localhost.loc".to_string(),
-            arc_postgres_service.clone(),
+            arc_storage_service.clone(),
             JWTService::new(
                 rand::private_key(32),
                 consts::ACCESS_TOKEN_TTL_SEC,
                 consts::REFRESH_TOKEN_TTL_SEC,
             ),
-            arc_email_sender.clone(),
+            Arc::new(EmailServiceMock {}),
+            arc_coder.clone(),
         );
         let certs = certs::gen_certs().unwrap(); // создадим серты
         let tls_config = transport::http_server::configure_tls(
@@ -99,8 +104,8 @@ impl Context {
             key: certs.client_key.serialize_pem(),
             container,
             time_now: Local::now(),
-            db: arc_postgres_service,
-            email_service: arc_email_sender,
+            db: arc_storage_service,
+            code_store: arc_coder,
         }
     }
 }

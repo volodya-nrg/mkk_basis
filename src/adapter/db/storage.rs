@@ -23,8 +23,8 @@ pub enum AnyConnectionOwned {
 impl AnyConnectionOwned {
     pub fn as_mut(&mut self) -> AnyConnection<'_> {
         match self {
-            AnyConnectionOwned::Postgres(c) => AnyConnection::Postgres(&mut *c),
-            AnyConnectionOwned::Sqlite(c) => AnyConnection::Sqlite(&mut *c),
+            Self::Postgres(c) => AnyConnection::Postgres(&mut *c),
+            Self::Sqlite(c) => AnyConnection::Sqlite(&mut *c),
         }
     }
 }
@@ -38,7 +38,7 @@ pub enum IsolationLevel {
 }
 
 impl IsolationLevel {
-    pub fn as_sql(&self) -> &'static str {
+    pub const fn as_sql(&self) -> &'static str {
         match self {
             // Self::ReadUncommitted => "READ UNCOMMITTED",
             Self::ReadCommitted => "READ COMMITTED",

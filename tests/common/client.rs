@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 
 use super::rand;
-use crate::common::mocks::EmailServiceMock;
+use crate::common::mocks::{ConfirmationCodeStoreMock};
 use http::StatusCode;
+use mkk_basis::adapter::email::ConfirmationCodeStorer;
 use mkk_basis::transport::models::{
     RequestLimitOffset, RequestLogin, RequestRegister, RequestTask, RequestTaskComment,
     RequestTaskData, RequestTeam, RequestTeamInvite, RequestUserCreate, RequestUserUpdate,
@@ -19,7 +20,7 @@ pub type StatusCodeBodyError = Result<(StatusCode, String), reqwest::Error>;
 pub struct Client {
     addr: String,
     client: reqwest::Client,
-    email_service: Arc<EmailServiceMock>,
+    code_store: Arc<ConfirmationCodeStoreMock>,
 }
 
 impl Client {
@@ -28,7 +29,7 @@ impl Client {
         ca: String,
         crt: String,
         key: String,
-        email_service: Arc<EmailServiceMock>,
+        coder: Arc<ConfirmationCodeStoreMock>,
     ) -> Self {
         // ca-сертификат - чтоб проверить сервер
         // crt - чтоб сервер мог проверить клиента
@@ -47,7 +48,7 @@ impl Client {
                 .cookie_store(true)
                 .build()
                 .unwrap(),
-            email_service,
+            code_store: coder,
         }
     }
     async fn parse_response(&self, resp: Response) -> StatusCodeBodyError {
@@ -158,7 +159,7 @@ impl Client {
         .await;
 
         if is_full {
-            let email_code = self.email_service.get_code(req.email.clone());
+            let email_code = self.code_store.take(&req.email.clone());
             let result2 = self
                 .register_confirm_common(Some(req.email), Some(email_code))
                 .await;

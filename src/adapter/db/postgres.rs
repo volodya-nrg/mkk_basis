@@ -14,15 +14,13 @@ use crate::adapter::db::{
     storage::{IsolationLevel, MyTransaction, Storage, TaskCommentsTable},
 };
 use async_trait::async_trait;
-use sqlx::pool::PoolConnection;
-use sqlx::{Acquire, AssertSqlSafe, Connection, Transaction};
+use sqlx::{AssertSqlSafe, Transaction};
 use sqlx::{Pool, Postgres};
 use tables::task_comments::TaskComments;
 
 pub struct MyPostgres {
     level: IsolationLevel,
     pool: Pool<Postgres>,
-    //conn: PoolConnection<Postgres>,
     pub tbl_task_comments: TaskComments,
     pub tbl_task_histories: TaskHistories,
     pub tbl_tasks: Tasks,
@@ -88,7 +86,7 @@ pub struct PostgresTransaction {
 }
 
 impl PostgresTransaction {
-    pub fn new(tx: Transaction<'static, Postgres>) -> Self {
+    pub const fn new(tx: Transaction<'static, Postgres>) -> Self {
         Self { tx }
     }
 }

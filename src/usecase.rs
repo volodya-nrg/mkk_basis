@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use crate::adapter::{
     db::{errors::RepositoryError, storage::Storage},
-    email::EmailSender,
+    email::{ConfirmationCodeStorer, EmailSender},
     jwt::{JWTError, Jwt as JWTService},
 };
 use crate::app_errors::AppErr;
@@ -27,15 +27,17 @@ pub struct UseCase {
     pub users: users::Users,
 }
 
+// внутри нельзя менять состояние (&mut self)
 impl UseCase {
     pub fn new(
         addr: String,
         storage: Arc<dyn Storage>,
         jwt_service: JWTService,
         email_sender: Arc<dyn EmailSender>,
+        code_store: Arc<dyn ConfirmationCodeStorer>,
     ) -> Self {
         Self {
-            auth: auth::Auth::new(addr, jwt_service, email_sender, storage.clone()),
+            auth: auth::Auth::new(addr, jwt_service, email_sender, code_store, storage.clone()),
             teams: teams::Teams::new(storage.clone()),
             tasks: tasks::Tasks::new(storage.clone()),
             task_comments: task_comments::TaskComments::new(storage.clone()),

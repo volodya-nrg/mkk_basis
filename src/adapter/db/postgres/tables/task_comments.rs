@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use sqlx::{AssertSqlSafe, Executor, QueryBuilder, Row};
+use sqlx::{AssertSqlSafe, QueryBuilder, Row};
 use uuid::Uuid;
 
 use crate::adapter::db::{

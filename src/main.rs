@@ -7,6 +7,7 @@ use std::time::Duration;
 
 // Тут обращаемся через mkk_basis, они указаны в lib.rs, тем самым при интеграционном тестировании
 // запускается только один бинарник для проверки, а не два.
+use mkk_basis::adapter::email::ConfirmationCodeStore;
 use mkk_basis::{
     adapter::{
         config::Config,
@@ -122,6 +123,7 @@ async fn run(config_filepath: String) -> Result<(), String> {
                 consts::REFRESH_TOKEN_TTL_SEC,
             ),
             Arc::new(email_service),
+            Arc::new(ConfirmationCodeStore {}),
         ),
         tls_config_for_server,
     );

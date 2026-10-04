@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use lettre::{
     message::{Mailbox, header::ContentType},
     transport::smtp::authentication::Credentials,
@@ -19,9 +20,25 @@ pub enum EmailError {
 
 // Crate "async_trait" упрощает объявление Pin<Box>, внутренних vtable у трейтов и разных lifetime.
 // Укажем сразу поддержку "Send + Sync + 'static", чтоб не писать подобное в других местах.
-#[async_trait::async_trait]
+#[async_trait]
 pub trait EmailSender: Send + Sync + 'static {
     fn send(&self, to: &str, subject: &str, body: &str) -> Result<(), EmailError>;
+}
+
+#[async_trait]
+pub trait ConfirmationCodeStorer: Send + Sync {
+    fn store(&self, email: &str, code: &str);
+    fn take(&self, email: &str) -> String;
+}
+
+pub struct ConfirmationCodeStore {}
+
+#[async_trait]
+impl ConfirmationCodeStorer for ConfirmationCodeStore {
+    fn store(&self, _email: &str, _code: &str) {}
+    fn take(&self, _email: &str) -> String {
+        String::new()
+    }
 }
 
 pub struct Email {
@@ -53,7 +70,7 @@ impl Email {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl EmailSender for Email {
     fn send(&self, ref_to: &str, ref_subject: &str, ref_body: &str) -> Result<(), EmailError> {
         let (local_from_email, domain_from_email) =

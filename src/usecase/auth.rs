@@ -1,12 +1,12 @@
 use http::StatusCode;
-use std::ops::Deref;
 use std::sync::Arc;
 use uuid::Uuid;
 
+use super::{UseCaseError, helpers};
 use crate::{
     adapter::{
         db::{errors::RepositoryError, models::User as UserDB, storage::Storage},
-        email::EmailSender,
+        email::{ConfirmationCodeStorer, EmailSender},
         helpers as HelpersService,
         jwt::{JWTError, Jwt as JWTService, TYPE_REFRESH},
     },
@@ -14,13 +14,12 @@ use crate::{
     consts,
 };
 
-use super::{UseCaseError, helpers};
-
 // Используется "dyn EmailSender", потому что может приходить как mock-а, так и структура для prod-а.
 #[derive(Clone)] // clone из-за axum
 pub struct Auth {
     addr: String,
     email_sender: Arc<dyn EmailSender>,
+    codes: Arc<dyn ConfirmationCodeStorer>,
     storage: Arc<dyn Storage>,
     pub jwt_service: JWTService, // публичен для экстрактора или middleware. Передаем его по значению, поэтому Arc не нужен.
 }
@@ -30,17 +29,19 @@ impl Auth {
         addr: String,
         jwt_service: JWTService,
         email_sender: Arc<dyn EmailSender>,
+        codes: Arc<dyn ConfirmationCodeStorer>,
         storage: Arc<dyn Storage>,
     ) -> Self {
         Self {
             addr,
             jwt_service,
             email_sender,
+            codes,
             storage,
         }
     }
     pub async fn register(
-        &mut self,
+        &self,
         email: &str,
         password: &str,
         password_confirm: &str,
@@ -105,12 +106,13 @@ impl Auth {
         self.email_sender
             .send(email, email_subject.as_str(), email_message.as_str())
             .map_err(|e| UseCaseError::Common(format!("failed to send email: {e}")))?;
+        self.codes.store(email, code.as_str()); // сохраним для теста
 
         tx.commit().await?;
         Ok(new_uuid)
     }
     pub async fn register_confirm(
-        &mut self,
+        &self,
         email: &str,
         actual_code: &str,
     ) -> Result<(), UseCaseError> {
