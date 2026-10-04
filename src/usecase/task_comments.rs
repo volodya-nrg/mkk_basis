@@ -1,23 +1,18 @@
-use crate::adapter::db::postgres::{
-    tables::task_comments::TaskComments as DBTaskComments, transactor::Transactor,
-};
 use std::sync::Arc;
 use uuid::Uuid;
+
+use crate::adapter::db::storage::Storage;
 
 use super::{UseCaseError, mapper, models::TaskComment};
 
 #[derive(Clone)] // clone из-за axum
 pub struct TaskComments {
-    transactor: Arc<Transactor>,
-    task_comments_repo: Arc<DBTaskComments>,
+    storage: Arc<dyn Storage>,
 }
 
 impl TaskComments {
-    pub const fn new(transactor: Arc<Transactor>, task_comments_repo: Arc<DBTaskComments>) -> Self {
-        Self {
-            transactor,
-            task_comments_repo,
-        }
+    pub const fn new(storage: Arc<dyn Storage>) -> Self {
+        Self { storage }
     }
     pub async fn list(
         &self,
@@ -25,44 +20,49 @@ impl TaskComments {
         limit: i32,
         offset: i32,
     ) -> Result<(Vec<TaskComment>, i64), UseCaseError> {
-        Ok(self
-            .transactor
-            .in_transaction::<_, _, UseCaseError>(async |tx| {
-                let list = self
-                    .task_comments_repo
-                    .list(tx, task_id, limit, offset)
-                    .await?;
-                Ok((
-                    list.0
-                        .into_iter() // по значениям
-                        .map(mapper::task_comment_db_to_task_comment_uc)
-                        .collect(),
-                    list.1,
-                ))
-            })
-            .await?)
+        let mut tx = self.storage.begin().await?;
+        let mut conn = tx.get_conn().await?;
+        let list = self
+            .storage
+            .task_comments()
+            .list(&mut conn, task_id, limit, offset)
+            .await?;
+        tx.commit().await?;
+
+        Ok((
+            list.0
+                .into_iter() // по значениям
+                .map(mapper::task_comment_db_to_task_comment_uc)
+                .collect(),
+            list.1,
+        ))
     }
     pub async fn one(&self, item_id: Uuid) -> Result<TaskComment, UseCaseError> {
-        let mut db_conn = self.transactor.conn().await?;
+        let mut conn = self.storage.get_conn().await?;
         Ok(mapper::task_comment_db_to_task_comment_uc(
-            self.task_comments_repo.one(&mut db_conn, item_id).await?,
+            self.storage
+                .task_comments()
+                .one(&mut conn.as_mut(), item_id)
+                .await?,
         ))
     }
     pub async fn create(&self, task_comment: TaskComment) -> Result<Uuid, UseCaseError> {
-        let mut db_conn = self.transactor.conn().await?;
+        let mut conn = self.storage.get_conn().await?;
         Ok(self
-            .task_comments_repo
+            .storage
+            .task_comments()
             .create(
-                &mut db_conn,
+                &mut conn.as_mut(),
                 mapper::task_comment_uc_to_task_comment_db(task_comment),
             )
             .await?)
     }
     pub async fn delete(&self, item_id: Uuid) -> Result<(), UseCaseError> {
-        let mut db_conn = self.transactor.conn().await?;
+        let mut conn = self.storage.get_conn().await?;
         Ok(self
-            .task_comments_repo
-            .delete(&mut db_conn, item_id)
+            .storage
+            .task_comments()
+            .delete(&mut conn.as_mut(), item_id)
             .await?)
     }
 }

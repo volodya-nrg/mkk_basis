@@ -18,10 +18,7 @@ use super::{certs, consts, mocks::EmailServiceMock, rand};
 
 use mkk_basis::{
     adapter::{
-        db::postgres::Postgres as PostgresService,
-        db::postgres::transactor::{IsolationLevel, Transactor},
-        jwt::Jwt as JWTService,
-        logger,
+        db::postgres::MyPostgres, db::storage::IsolationLevel, jwt::Jwt as JWTService, logger,
     },
     transport::{self, http_server::HTTPServer},
     usecase::UseCase,
@@ -34,8 +31,7 @@ pub struct Context {
     pub key: String,
     pub time_now: DateTime<Local>,
     pub container: ContainerAsync<PostgresContainer>, // обязательно нужно, чтоб жил, иначе после выходи из ф-ии уничтожается
-    pub db: Arc<PostgresService>,
-    pub transactor: Arc<Transactor>,
+    pub db: Arc<MyPostgres>,
     pub email_service: Arc<EmailServiceMock>, // явно ставим mock-у, а не трейт, потому что надо надо достать отсылаемые данные
 }
 
@@ -71,8 +67,8 @@ impl Context {
             .unwrap();
         let addr_str = addr_socket.to_string();
         let http_addr = format!("https://{}", addr_str); // явно используем https
-        let arc_transactor = Arc::new(Transactor::new(pool.clone(), IsolationLevel::Serializable));
-        let arc_postgres_service = Arc::new(PostgresService::new(arc_transactor.clone()));
+        let arc_postgres_service =
+            Arc::new(MyPostgres::new(pool.clone(), IsolationLevel::Serializable));
         let arc_email_sender = Arc::new(EmailServiceMock::new());
         let use_case = UseCase::new(
             "http://localhost.loc".to_string(),
@@ -104,7 +100,6 @@ impl Context {
             container,
             time_now: Local::now(),
             db: arc_postgres_service,
-            transactor: arc_transactor,
             email_service: arc_email_sender,
         }
     }

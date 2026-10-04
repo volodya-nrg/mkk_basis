@@ -1,20 +1,17 @@
 use http::StatusCode;
+use std::ops::Deref;
 use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::{
     adapter::{
-        db::{
-            errors::RepositoryError,
-            models::User as UserDB,
-            postgres::{tables::users::Users as DBUsers, transactor::Transactor},
-        },
+        db::{errors::RepositoryError, models::User as UserDB, storage::Storage},
         email::EmailSender,
         helpers as HelpersService,
         jwt::{JWTError, Jwt as JWTService, TYPE_REFRESH},
     },
-    consts,
     app_errors::AppErr,
+    consts,
 };
 
 use super::{UseCaseError, helpers};
@@ -24,8 +21,7 @@ use super::{UseCaseError, helpers};
 pub struct Auth {
     addr: String,
     email_sender: Arc<dyn EmailSender>,
-    transactor: Arc<Transactor>,
-    users_repo: Arc<DBUsers>,
+    storage: Arc<dyn Storage>,
     pub jwt_service: JWTService, // публичен для экстрактора или middleware. Передаем его по значению, поэтому Arc не нужен.
 }
 
@@ -34,19 +30,17 @@ impl Auth {
         addr: String,
         jwt_service: JWTService,
         email_sender: Arc<dyn EmailSender>,
-        transactor: Arc<Transactor>,
-        users_repo: Arc<DBUsers>,
+        storage: Arc<dyn Storage>,
     ) -> Self {
         Self {
             addr,
             jwt_service,
             email_sender,
-            transactor,
-            users_repo,
+            storage,
         }
     }
     pub async fn register(
-        &self,
+        &mut self,
         email: &str,
         password: &str,
         password_confirm: &str,
@@ -98,32 +92,25 @@ impl Auth {
         );
         let email_subject = format!("Confirm email from {}", self.addr);
         let email_message = format!("Confirm email: <a href=\"{}\">{}</a>", link, link);
+        let mut tx = self.storage.begin().await?;
+        let mut conn = tx.get_conn().await?;
+        let user_db = UserDB {
+            email: email.to_string(),
+            password: password_hash.to_string(),
+            email_code: Some(code.clone()),
+            ..Default::default()
+        };
+        let new_uuid = self.storage.users().create(&mut conn, user_db).await?;
 
-        Ok(self
-            .transactor
-            .in_transaction::<_, _, UseCaseError>(async |tx| {
-                let user_db = UserDB {
-                    email: email.to_string(),
-                    password: password_hash.to_string(),
-                    email_code: Some(code.clone()),
-                    ..Default::default()
-                };
-                let new_uuid = self.users_repo.create(tx, user_db).await?;
+        self.email_sender
+            .send(email, email_subject.as_str(), email_message.as_str())
+            .map_err(|e| UseCaseError::Common(format!("failed to send email: {e}")))?;
 
-                self.email_sender
-                    .send(email, email_subject.as_str(), email_message.as_str())
-                    .map_err(|e| UseCaseError::Common(format!("failed to send email: {e}")))?;
-
-                self.email_sender
-                    .send(email, email_subject.as_str(), email_message.as_str())
-                    .map_err(|e| UseCaseError::Common(format!("failed to send email: {e}")))?;
-
-                Ok(new_uuid)
-            })
-            .await?)
+        tx.commit().await?;
+        Ok(new_uuid)
     }
     pub async fn register_confirm(
-        &self,
+        &mut self,
         email: &str,
         actual_code: &str,
     ) -> Result<(), UseCaseError> {
@@ -149,8 +136,12 @@ impl Auth {
             });
         }
 
-        let mut db_conn = self.transactor.conn().await?;
-        let mut user_db = self.users_repo.by_email(&mut db_conn, email).await?;
+        let mut conn = self.storage.get_conn().await?;
+        let mut user_db = self
+            .storage
+            .users()
+            .by_email(&mut conn.as_mut(), email)
+            .await?;
         let expected_code = user_db.email_code.ok_or_else(|| UseCaseError::Transport {
             status_code: StatusCode::BAD_REQUEST,
             public_err: AppErr::EmailAlreadyConfirm.to_string(),
@@ -167,7 +158,11 @@ impl Auth {
 
         user_db.email_code = None;
 
-        Ok(self.users_repo.update(&mut db_conn, user_db).await?)
+        Ok(self
+            .storage
+            .users()
+            .update(&mut conn.as_mut(), user_db)
+            .await?)
     }
     pub async fn login(
         &self,
@@ -189,10 +184,11 @@ impl Auth {
             });
         }
 
-        let mut db_conn = self.transactor.conn().await?;
+        let mut conn = self.storage.get_conn().await?;
         let user_db = self
-            .users_repo
-            .by_email(&mut db_conn, email)
+            .storage
+            .users()
+            .by_email(&mut conn.as_mut(), email)
             .await
             .map_err(|e| {
                 // ! если пользователь не найден, то нужно перенаправлять его на страницу регистрации - тут исключение
@@ -252,8 +248,12 @@ impl Auth {
             });
         }
 
-        let mut db_conn = self.transactor.conn().await?;
-        let user_db = self.users_repo.one(&mut db_conn, claims.sub).await?;
+        let mut conn = self.storage.get_conn().await?;
+        let user_db = self
+            .storage
+            .users()
+            .one(&mut conn.as_mut(), claims.sub)
+            .await?;
         let access_token = self
             .jwt_service
             .generate_access_token(user_db.user_id, user_db.role)?;

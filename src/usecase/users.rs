@@ -3,10 +3,7 @@ use std::fs;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::adapter::db::{
-    models::User as UserDB, postgres::tables::users::Users as DBUsers,
-    postgres::transactor::Transactor,
-};
+use crate::adapter::db::{models::User as UserDB, storage::Storage};
 
 use super::{
     UseCaseError, helpers, mapper,
@@ -15,33 +12,31 @@ use super::{
 
 #[derive(Clone)] // clone из-за axum
 pub struct Users {
-    transactor: Arc<Transactor>,
-    users_repo: Arc<DBUsers>,
+    storage: Arc<dyn Storage>,
 }
 
 impl Users {
-    pub const fn new(transactor: Arc<Transactor>, users_repo: Arc<DBUsers>) -> Self {
-        Self {
-            transactor,
-            users_repo,
-        }
+    pub const fn new(storage: Arc<dyn Storage>) -> Self {
+        Self { storage }
     }
     pub async fn list(&self, limit: i32, offset: i32) -> Result<(Vec<User>, i64), UseCaseError> {
-        Ok(self
-            .transactor
-            .in_transaction::<_, _, UseCaseError>(async |tx| {
-                let list = self.users_repo.list(tx, limit, offset).await?;
-                Ok((
-                    list.0.into_iter().map(mapper::user_db_to_user_uc).collect(),
-                    list.1,
-                ))
-            })
-            .await?)
+        let mut tx = self.storage.begin().await?;
+        let mut conn = tx.get_conn().await?;
+        let list = self.storage.users().list(&mut conn, limit, offset).await?;
+
+        tx.commit().await?;
+        Ok((
+            list.0.into_iter().map(mapper::user_db_to_user_uc).collect(),
+            list.1,
+        ))
     }
     pub async fn one(&self, item_id: Uuid) -> Result<User, UseCaseError> {
-        let mut db_conn = self.transactor.conn().await?;
+        let mut conn = self.storage.get_conn().await?;
         Ok(mapper::user_db_to_user_uc(
-            self.users_repo.one(&mut db_conn, item_id).await?,
+            self.storage
+                .users()
+                .one(&mut conn.as_mut(), item_id)
+                .await?,
         ))
     }
     pub async fn create(&self, mut user: UserCreate) -> Result<Uuid, UseCaseError> {
@@ -61,13 +56,13 @@ impl Users {
         }
 
         user.password = self.create_password_hash(user.password)?;
-
-        let mut db_conn = self.transactor.conn().await?;
+        let mut conn = self.storage.get_conn().await?;
 
         Ok(self
-            .users_repo
+            .storage
+            .users()
             .create(
-                &mut db_conn,
+                &mut conn.as_mut(),
                 UserDB {
                     user_id: Default::default(),
                     email: user.email,
@@ -83,8 +78,12 @@ impl Users {
             .await?)
     }
     pub async fn update(&self, user: UserUpdate) -> Result<(), UseCaseError> {
-        let mut db_conn = self.transactor.conn().await?;
-        let user_db = self.users_repo.one(&mut db_conn, user.user_id).await?;
+        let mut conn = self.storage.get_conn().await?;
+        let user_db = self
+            .storage
+            .users()
+            .one(&mut conn.as_mut(), user.user_id)
+            .await?;
         let mut user_db_copy = user_db.clone();
 
         if let Some(v) = user.email {
@@ -113,44 +112,45 @@ impl Users {
         }
 
         // если файл удалился нормально, то транзакция завершена
-        Ok(self
-            .transactor
-            .in_transaction(async |tx| {
-                self.users_repo.update(tx, user_db_copy).await?;
+        let mut tx = self.storage.begin().await?;
+        let mut conn = tx.get_conn().await?;
 
-                if user.is_remove_avatar
-                    && let Some(avatar_filepath) = user_db.avatar.clone()
-                    && let Err(e) = fs::remove_file(avatar_filepath.clone())
-                {
-                    return Err(UseCaseError::Common(format!(
-                        "failed to remove file ({avatar_filepath}): {e}",
-                    )));
-                }
+        self.storage.users().update(&mut conn, user_db_copy).await?;
 
-                Ok(())
-            })
-            .await?)
+        if user.is_remove_avatar
+            && let Some(avatar_filepath) = user_db.avatar.clone()
+            && let Err(e) = fs::remove_file(avatar_filepath.clone())
+        {
+            return Err(UseCaseError::Common(format!(
+                "failed to remove file ({avatar_filepath}): {e}",
+            )));
+        }
+
+        tx.commit().await?;
+        Ok(())
     }
     pub async fn delete(&self, item_id: Uuid) -> Result<(), UseCaseError> {
-        let mut db_conn = self.transactor.conn().await?;
-        let user = self.users_repo.one(&mut db_conn, item_id).await?;
+        let mut conn = self.storage.get_conn().await?;
+        let user = self
+            .storage
+            .users()
+            .one(&mut conn.as_mut(), item_id)
+            .await?;
+        let mut tx = self.storage.begin().await?;
+        let mut conn = tx.get_conn().await?;
 
-        Ok(self
-            .transactor
-            .in_transaction(async |tx| {
-                self.users_repo.delete(tx, item_id).await?;
+        self.storage.users().delete(&mut conn, item_id).await?;
 
-                if let Some(v) = user.avatar
-                    && let Err(e) = fs::remove_file(v.clone())
-                {
-                    return Err(UseCaseError::Common(format!(
-                        "failed to remove file ({v}): {e}",
-                    )));
-                }
+        if let Some(v) = user.avatar
+            && let Err(e) = fs::remove_file(v.clone())
+        {
+            return Err(UseCaseError::Common(format!(
+                "failed to remove file ({v}): {e}",
+            )));
+        }
 
-                Ok(())
-            })
-            .await?)
+        tx.commit().await?;
+        Ok(())
     }
     fn create_password_hash(&self, pass: String) -> Result<String, UseCaseError> {
         helpers::password_hash(&pass)

@@ -1,14 +1,16 @@
-use sqlx::{AssertSqlSafe, PgConnection, QueryBuilder, Row};
+use async_trait::async_trait;
+use sqlx::{AssertSqlSafe, Executor, QueryBuilder, Row};
 use uuid::Uuid;
 
 use crate::adapter::db::{
     errors::RepositoryError,
     internal::Table,
     models::{List, TaskComment},
+    storage::{AnyConnection, TaskCommentsTable},
 };
 
-#[derive(Default)] // Default - требует линтер
 pub struct TaskComments {}
+
 impl Table for TaskComments {
     fn get_name(&self) -> &str {
         "task_comments"
@@ -24,21 +26,23 @@ impl Table for TaskComments {
         ]
     }
 }
-impl TaskComments {
-    pub const fn new() -> Self {
-        Self {}
-    }
-    pub async fn list(
+
+#[async_trait]
+impl TaskCommentsTable for TaskComments {
+    async fn list(
         &self,
-        executor: &mut PgConnection, // везде стоит это, Executor не подходит, тк нужно executor иногда использовать несколько раз
+        conn: &mut AnyConnection<'_>,
         task_id: Uuid,
         limit: i32,
         offset: i32,
     ) -> Result<List<TaskComment>, RepositoryError> {
+        let AnyConnection::Postgres(pg) = conn else {
+            return Err(RepositoryError::WrongDatabase);
+        };
         let mut query_common = format!(
             "SELECT {} FROM {}",
             self.get_fields().join(","),
-            self.get_name(),
+            self.get_name()
         );
         let mut query_count = format!("SELECT COUNT(*) as count FROM {}", self.get_name());
         let mut params: Vec<(String, String)> = vec![];
@@ -83,21 +87,24 @@ impl TaskComments {
         }
 
         let items = prepare_common
-            .fetch_all(executor.as_mut())
+            .fetch_all(&mut **pg)
             .await
             .map_err(RepositoryError::FailedToQuery)?;
         let total = prepare_count
-            .fetch_one(executor.as_mut())
+            .fetch_one(&mut **pg)
             .await
             .map_err(RepositoryError::FailedToCount)?;
 
         Ok(List(items, total))
     }
-    pub async fn one(
+    async fn one(
         &self,
-        executor: &mut PgConnection,
+        conn: &mut AnyConnection<'_>,
         item_id: Uuid,
     ) -> Result<TaskComment, RepositoryError> {
+        let AnyConnection::Postgres(pg) = conn else {
+            return Err(RepositoryError::WrongDatabase);
+        };
         let query = format!(
             "SELECT {} FROM {} WHERE task_comment_id=$1",
             self.get_fields().join(","),
@@ -106,16 +113,19 @@ impl TaskComments {
         QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(executor)
+            .fetch_optional(&mut **pg)
             .await
             .map_err(RepositoryError::FailedToQuery)?
             .ok_or(RepositoryError::NotFoundRow)
     }
-    pub async fn create(
+    async fn create(
         &self,
-        executor: &mut PgConnection,
+        conn: &mut AnyConnection<'_>,
         item: TaskComment,
     ) -> Result<Uuid, RepositoryError> {
+        let AnyConnection::Postgres(pg) = conn else {
+            return Err(RepositoryError::WrongDatabase);
+        };
         let query = format!(
             "INSERT INTO {} (task_id, user_id, msg) VALUES ($1,$2,$3) RETURNING task_comment_id",
             self.get_name(),
@@ -125,17 +135,20 @@ impl TaskComments {
             .bind(item.task_id)
             .bind(item.user_id)
             .bind(&item.msg)
-            .fetch_one(executor)
+            .fetch_one(&mut **pg)
             .await
             .map_err(RepositoryError::FailedToInsert)?
             .try_get(0)
             .map_err(RepositoryError::Common)
     }
-    pub async fn update(
+    async fn update(
         &self,
-        executor: &mut PgConnection,
+        conn: &mut AnyConnection<'_>,
         item: TaskComment,
     ) -> Result<(), RepositoryError> {
+        let AnyConnection::Postgres(pg) = conn else {
+            return Err(RepositoryError::WrongDatabase);
+        };
         let query = format!(
             "UPDATE {} SET task_id=$1, user_id=$2, msg=$3 WHERE task_comment_id=$4",
             self.get_name(),
@@ -146,7 +159,7 @@ impl TaskComments {
             .bind(item.user_id)
             .bind(&item.msg)
             .bind(item.task_comment_id)
-            .execute(executor)
+            .execute(&mut **pg)
             .await
             .map_err(RepositoryError::FailedToUpdate)
             .and_then(|result| {
@@ -159,16 +172,19 @@ impl TaskComments {
                 }
             })
     }
-    pub async fn delete(
+    async fn delete(
         &self,
-        executor: &mut PgConnection,
+        conn: &mut AnyConnection<'_>,
         item_id: Uuid,
     ) -> Result<(), RepositoryError> {
+        let AnyConnection::Postgres(pg) = conn else {
+            return Err(RepositoryError::WrongDatabase);
+        };
         let query = format!("DELETE FROM {} WHERE task_comment_id=$1", self.get_name());
         QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(executor)
+            .execute(&mut **pg)
             .await
             .map_err(RepositoryError::FailedToDelete)
             .and_then(|result| {

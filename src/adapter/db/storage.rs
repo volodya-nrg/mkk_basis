@@ -1,84 +1,241 @@
+use async_trait::async_trait;
+use sqlx::pool::PoolConnection;
+use sqlx::{PgConnection, Postgres, Sqlite, SqliteConnection};
 use uuid::Uuid;
 
-use super::errors::RepositoryError;
-use super::models::{List, Task, TaskComment, TaskData, TaskHistory, Team, TeamMember, User};
+use super::{
+    errors::RepositoryError,
+    models::{List, Task, TaskComment, TaskData, TaskHistory, Team, TeamMember, User},
+};
 
-trait Storage {
-    type Transaction<'a>: StorageTransaction<'a>
-    where
-        Self: 'a;
-    type TaskComments: TaskCommentsTable;
-    type TaskHistories: TaskHistoriesTable;
-    type Tasks: TasksTable;
-    type TeamMembers: TeamMembersTable;
-    type Teams: TeamsTable;
-    type Users: UsersTable;
-
-    fn begin(&self) -> Result<Self::Transaction<'_>, RepositoryError>;
-    fn task_comments(&self) -> &Self::TaskComments;
-    fn task_histories(&self) -> &Self::TaskHistories;
-    fn tasks(&self) -> &Self::Tasks;
-    fn team_members(&self) -> &Self::TeamMembers;
-    fn teams(&self) -> &Self::Teams;
-    fn users(&self) -> &Self::Users;
+// Заимствованное соединение — для передачи в методы таблиц.
+pub enum AnyConnection<'a> {
+    Postgres(&'a mut PgConnection),
+    Sqlite(&'a mut SqliteConnection),
 }
 
-trait StorageTransaction<'a> {
-    /*
-    let tx = storage.begin()?;
-    // работаем через tx, у которого те же геттеры таблиц
-    tx.tasks().create(...)?;
-    tx.commit()?;
-    */
-    fn commit(&self) -> Result<(), RepositoryError>;
-    fn rollback(&self) -> Result<(), RepositoryError>;
+// Владеющее соединение — то, что возвращает Storage::get_conn().
+pub enum AnyConnectionOwned {
+    Postgres(PoolConnection<Postgres>),
+    Sqlite(PoolConnection<Sqlite>),
 }
 
-trait TaskCommentsTable {
+impl AnyConnectionOwned {
+    pub fn as_mut(&mut self) -> AnyConnection<'_> {
+        match self {
+            AnyConnectionOwned::Postgres(c) => AnyConnection::Postgres(&mut *c),
+            AnyConnectionOwned::Sqlite(c) => AnyConnection::Sqlite(&mut *c),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum IsolationLevel {
+    // ReadUncommitted,
+    ReadCommitted,
+    RepeatableRead,
+    Serializable,
+}
+
+impl IsolationLevel {
+    pub fn as_sql(&self) -> &'static str {
+        match self {
+            // Self::ReadUncommitted => "READ UNCOMMITTED",
+            Self::ReadCommitted => "READ COMMITTED",
+            Self::RepeatableRead => "REPEATABLE READ",
+            Self::Serializable => "SERIALIZABLE",
+        }
+    }
+}
+
+#[async_trait]
+pub trait Storage: Send + Sync {
+    async fn begin(&self) -> Result<Box<dyn MyTransaction>, RepositoryError>;
+    async fn get_conn(&self) -> Result<AnyConnectionOwned, RepositoryError>;
+    fn task_comments(&self) -> &dyn TaskCommentsTable;
+    fn task_histories(&self) -> &dyn TaskHistoriesTable;
+    fn tasks(&self) -> &dyn TasksTable;
+    fn team_members(&self) -> &dyn TeamMembersTable;
+    fn teams(&self) -> &dyn TeamsTable;
+    fn users(&self) -> &dyn UsersTable;
+}
+#[async_trait]
+pub trait MyTransaction: Send + Sync {
+    async fn get_conn(&mut self) -> Result<AnyConnection<'_>, RepositoryError>;
+    async fn commit(self: Box<Self>) -> Result<(), RepositoryError>;
+    async fn rollback(self: Box<Self>) -> Result<(), RepositoryError>;
+}
+
+#[async_trait]
+pub trait TaskCommentsTable: Send + Sync {
     async fn list(
         &self,
+        conn: &mut AnyConnection<'_>,
         task_id: Uuid,
         limit: i32,
         offset: i32,
     ) -> Result<List<TaskComment>, RepositoryError>;
-    async fn one(&self, item_id: Uuid) -> Result<TaskComment, RepositoryError>;
-    async fn create(&self, item: TaskComment) -> Result<Uuid, RepositoryError>;
-    async fn update(&self, item: TaskComment) -> Result<(), RepositoryError>;
-    async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError>;
+
+    async fn one(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        item_id: Uuid,
+    ) -> Result<TaskComment, RepositoryError>;
+    async fn create(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        item: TaskComment,
+    ) -> Result<Uuid, RepositoryError>;
+    async fn update(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        item: TaskComment,
+    ) -> Result<(), RepositoryError>;
+    async fn delete(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        item_id: Uuid,
+    ) -> Result<(), RepositoryError>;
 }
-trait TaskHistoriesTable {
-    async fn list(&self, limit: i32, offset: i32) -> Result<List<TaskHistory>, RepositoryError>;
-    async fn one(&self, item_id: Uuid) -> Result<TaskHistory, RepositoryError>;
-    async fn by_task_id(&self, task_id: Uuid) -> Result<Vec<TaskHistory>, RepositoryError>;
-    async fn create(&self, item: TaskHistory) -> Result<TaskHistory, RepositoryError>;
-    async fn update(&self, item: TaskHistory) -> Result<(), RepositoryError>;
-    async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError>;
+
+#[async_trait]
+pub trait TaskHistoriesTable: Send + Sync {
+    async fn list(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        limit: i32,
+        offset: i32,
+    ) -> Result<List<TaskHistory>, RepositoryError>;
+    async fn one(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        item_id: Uuid,
+    ) -> Result<TaskHistory, RepositoryError>;
+    async fn by_task_id(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        task_id: Uuid,
+    ) -> Result<Vec<TaskHistory>, RepositoryError>;
+    async fn create(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        item: TaskHistory,
+    ) -> Result<Uuid, RepositoryError>;
+    async fn update(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        item: TaskHistory,
+    ) -> Result<(), RepositoryError>;
+    async fn delete(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        item_id: Uuid,
+    ) -> Result<(), RepositoryError>;
 }
-trait TasksTable {
-    async fn list(&self, data: TaskData) -> Result<List<Task>, RepositoryError>;
-    async fn one(&self, item_id: Uuid) -> Result<Task, RepositoryError>;
-    async fn create(&self, item: Task) -> Result<Uuid, RepositoryError>;
-    async fn update(&self, item: Task) -> Result<(), RepositoryError>;
-    async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError>;
+
+#[async_trait]
+pub trait TasksTable: Send + Sync {
+    async fn list(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        data: TaskData,
+    ) -> Result<List<Task>, RepositoryError>;
+    async fn one(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        item_id: Uuid,
+    ) -> Result<Task, RepositoryError>;
+    async fn create(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        item: Task,
+    ) -> Result<Uuid, RepositoryError>;
+    async fn update(&self, conn: &mut AnyConnection<'_>, item: Task)
+    -> Result<(), RepositoryError>;
+    async fn delete(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        item_id: Uuid,
+    ) -> Result<(), RepositoryError>;
 }
-trait TeamMembersTable {
-    async fn all(&self) -> Result<Vec<TeamMember>, RepositoryError>;
-    async fn one(&self, team_id: Uuid, user_id: Uuid) -> Result<TeamMember, RepositoryError>;
-    async fn create(&self, item: TeamMember) -> Result<(), RepositoryError>;
-    async fn delete(&self, team_id: Uuid, user_id: Uuid) -> Result<(), RepositoryError>;
+
+#[async_trait]
+pub trait TeamMembersTable: Send + Sync {
+    async fn all(&self, conn: &mut AnyConnection<'_>) -> Result<Vec<TeamMember>, RepositoryError>;
+    async fn one(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        team_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<TeamMember, RepositoryError>;
+    async fn create(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        item: TeamMember,
+    ) -> Result<(), RepositoryError>;
+    async fn delete(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        team_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), RepositoryError>;
 }
-trait TeamsTable {
-    async fn list(&self, limit: i32, offset: i32) -> Result<List<Team>, RepositoryError>;
-    async fn one(&self, item_id: Uuid) -> Result<Team, RepositoryError>;
-    async fn create(&self, item: Team) -> Result<Uuid, RepositoryError>;
-    async fn update(&self, item: Team) -> Result<(), RepositoryError>;
-    async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError>;
+
+#[async_trait]
+pub trait TeamsTable: Send + Sync {
+    async fn list(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        limit: i32,
+        offset: i32,
+    ) -> Result<List<Team>, RepositoryError>;
+    async fn one(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        item_id: Uuid,
+    ) -> Result<Team, RepositoryError>;
+    async fn create(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        item: Team,
+    ) -> Result<Uuid, RepositoryError>;
+    async fn update(&self, conn: &mut AnyConnection<'_>, item: Team)
+    -> Result<(), RepositoryError>;
+    async fn delete(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        item_id: Uuid,
+    ) -> Result<(), RepositoryError>;
 }
-trait UsersTable {
-    async fn list(&self, limit: i32, offset: i32) -> Result<List<User>, RepositoryError>;
-    async fn one(&self, item_id: Uuid) -> Result<User, RepositoryError>;
-    async fn by_email(&self, email: &str) -> Result<User, RepositoryError>;
-    async fn create(&self, item: User) -> Result<Uuid, RepositoryError>;
-    async fn update(&self, item: User) -> Result<(), RepositoryError>;
-    async fn delete(&self, item_id: Uuid) -> Result<(), RepositoryError>;
+
+#[async_trait]
+pub trait UsersTable: Send + Sync {
+    async fn list(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        limit: i32,
+        offset: i32,
+    ) -> Result<List<User>, RepositoryError>;
+    async fn one(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        item_id: Uuid,
+    ) -> Result<User, RepositoryError>;
+    async fn by_email(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        email: &str,
+    ) -> Result<User, RepositoryError>;
+    async fn create(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        item: User,
+    ) -> Result<Uuid, RepositoryError>;
+    async fn update(&self, conn: &mut AnyConnection<'_>, item: User)
+    -> Result<(), RepositoryError>;
+    async fn delete(
+        &self,
+        conn: &mut AnyConnection<'_>,
+        item_id: Uuid,
+    ) -> Result<(), RepositoryError>;
 }

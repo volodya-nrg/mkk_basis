@@ -19,5 +19,7 @@ pub enum RepositoryError {
     NotFoundRow,
     #[error("expected one row, but has {0}")]
     ExpectedOneRow(u64),
+    #[error("wrong database")]
+    WrongDatabase,
 }
 // impl std::error::Error for RepositoryError {}

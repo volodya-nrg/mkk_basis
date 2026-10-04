@@ -1,10 +1,16 @@
-use sqlx::{PgConnection, QueryBuilder};
+use async_trait::async_trait;
+use sqlx::QueryBuilder;
 use uuid::Uuid;
 
-use crate::adapter::db::{errors::RepositoryError, internal::Table, models::TeamMember};
+use crate::adapter::db::{
+    errors::RepositoryError,
+    internal::Table,
+    models::TeamMember,
+    storage::{AnyConnection, TeamMembersTable},
+};
 
-#[derive(Default)] // Default - требует линтер
 pub struct TeamMembers {}
+
 impl Table for TeamMembers {
     fn get_name(&self) -> &str {
         "team_members"
@@ -13,30 +19,32 @@ impl Table for TeamMembers {
         &["team_id", "user_id", "created_at"]
     }
 }
-impl TeamMembers {
-    pub const fn new() -> Self {
-        Self {}
-    }
-    pub async fn all(
-        &self,
-        executor: &mut PgConnection,
-    ) -> Result<Vec<TeamMember>, RepositoryError> {
+
+#[async_trait]
+impl TeamMembersTable for TeamMembers {
+    async fn all(&self, conn: &mut AnyConnection<'_>) -> Result<Vec<TeamMember>, RepositoryError> {
+        let AnyConnection::Postgres(pg) = conn else {
+            return Err(RepositoryError::WrongDatabase);
+        };
         QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
             self.get_fields().join(","),
             self.get_name(),
         ))
         .build_query_as()
-        .fetch_all(executor)
+        .fetch_all(&mut **pg)
         .await
         .map_err(RepositoryError::FailedToQuery)
     }
-    pub async fn one(
+    async fn one(
         &self,
-        executor: &mut PgConnection,
+        conn: &mut AnyConnection<'_>,
         team_id: Uuid,
         user_id: Uuid,
     ) -> Result<TeamMember, RepositoryError> {
+        let AnyConnection::Postgres(pg) = conn else {
+            return Err(RepositoryError::WrongDatabase);
+        };
         let query = format!(
             "SELECT {} FROM {} WHERE team_id=$1 AND user_id=$2",
             self.get_fields().join(","),
@@ -46,16 +54,19 @@ impl TeamMembers {
             .build_query_as()
             .bind(team_id)
             .bind(user_id)
-            .fetch_optional(executor)
+            .fetch_optional(&mut **pg)
             .await
             .map_err(RepositoryError::FailedToQuery)?
             .ok_or(RepositoryError::NotFoundRow)
     }
-    pub async fn create(
+    async fn create(
         &self,
-        executor: &mut PgConnection,
+        conn: &mut AnyConnection<'_>,
         item: TeamMember,
     ) -> Result<(), RepositoryError> {
+        let AnyConnection::Postgres(pg) = conn else {
+            return Err(RepositoryError::WrongDatabase);
+        };
         let query = format!(
             "INSERT INTO {} (team_id, user_id) VALUES ($1,$2)",
             self.get_name(),
@@ -64,17 +75,20 @@ impl TeamMembers {
             .build()
             .bind(item.team_id)
             .bind(item.user_id)
-            .execute(executor)
+            .execute(&mut **pg)
             .await
             .map_err(RepositoryError::FailedToInsert)
             .map(|_| ())
     }
-    pub async fn delete(
+    async fn delete(
         &self,
-        executor: &mut PgConnection,
+        conn: &mut AnyConnection<'_>,
         team_id: Uuid,
         user_id: Uuid,
     ) -> Result<(), RepositoryError> {
+        let AnyConnection::Postgres(pg) = conn else {
+            return Err(RepositoryError::WrongDatabase);
+        };
         let query = format!(
             "DELETE FROM {} WHERE team_id=$1 AND user_id=$2",
             self.get_name()
@@ -83,7 +97,7 @@ impl TeamMembers {
             .build()
             .bind(team_id)
             .bind(user_id)
-            .execute(executor)
+            .execute(&mut **pg)
             .await
             .map_err(RepositoryError::FailedToDelete)
             .and_then(|result| {

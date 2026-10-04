@@ -5,11 +5,23 @@ use lettre::{
 };
 use std::time::Duration;
 
+// все таки надежнее создавать ошибки через thiserror::Error, потому что:
+// 1. отсутствует отличие ошибок
+// 2. теряется источник (предыдущая ошибка в цепочке)
+// 3. не реализует std::error::Error
+#[derive(Debug, thiserror::Error)]
+pub enum EmailError {
+    #[error("invalid email address: {0}")]
+    InvalidEmailAddress(String),
+    #[error("{0}")]
+    Common(String),
+}
+
 // Crate "async_trait" упрощает объявление Pin<Box>, внутренних vtable у трейтов и разных lifetime.
 // Укажем сразу поддержку "Send + Sync + 'static", чтоб не писать подобное в других местах.
 #[async_trait::async_trait]
 pub trait EmailSender: Send + Sync + 'static {
-    fn send(&self, to: &str, subject: &str, body: &str) -> Result<(), String>;
+    fn send(&self, to: &str, subject: &str, body: &str) -> Result<(), EmailError>;
 }
 
 pub struct Email {
@@ -43,19 +55,21 @@ impl Email {
 
 #[async_trait::async_trait]
 impl EmailSender for Email {
-    fn send(&self, ref_to: &str, ref_subject: &str, ref_body: &str) -> Result<(), String> {
-        let (local_from_email, domain_from_email) = self
-            .from_email
-            .split_once('@')
-            .ok_or_else(|| "invalid email: missing @ from 'from'".to_string())?;
-        let address_from_email = Address::new(local_from_email, domain_from_email)
-            .map_err(|e| format!("failed to create address from 'from': {e}"))?;
+    fn send(&self, ref_to: &str, ref_subject: &str, ref_body: &str) -> Result<(), EmailError> {
+        let (local_from_email, domain_from_email) =
+            self.from_email.split_once('@').ok_or_else(|| {
+                EmailError::InvalidEmailAddress("invalid email: missing @ from 'from'".to_string())
+            })?;
+        let address_from_email =
+            Address::new(local_from_email, domain_from_email).map_err(|e| {
+                EmailError::Common(format!("failed to create address from 'from': {e}"))
+            })?;
         let mailbox_from = Mailbox::new(Some(self.from_name.clone()), address_from_email);
-        let (local_to, domain_to) = ref_to
-            .split_once('@')
-            .ok_or_else(|| "invalid email: missing @ from 'to'".to_string())?; // linter просит использовать эту ф-ию, а не ok_or
+        let (local_to, domain_to) = ref_to.split_once('@').ok_or_else(|| {
+            EmailError::InvalidEmailAddress("invalid email: missing @ from 'to'".to_string())
+        })?; // linter просит использовать эту ф-ию, а не ok_or
         let address_to = Address::new(local_to, domain_to)
-            .map_err(|e| format!("failed to create address from 'to': {e}"))?;
+            .map_err(|e| EmailError::Common(format!("failed to create address from 'to': {e}")))?;
         let mailbox_to = Mailbox::new(None, address_to);
         let email = Message::builder()
             .from(mailbox_from)
@@ -64,15 +78,15 @@ impl EmailSender for Email {
             .subject(ref_subject)
             .header(ContentType::TEXT_HTML)
             .body(ref_body.to_string())
-            .map_err(|e| format!("failed to create body: {e}"))?;
+            .map_err(|e| EmailError::Common(format!("failed to create body: {e}")))?;
 
         SmtpTransport::starttls_relay(self.host.as_str())
-            .map_err(|e| format!("failed to create smtp-transport: {e}"))?
+            .map_err(|e| EmailError::Common(format!("failed to create smtp-transport: {e}")))?
             .timeout(Some(self.timeout))
             .credentials(Credentials::new(self.login.clone(), self.pass.clone()))
             .build()
             .send(&email)
-            .map_err(|e| format!("failed to send: {e}"))
+            .map_err(|e| EmailError::Common(format!("failed to send: {e}")))
             .map(|_| ())
     }
 }

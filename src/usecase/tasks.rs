@@ -3,14 +3,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::adapter::db::{
-    errors::RepositoryError,
-    postgres::{
-        tables::{
-            task_histories::TaskHistories as DBTaskHistories, tasks::Status as TaskStatus,
-            tasks::Tasks as DBTasks, team_members::TeamMembers as DBTeamMembers,
-        },
-        transactor::Transactor,
-    },
+    errors::RepositoryError, postgres::tables::tasks::Status as TaskStatus, storage::Storage,
 };
 use crate::app_errors::AppErr;
 
@@ -21,152 +14,149 @@ use super::{
 
 #[derive(Clone)] // clone из-за axum
 pub struct Tasks {
-    transactor: Arc<Transactor>,
-    tasks_repo: Arc<DBTasks>,
-    task_histories_repo: Arc<DBTaskHistories>,
-    team_members_repo: Arc<DBTeamMembers>,
+    storage: Arc<dyn Storage>,
 }
 
 impl Tasks {
-    pub const fn new(
-        transactor: Arc<Transactor>,
-        tasks_repo: Arc<DBTasks>,
-        task_histories_repo: Arc<DBTaskHistories>,
-        team_members_repo: Arc<DBTeamMembers>,
-    ) -> Self {
-        Self {
-            transactor,
-            tasks_repo,
-            task_histories_repo,
-            team_members_repo,
-        }
+    pub const fn new(storage: Arc<dyn Storage>) -> Self {
+        Self { storage }
     }
     pub async fn list(&self, data: TaskData) -> Result<(Vec<Task>, i64), UseCaseError> {
-        Ok(self
-            .transactor
-            .in_transaction::<_, _, UseCaseError>(async |tx| {
-                let list = self
-                    .tasks_repo
-                    .list(tx, mapper::task_data_uc_to_task_data_db(data))
-                    .await?;
-                Ok((
-                    list.0.into_iter().map(mapper::task_db_to_task_uc).collect(),
-                    list.1,
-                ))
-            })
-            .await?)
+        let mut tx = self.storage.begin().await?;
+        let mut conn = tx.get_conn().await?;
+        let list = self
+            .storage
+            .tasks()
+            .list(&mut conn, mapper::task_data_uc_to_task_data_db(data))
+            .await?;
+
+        tx.commit().await?;
+        Ok((
+            list.0.into_iter().map(mapper::task_db_to_task_uc).collect(),
+            list.1,
+        ))
     }
     pub async fn one(&self, item_id: Uuid) -> Result<Task, UseCaseError> {
-        let mut db_conn = self.transactor.conn().await?;
+        let mut conn = self.storage.get_conn().await?;
         Ok(mapper::task_db_to_task_uc(
-            self.tasks_repo.one(&mut db_conn, item_id).await?,
+            self.storage
+                .tasks()
+                .one(&mut conn.as_mut(), item_id)
+                .await?,
         ))
     }
     pub async fn create(&self, task: Task, user_id: Uuid) -> Result<Uuid, UseCaseError> {
         // создать задачу может только член команды
         self.check_access(task.team_id, user_id).await?;
 
-        Ok(self
-            .transactor
-            .in_transaction::<_, _, UseCaseError>(async |tx| {
-                let new_task_uuid = self
-                    .tasks_repo
-                    .create(tx.as_mut(), mapper::task_uc_to_task_db(task))
-                    .await?;
-                let _ = self
-                    .task_histories_repo
-                    .create(
-                        tx,
-                        mapper::task_history_uc_to_task_history_db(TaskHistory {
-                            task_history_id: Default::default(),
-                            task_id: new_task_uuid,
-                            user_id,
-                            msg: "create".to_string(),
-                            created_at: Default::default(),
-                        }),
-                    )
-                    .await?;
+        let mut tx = self.storage.begin().await?;
+        let mut conn = tx.get_conn().await?;
+        let new_task_uuid = self
+            .storage
+            .tasks()
+            .create(&mut conn, mapper::task_uc_to_task_db(task))
+            .await?;
+        let _ = self
+            .storage
+            .task_histories()
+            .create(
+                &mut conn,
+                mapper::task_history_uc_to_task_history_db(TaskHistory {
+                    task_history_id: Default::default(),
+                    task_id: new_task_uuid,
+                    user_id,
+                    msg: "create".to_string(),
+                    created_at: Default::default(),
+                }),
+            )
+            .await?;
 
-                Ok(new_task_uuid)
-            })
-            .await?)
+        tx.commit().await?;
+        Ok(new_task_uuid)
     }
     pub async fn update(&self, task: Task, user_id: Uuid) -> Result<(), UseCaseError> {
         // обновить задачу может только член команды
         self.check_access(task.team_id, user_id).await?;
 
         let task_id = task.task_id;
-        let _ = self
-            .transactor
-            .in_transaction(async |tx| {
-                self.tasks_repo
-                    .update(tx.as_mut(), mapper::task_uc_to_task_db(task))
-                    .await?;
+        let mut tx = self.storage.begin().await?;
+        let mut conn = tx.get_conn().await?;
 
-                self.task_histories_repo
-                    .create(
-                        tx,
-                        mapper::task_history_uc_to_task_history_db(TaskHistory {
-                            task_history_id: Default::default(),
-                            task_id,
-                            user_id,
-                            msg: "update".to_string(),
-                            created_at: Default::default(),
-                        }),
-                    )
-                    .await
-            })
+        self.storage
+            .tasks()
+            .update(&mut conn, mapper::task_uc_to_task_db(task))
             .await?;
+        self.storage
+            .task_histories()
+            .create(
+                &mut conn,
+                mapper::task_history_uc_to_task_history_db(TaskHistory {
+                    task_history_id: Default::default(),
+                    task_id,
+                    user_id,
+                    msg: "update".to_string(),
+                    created_at: Default::default(),
+                }),
+            )
+            .await?;
+
+        tx.commit().await?;
 
         Ok(())
     }
     // удалить задачу может только член команды
     pub async fn delete(&self, task_id: Uuid, user_id: Uuid) -> Result<(), UseCaseError> {
-        let mut db_conn = self.transactor.conn().await?;
-        let mut task =
-            mapper::task_db_to_task_uc(self.tasks_repo.one(&mut db_conn, task_id).await?);
+        let mut conn = self.storage.get_conn().await?;
+        let mut task = mapper::task_db_to_task_uc(
+            self.storage
+                .tasks()
+                .one(&mut conn.as_mut(), task_id)
+                .await?,
+        );
 
         self.check_access(task.team_id, user_id).await?;
         task.status = TaskStatus::Cancelled.to_string();
 
-        let _ = self
-            .transactor
-            .in_transaction(async |tx| {
-                self.tasks_repo
-                    .update(tx.as_mut(), mapper::task_uc_to_task_db(task))
-                    .await?;
+        let mut tx = self.storage.begin().await?;
+        let mut conn = tx.get_conn().await?;
 
-                self.task_histories_repo
-                    .create(
-                        tx,
-                        mapper::task_history_uc_to_task_history_db(TaskHistory {
-                            task_history_id: Default::default(),
-                            task_id,
-                            user_id,
-                            msg: "delete".to_string(),
-                            created_at: Default::default(),
-                        }),
-                    )
-                    .await
-            })
+        self.storage
+            .tasks()
+            .update(&mut conn, mapper::task_uc_to_task_db(task))
+            .await?;
+        self.storage
+            .task_histories()
+            .create(
+                &mut conn,
+                mapper::task_history_uc_to_task_history_db(TaskHistory {
+                    task_history_id: Default::default(),
+                    task_id,
+                    user_id,
+                    msg: "delete".to_string(),
+                    created_at: Default::default(),
+                }),
+            )
             .await?;
 
+        tx.commit().await?;
         Ok(())
     }
     pub async fn get_history(&self, item_id: Uuid) -> Result<Vec<TaskHistory>, UseCaseError> {
-        let mut db_conn = self.transactor.conn().await?;
+        let mut conn = self.storage.get_conn().await?;
         Ok(self
-            .task_histories_repo
-            .by_task_id(&mut db_conn, item_id)
+            .storage
+            .task_histories()
+            .by_task_id(&mut conn.as_mut(), item_id)
             .await?
             .into_iter() // по значениям
             .map(mapper::task_history_db_to_task_history_uc)
             .collect())
     }
     async fn check_access(&self, team_id: Uuid, user_id: Uuid) -> Result<(), UseCaseError> {
-        let mut db_conn = self.transactor.conn().await?;
-        self.team_members_repo
-            .one(&mut db_conn, team_id, user_id)
+        let mut conn = self.storage.get_conn().await?;
+        self.storage
+            .team_members()
+            .one(&mut conn.as_mut(), team_id, user_id)
             .await
             .map_err(|e| match e {
                 RepositoryError::NotFoundRow => UseCaseError::Transport {

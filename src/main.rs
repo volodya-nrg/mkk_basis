@@ -7,19 +7,18 @@ use std::time::Duration;
 
 // Тут обращаемся через mkk_basis, они указаны в lib.rs, тем самым при интеграционном тестировании
 // запускается только один бинарник для проверки, а не два.
-use mkk_basis::adapter::{
-    config::Config,
-    db::postgres::{
-        Postgres as PostgresService,
-        transactor::{IsolationLevel, Transactor},
+use mkk_basis::{
+    adapter::{
+        config::Config,
+        db::{postgres::MyPostgres, storage::IsolationLevel},
+        email::Email as EmailService,
+        jwt::Jwt as JWTService,
+        logger,
     },
-    email::Email as EmailService,
-    jwt::Jwt as JWTService,
-    logger,
+    consts,
+    transport::{self, http_server::HTTPServer},
+    usecase::UseCase,
 };
-use mkk_basis::consts;
-use mkk_basis::transport::{self, http_server::HTTPServer};
-use mkk_basis::usecase::UseCase;
 
 #[derive(Parser)]
 struct Args {
@@ -101,8 +100,9 @@ async fn run(config_filepath: String) -> Result<(), String> {
         .connect(&cfg.postgres.dsn)
         .await
         .map_err(|e| format!("failed to connect on DB: {e}"))?;
-    let transactor = Transactor::new(pool, IsolationLevel::RepeatableRead);
-    let postgres_service = PostgresService::new(Arc::new(transactor));
+    let storage_service = MyPostgres::new(pool, IsolationLevel::RepeatableRead)
+        .await
+        .map_err(|e| format!("failed to create MyPostgres: {e}"))?;
     let email_service = EmailService::new(
         &cfg.email.host,
         &cfg.email.login,
@@ -115,7 +115,7 @@ async fn run(config_filepath: String) -> Result<(), String> {
         cfg.http_server.address,
         UseCase::new(
             cfg.addr,
-            Arc::new(postgres_service),
+            Arc::new(storage_service),
             JWTService::new(
                 private_key_bytes,
                 consts::ACCESS_TOKEN_TTL_SEC,

@@ -8,18 +8,15 @@ pub mod tasks;
 pub mod teams;
 pub mod users;
 
-use crate::adapter::{
-    db::{
-        errors::RepositoryError,
-        postgres::{Postgres, transactor::TransactionError},
-    },
-    email::EmailSender,
-    jwt::JWTError,
-    jwt::Jwt as JWTService,
-};
-use crate::app_errors::AppErr;
 use http::StatusCode;
 use std::sync::Arc;
+
+use crate::adapter::{
+    db::{errors::RepositoryError, storage::Storage},
+    email::EmailSender,
+    jwt::{JWTError, Jwt as JWTService},
+};
+use crate::app_errors::AppErr;
 
 #[derive(Clone)] // clone из-за axum
 pub struct UseCase {
@@ -33,34 +30,16 @@ pub struct UseCase {
 impl UseCase {
     pub fn new(
         addr: String,
-        db: Arc<Postgres>,
+        storage: Arc<dyn Storage>,
         jwt_service: JWTService,
         email_sender: Arc<dyn EmailSender>,
     ) -> Self {
         Self {
-            auth: auth::Auth::new(
-                addr,
-                jwt_service,
-                email_sender,
-                db.transactor.clone(),
-                db.tbl_users.clone(),
-            ),
-            teams: teams::Teams::new(
-                db.transactor.clone(),
-                db.tbl_teams.clone(),
-                db.tbl_team_members.clone(),
-            ),
-            tasks: tasks::Tasks::new(
-                db.transactor.clone(),
-                db.tbl_tasks.clone(),
-                db.tbl_task_histories.clone(),
-                db.tbl_team_members.clone(),
-            ),
-            task_comments: task_comments::TaskComments::new(
-                db.transactor.clone(),
-                db.tbl_task_comments.clone(),
-            ),
-            users: users::Users::new(db.transactor.clone(), db.tbl_users.clone()),
+            auth: auth::Auth::new(addr, jwt_service, email_sender, storage.clone()),
+            teams: teams::Teams::new(storage.clone()),
+            tasks: tasks::Tasks::new(storage.clone()),
+            task_comments: task_comments::TaskComments::new(storage.clone()),
+            users: users::Users::new(storage.clone()),
         }
     }
 }
@@ -107,17 +86,5 @@ impl From<JWTError> for UseCaseError {
 impl From<sqlx::Error> for UseCaseError {
     fn from(e: sqlx::Error) -> Self {
         Self::Common(e.to_string())
-    }
-}
-impl<E> From<TransactionError<E>> for UseCaseError
-where
-    E: Into<Self>,
-{
-    fn from(e: TransactionError<E>) -> Self {
-        match e {
-            TransactionError::Database(sqlx_err) => Self::Common(sqlx_err.to_string()),
-            TransactionError::Operation(e) => e.into(),
-            // other => Self::from(other), - тут было переполнение стека
-        }
     }
 }

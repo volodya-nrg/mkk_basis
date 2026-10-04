@@ -10,6 +10,10 @@ use mkk_basis::adapter::db::{
     errors::RepositoryError,
     models::TaskData,
     postgres::{tables::tasks::Status as TaskStatus, tables::users::Role as UserRoles},
+    storage::{
+        Storage, TaskCommentsTable, TaskHistoriesTable, TasksTable, TeamMembersTable, TeamsTable,
+        UsersTable,
+    },
 };
 
 use common::{context::Context, rand};
@@ -23,17 +27,20 @@ async fn get_context() -> &'static Context {
 #[tokio::test]
 async fn check_users() {
     let ctx = get_context().await;
-    let mut conn = ctx.transactor.conn().await.unwrap();
+    let mut conn = ctx.db.get_conn().await.unwrap();
 
     // err: проверим что запись не находит
     assert_matches!(
-        ctx.db.tbl_users.one(conn.as_mut(), Uuid::new_v4()).await,
+        ctx.db
+            .tbl_users
+            .one(&mut conn.as_mut(), Uuid::new_v4())
+            .await,
         Err(RepositoryError::NotFoundRow)
     );
     assert_matches!(
         ctx.db
             .tbl_users
-            .by_email(conn.as_mut(), &rand::email())
+            .by_email(&mut conn.as_mut(), &rand::email())
             .await,
         Err(RepositoryError::NotFoundRow)
     );
@@ -43,7 +50,7 @@ async fn check_users() {
     user_expected.user_id = ctx
         .db
         .tbl_users
-        .create(conn.as_mut(), user_expected.clone())
+        .create(&mut conn.as_mut(), user_expected.clone())
         .await
         .unwrap();
     assert!(!user_expected.user_id.is_nil());
@@ -52,7 +59,7 @@ async fn check_users() {
     assert!(
         ctx.db
             .tbl_users
-            .create(conn.as_mut(), user_expected.clone())
+            .create(&mut conn.as_mut(), user_expected.clone())
             .await
             .is_err()
     );
@@ -61,7 +68,7 @@ async fn check_users() {
     let mut user_actual = ctx
         .db
         .tbl_users
-        .one(conn.as_mut(), user_expected.user_id)
+        .one(&mut conn.as_mut(), user_expected.user_id)
         .await
         .unwrap();
     assert!(user_actual.created_at.gt(&ctx.time_now));
@@ -75,18 +82,28 @@ async fn check_users() {
         user_actual,
         ctx.db
             .tbl_users
-            .by_email(conn.as_mut(), &user_actual.email)
+            .by_email(&mut conn.as_mut(), &user_actual.email)
             .await
             .unwrap()
     );
 
     // ok: проверим что список не пустой
-    let mut list = ctx.db.tbl_users.list(conn.as_mut(), -1, -1).await.unwrap();
+    let mut list = ctx
+        .db
+        .tbl_users
+        .list(&mut conn.as_mut(), -1, -1)
+        .await
+        .unwrap();
     assert!(!list.0.is_empty());
     assert!(list.1 > 0);
 
     // ok: проверим пустой результат, но общее кол-во есть
-    list = ctx.db.tbl_users.list(conn.as_mut(), 0, 0).await.unwrap();
+    list = ctx
+        .db
+        .tbl_users
+        .list(&mut conn.as_mut(), 0, 0)
+        .await
+        .unwrap();
     assert!(list.0.is_empty());
     assert!(list.1 > 0);
 
@@ -94,7 +111,7 @@ async fn check_users() {
     assert!(
         ctx.db
             .tbl_users
-            .update(conn.as_mut(), rand::user())
+            .update(&mut conn.as_mut(), rand::user())
             .await
             .is_err()
     );
@@ -106,14 +123,14 @@ async fn check_users() {
     assert!(
         ctx.db
             .tbl_users
-            .update(conn.as_mut(), user_expected.clone())
+            .update(&mut conn.as_mut(), user_expected.clone())
             .await
             .is_success()
     );
     user_actual = ctx
         .db
         .tbl_users
-        .one(conn.as_mut(), user_expected.user_id)
+        .one(&mut conn.as_mut(), user_expected.user_id)
         .await
         .unwrap();
     assert!(user_actual.updated_at.gt(&user_actual.created_at));
@@ -126,7 +143,7 @@ async fn check_users() {
     assert!(
         ctx.db
             .tbl_users
-            .update(conn.as_mut(), user_expected.clone())
+            .update(&mut conn.as_mut(), user_expected.clone())
             .await
             .is_err()
     );
@@ -134,14 +151,14 @@ async fn check_users() {
     assert!(
         ctx.db
             .tbl_users
-            .update(conn.as_mut(), user_expected.clone())
+            .update(&mut conn.as_mut(), user_expected.clone())
             .await
             .is_success()
     );
     assert!(
         ctx.db
             .tbl_users
-            .one(conn.as_mut(), user_expected.user_id)
+            .one(&mut conn.as_mut(), user_expected.user_id)
             .await
             .unwrap()
             .role
@@ -151,14 +168,14 @@ async fn check_users() {
     assert!(
         ctx.db
             .tbl_users
-            .update(conn.as_mut(), user_expected.clone())
+            .update(&mut conn.as_mut(), user_expected.clone())
             .await
             .is_success()
     );
     assert!(
         ctx.db
             .tbl_users
-            .one(conn.as_mut(), user_expected.user_id)
+            .one(&mut conn.as_mut(), user_expected.user_id)
             .await
             .unwrap()
             .role
@@ -169,7 +186,7 @@ async fn check_users() {
     assert!(
         ctx.db
             .tbl_users
-            .delete(conn.as_mut(), Uuid::new_v4())
+            .delete(&mut conn.as_mut(), Uuid::new_v4())
             .await
             .is_err()
     );
@@ -178,7 +195,7 @@ async fn check_users() {
     assert!(
         ctx.db
             .tbl_users
-            .delete(conn.as_mut(), user_actual.user_id)
+            .delete(&mut conn.as_mut(), user_actual.user_id)
             .await
             .is_success()
     );
@@ -187,7 +204,7 @@ async fn check_users() {
     assert_matches!(
         ctx.db
             .tbl_users
-            .one(conn.as_mut(), user_actual.user_id)
+            .one(&mut conn.as_mut(), user_actual.user_id)
             .await,
         Err(RepositoryError::NotFoundRow)
     );
@@ -196,17 +213,20 @@ async fn check_users() {
 #[tokio::test]
 async fn check_teams() {
     let ctx = get_context().await;
-    let mut conn = ctx.transactor.conn().await.unwrap();
+    let mut conn = ctx.db.get_conn().await.unwrap();
     let user_id = ctx
         .db
         .tbl_users
-        .create(conn.as_mut(), rand::user())
+        .create(&mut conn.as_mut(), rand::user())
         .await
         .unwrap();
 
     // err: проверим что команду не находит
     assert_matches!(
-        ctx.db.tbl_teams.one(conn.as_mut(), Uuid::new_v4()).await,
+        ctx.db
+            .tbl_teams
+            .one(&mut conn.as_mut(), Uuid::new_v4())
+            .await,
         Err(RepositoryError::NotFoundRow)
     );
 
@@ -214,7 +234,7 @@ async fn check_teams() {
     assert!(
         ctx.db
             .tbl_teams
-            .create(conn.as_mut(), rand::team())
+            .create(&mut conn.as_mut(), rand::team())
             .await
             .is_err()
     );
@@ -225,7 +245,7 @@ async fn check_teams() {
     team_expected.team_id = ctx
         .db
         .tbl_teams
-        .create(conn.as_mut(), team_expected.clone())
+        .create(&mut conn.as_mut(), team_expected.clone())
         .await
         .unwrap();
     assert!(!team_expected.team_id.is_nil());
@@ -234,7 +254,7 @@ async fn check_teams() {
     assert!(
         ctx.db
             .tbl_teams
-            .create(conn.as_mut(), team_expected.clone())
+            .create(&mut conn.as_mut(), team_expected.clone())
             .await
             .is_err()
     );
@@ -243,7 +263,7 @@ async fn check_teams() {
     let mut team_actual = ctx
         .db
         .tbl_teams
-        .one(conn.as_mut(), team_expected.team_id)
+        .one(&mut conn.as_mut(), team_expected.team_id)
         .await
         .unwrap();
     assert!(team_actual.created_at.gt(&ctx.time_now));
@@ -253,12 +273,22 @@ async fn check_teams() {
     assert_eq!(team_expected, team_actual);
 
     // ok: проверим что список не пустой
-    let mut list = ctx.db.tbl_teams.list(conn.as_mut(), -1, -1).await.unwrap();
+    let mut list = ctx
+        .db
+        .tbl_teams
+        .list(&mut conn.as_mut(), -1, -1)
+        .await
+        .unwrap();
     assert!(!list.0.is_empty());
     assert!(list.1 > 0);
 
     // ok: проверим пустой результат, но общее кол-во есть
-    list = ctx.db.tbl_teams.list(conn.as_mut(), 0, 0).await.unwrap();
+    list = ctx
+        .db
+        .tbl_teams
+        .list(&mut conn.as_mut(), 0, 0)
+        .await
+        .unwrap();
     assert!(list.0.is_empty());
     assert!(list.1 > 0);
 
@@ -266,7 +296,7 @@ async fn check_teams() {
     assert!(
         ctx.db
             .tbl_teams
-            .update(conn.as_mut(), rand::team())
+            .update(&mut conn.as_mut(), rand::team())
             .await
             .is_err()
     );
@@ -278,14 +308,14 @@ async fn check_teams() {
     assert!(
         ctx.db
             .tbl_teams
-            .update(conn.as_mut(), team_expected.clone())
+            .update(&mut conn.as_mut(), team_expected.clone())
             .await
             .is_success()
     );
     team_actual = ctx
         .db
         .tbl_teams
-        .one(conn.as_mut(), team_expected.team_id)
+        .one(&mut conn.as_mut(), team_expected.team_id)
         .await
         .unwrap();
     assert!(team_actual.updated_at.gt(&team_actual.created_at));
@@ -297,7 +327,7 @@ async fn check_teams() {
     assert!(
         ctx.db
             .tbl_teams
-            .delete(conn.as_mut(), Uuid::new_v4())
+            .delete(&mut conn.as_mut(), Uuid::new_v4())
             .await
             .is_err()
     );
@@ -306,7 +336,7 @@ async fn check_teams() {
     assert!(
         ctx.db
             .tbl_users
-            .delete(conn.as_mut(), user_id)
+            .delete(&mut conn.as_mut(), user_id)
             .await
             .is_err()
     );
@@ -315,7 +345,11 @@ async fn check_teams() {
     let team_member = ctx
         .db
         .tbl_team_members
-        .one(conn.as_mut(), team_actual.team_id, team_actual.created_by)
+        .one(
+            &mut conn.as_mut(),
+            team_actual.team_id,
+            team_actual.created_by,
+        )
         .await
         .unwrap();
     assert_eq!(team_actual.team_id, team_member.team_id);
@@ -326,7 +360,7 @@ async fn check_teams() {
     assert!(
         ctx.db
             .tbl_teams
-            .delete(conn.as_mut(), team_actual.team_id)
+            .delete(&mut conn.as_mut(), team_actual.team_id)
             .await
             .is_success()
     );
@@ -335,7 +369,7 @@ async fn check_teams() {
     assert_matches!(
         ctx.db
             .tbl_teams
-            .one(conn.as_mut(), team_actual.team_id)
+            .one(&mut conn.as_mut(), team_actual.team_id)
             .await,
         Err(RepositoryError::NotFoundRow)
     );
@@ -344,7 +378,11 @@ async fn check_teams() {
     assert_matches!(
         ctx.db
             .tbl_team_members
-            .one(conn.as_mut(), team_actual.team_id, team_actual.created_by)
+            .one(
+                &mut conn.as_mut(),
+                team_actual.team_id,
+                team_actual.created_by
+            )
             .await,
         Err(RepositoryError::NotFoundRow)
     );
@@ -352,7 +390,7 @@ async fn check_teams() {
     // ok: почистим за собой
     ctx.db
         .tbl_users
-        .delete(conn.as_mut(), user_id)
+        .delete(&mut conn.as_mut(), user_id)
         .await
         .unwrap();
 }
@@ -360,30 +398,35 @@ async fn check_teams() {
 #[tokio::test]
 async fn check_team_members() {
     let ctx = get_context().await;
-    let mut conn = ctx.transactor.conn().await.unwrap();
+    let mut conn = ctx.db.get_conn().await.unwrap();
 
     // ok: создадим пользователя и команду
     let user_id1 = ctx
         .db
         .tbl_users
-        .create(conn.as_mut(), rand::user())
+        .create(&mut conn.as_mut(), rand::user())
         .await
         .unwrap();
     let user_id2 = ctx
         .db
         .tbl_users
-        .create(conn.as_mut(), rand::user())
+        .create(&mut conn.as_mut(), rand::user())
         .await
         .unwrap();
     let mut team = rand::team();
     team.created_by = user_id1;
-    let team_id = ctx.db.tbl_teams.create(conn.as_mut(), team).await.unwrap();
+    let team_id = ctx
+        .db
+        .tbl_teams
+        .create(&mut conn.as_mut(), team)
+        .await
+        .unwrap();
 
     // err: проверим что не находит
     assert_matches!(
         ctx.db
             .tbl_team_members
-            .one(conn.as_mut(), Uuid::new_v4(), Uuid::new_v4())
+            .one(&mut conn.as_mut(), Uuid::new_v4(), Uuid::new_v4())
             .await,
         Err(RepositoryError::NotFoundRow)
     );
@@ -392,7 +435,7 @@ async fn check_team_members() {
     assert!(
         ctx.db
             .tbl_team_members
-            .create(conn.as_mut(), rand::team_member())
+            .create(&mut conn.as_mut(), rand::team_member())
             .await
             .is_err()
     );
@@ -404,7 +447,7 @@ async fn check_team_members() {
     assert!(
         ctx.db
             .tbl_team_members
-            .create(conn.as_mut(), team_member_expected.clone())
+            .create(&mut conn.as_mut(), team_member_expected.clone())
             .await
             .is_err()
     );
@@ -414,7 +457,7 @@ async fn check_team_members() {
     assert!(
         ctx.db
             .tbl_team_members
-            .create(conn.as_mut(), team_member_expected.clone())
+            .create(&mut conn.as_mut(), team_member_expected.clone())
             .await
             .is_success()
     );
@@ -424,7 +467,7 @@ async fn check_team_members() {
         .db
         .tbl_team_members
         .one(
-            conn.as_mut(),
+            &mut conn.as_mut(),
             team_member_expected.team_id,
             team_member_expected.user_id,
         )
@@ -438,7 +481,7 @@ async fn check_team_members() {
     assert!(
         !ctx.db
             .tbl_team_members
-            .all(conn.as_mut())
+            .all(&mut conn.as_mut())
             .await
             .unwrap()
             .is_empty()
@@ -448,7 +491,7 @@ async fn check_team_members() {
     assert!(
         ctx.db
             .tbl_team_members
-            .delete(conn.as_mut(), Uuid::new_v4(), Uuid::new_v4())
+            .delete(&mut conn.as_mut(), Uuid::new_v4(), Uuid::new_v4())
             .await
             .is_err()
     );
@@ -456,7 +499,7 @@ async fn check_team_members() {
     // ok: удалим пользователя, запись о члене должно удалится каскадно
     ctx.db
         .tbl_users
-        .delete(conn.as_mut(), user_id2)
+        .delete(&mut conn.as_mut(), user_id2)
         .await
         .unwrap();
 
@@ -465,7 +508,7 @@ async fn check_team_members() {
         ctx.db
             .tbl_team_members
             .one(
-                conn.as_mut(),
+                &mut conn.as_mut(),
                 team_member_actual.team_id,
                 team_member_actual.user_id
             )
@@ -477,7 +520,7 @@ async fn check_team_members() {
     assert!(
         ctx.db
             .tbl_team_members
-            .one(conn.as_mut(), team_id, user_id1)
+            .one(&mut conn.as_mut(), team_id, user_id1)
             .await
             .is_success()
     );
@@ -485,7 +528,7 @@ async fn check_team_members() {
     // ok: удалим team, запись о member тоже должна исчезнуть
     ctx.db
         .tbl_teams
-        .delete(conn.as_mut(), team_id)
+        .delete(&mut conn.as_mut(), team_id)
         .await
         .unwrap();
 
@@ -493,7 +536,7 @@ async fn check_team_members() {
     assert_matches!(
         ctx.db
             .tbl_team_members
-            .one(conn.as_mut(), team_id, user_id1)
+            .one(&mut conn.as_mut(), team_id, user_id1)
             .await,
         Err(RepositoryError::NotFoundRow)
     );
@@ -501,7 +544,7 @@ async fn check_team_members() {
     // почистим
     ctx.db
         .tbl_users
-        .delete(conn.as_mut(), user_id1)
+        .delete(&mut conn.as_mut(), user_id1)
         .await
         .unwrap();
 }
@@ -509,28 +552,36 @@ async fn check_team_members() {
 #[tokio::test]
 async fn check_tasks() {
     let ctx = get_context().await;
-    let mut conn = ctx.transactor.conn().await.unwrap();
+    let mut conn = ctx.db.get_conn().await.unwrap();
 
     // ok: создадим пользователя и команду
     let user_id1 = ctx
         .db
         .tbl_users
-        .create(conn.as_mut(), rand::user())
+        .create(&mut conn.as_mut(), rand::user())
         .await
         .unwrap();
     let user_id2 = ctx
         .db
         .tbl_users
-        .create(conn.as_mut(), rand::user())
+        .create(&mut conn.as_mut(), rand::user())
         .await
         .unwrap();
     let mut team = rand::team();
     team.created_by = user_id1;
-    let team_id: Uuid = ctx.db.tbl_teams.create(conn.as_mut(), team).await.unwrap();
+    let team_id: Uuid = ctx
+        .db
+        .tbl_teams
+        .create(&mut conn.as_mut(), team)
+        .await
+        .unwrap();
 
     // err: проверим что задачу не находит
     assert_matches!(
-        ctx.db.tbl_tasks.one(conn.as_mut(), Uuid::new_v4()).await,
+        ctx.db
+            .tbl_tasks
+            .one(&mut conn.as_mut(), Uuid::new_v4())
+            .await,
         Err(RepositoryError::NotFoundRow)
     );
 
@@ -538,7 +589,7 @@ async fn check_tasks() {
     assert!(
         ctx.db
             .tbl_tasks
-            .create(conn.as_mut(), rand::task())
+            .create(&mut conn.as_mut(), rand::task())
             .await
             .is_err()
     );
@@ -552,7 +603,7 @@ async fn check_tasks() {
     task_expected.task_id = ctx
         .db
         .tbl_tasks
-        .create(conn.as_mut(), task_expected.clone())
+        .create(&mut conn.as_mut(), task_expected.clone())
         .await
         .unwrap();
     assert!(!task_expected.task_id.is_nil());
@@ -561,7 +612,7 @@ async fn check_tasks() {
     assert!(
         ctx.db
             .tbl_tasks
-            .create(conn.as_mut(), task_expected.clone())
+            .create(&mut conn.as_mut(), task_expected.clone())
             .await
             .is_err()
     );
@@ -570,7 +621,7 @@ async fn check_tasks() {
     let mut task_actual = ctx
         .db
         .tbl_tasks
-        .one(conn.as_mut(), task_expected.task_id)
+        .one(&mut conn.as_mut(), task_expected.task_id)
         .await
         .unwrap();
     assert!(task_actual.created_at.gt(&ctx.time_now));
@@ -589,7 +640,7 @@ async fn check_tasks() {
     let mut list = ctx
         .db
         .tbl_tasks
-        .list(conn.as_mut(), task_data.clone())
+        .list(&mut conn.as_mut(), task_data.clone())
         .await
         .unwrap();
     assert!(!list.0.is_empty());
@@ -601,7 +652,7 @@ async fn check_tasks() {
     list = ctx
         .db
         .tbl_tasks
-        .list(conn.as_mut(), task_data.clone())
+        .list(&mut conn.as_mut(), task_data.clone())
         .await
         .unwrap();
     assert!(list.0.is_empty());
@@ -615,7 +666,7 @@ async fn check_tasks() {
     list = ctx
         .db
         .tbl_tasks
-        .list(conn.as_mut(), task_data.clone())
+        .list(&mut conn.as_mut(), task_data.clone())
         .await
         .unwrap();
     assert!(list.0.is_empty());
@@ -626,7 +677,7 @@ async fn check_tasks() {
     list = ctx
         .db
         .tbl_tasks
-        .list(conn.as_mut(), task_data.clone())
+        .list(&mut conn.as_mut(), task_data.clone())
         .await
         .unwrap();
     assert!(!list.0.is_empty());
@@ -637,7 +688,7 @@ async fn check_tasks() {
     list = ctx
         .db
         .tbl_tasks
-        .list(conn.as_mut(), task_data.clone())
+        .list(&mut conn.as_mut(), task_data.clone())
         .await
         .unwrap();
     assert!(list.0.is_empty());
@@ -648,7 +699,7 @@ async fn check_tasks() {
     list = ctx
         .db
         .tbl_tasks
-        .list(conn.as_mut(), task_data.clone())
+        .list(&mut conn.as_mut(), task_data.clone())
         .await
         .unwrap();
     assert!(!list.0.is_empty());
@@ -659,7 +710,7 @@ async fn check_tasks() {
     list = ctx
         .db
         .tbl_tasks
-        .list(conn.as_mut(), task_data.clone())
+        .list(&mut conn.as_mut(), task_data.clone())
         .await
         .unwrap();
     assert!(list.0.is_empty());
@@ -670,7 +721,7 @@ async fn check_tasks() {
     list = ctx
         .db
         .tbl_tasks
-        .list(conn.as_mut(), task_data.clone())
+        .list(&mut conn.as_mut(), task_data.clone())
         .await
         .unwrap();
     assert!(!list.0.is_empty());
@@ -682,7 +733,7 @@ async fn check_tasks() {
     list = ctx
         .db
         .tbl_tasks
-        .list(conn.as_mut(), task_data.clone())
+        .list(&mut conn.as_mut(), task_data.clone())
         .await
         .unwrap();
     assert!(list.0.is_empty());
@@ -692,7 +743,7 @@ async fn check_tasks() {
     assert!(
         ctx.db
             .tbl_tasks
-            .update(conn.as_mut(), rand::task())
+            .update(&mut conn.as_mut(), rand::task())
             .await
             .is_err()
     );
@@ -700,13 +751,13 @@ async fn check_tasks() {
     // удалим user2 и посмотрим что assignee_id=None;
     ctx.db
         .tbl_users
-        .delete(conn.as_mut(), user_id2)
+        .delete(&mut conn.as_mut(), user_id2)
         .await
         .unwrap();
     assert!(
         ctx.db
             .tbl_tasks
-            .one(conn.as_mut(), task_actual.task_id)
+            .one(&mut conn.as_mut(), task_actual.task_id)
             .await
             .unwrap()
             .assignee_id
@@ -723,7 +774,7 @@ async fn check_tasks() {
     assert!(
         ctx.db
             .tbl_tasks
-            .update(conn.as_mut(), task_expected.clone())
+            .update(&mut conn.as_mut(), task_expected.clone())
             .await
             .is_success()
     );
@@ -731,7 +782,7 @@ async fn check_tasks() {
     task_actual = ctx
         .db
         .tbl_tasks
-        .one(conn.as_mut(), task_expected.task_id)
+        .one(&mut conn.as_mut(), task_expected.task_id)
         .await
         .unwrap();
     assert!(task_actual.updated_at.gt(&task_actual.created_at));
@@ -743,7 +794,7 @@ async fn check_tasks() {
     assert!(
         ctx.db
             .tbl_tasks
-            .delete(conn.as_mut(), Uuid::new_v4())
+            .delete(&mut conn.as_mut(), Uuid::new_v4())
             .await
             .is_err()
     );
@@ -752,7 +803,7 @@ async fn check_tasks() {
     assert!(
         ctx.db
             .tbl_users
-            .delete(conn.as_mut(), user_id1)
+            .delete(&mut conn.as_mut(), user_id1)
             .await
             .is_err()
     );
@@ -761,7 +812,7 @@ async fn check_tasks() {
     assert!(
         ctx.db
             .tbl_teams
-            .delete(conn.as_mut(), team_id)
+            .delete(&mut conn.as_mut(), team_id)
             .await
             .is_err()
     );
@@ -770,7 +821,7 @@ async fn check_tasks() {
     assert!(
         ctx.db
             .tbl_tasks
-            .delete(conn.as_mut(), task_actual.task_id)
+            .delete(&mut conn.as_mut(), task_actual.task_id)
             .await
             .is_success()
     );
@@ -779,7 +830,7 @@ async fn check_tasks() {
     assert_matches!(
         ctx.db
             .tbl_tasks
-            .one(conn.as_mut(), task_actual.task_id)
+            .one(&mut conn.as_mut(), task_actual.task_id)
             .await,
         Err(RepositoryError::NotFoundRow)
     );
@@ -787,12 +838,12 @@ async fn check_tasks() {
     // ok: почистим за собой
     ctx.db
         .tbl_teams
-        .delete(conn.as_mut(), task_actual.team_id)
+        .delete(&mut conn.as_mut(), task_actual.team_id)
         .await
         .unwrap();
     ctx.db
         .tbl_users
-        .delete(conn.as_mut(), user_id1)
+        .delete(&mut conn.as_mut(), user_id1)
         .await
         .unwrap();
 }
@@ -800,36 +851,46 @@ async fn check_tasks() {
 #[tokio::test]
 async fn check_task_histories() {
     let ctx = get_context().await;
-    let mut conn = ctx.transactor.conn().await.unwrap();
+    let mut conn = ctx.db.get_conn().await.unwrap();
 
     // ok: создадим зависимости
     let user_id1 = ctx
         .db
         .tbl_users
-        .create(conn.as_mut(), rand::user())
+        .create(&mut conn.as_mut(), rand::user())
         .await
         .unwrap();
     let user_id2 = ctx
         .db
         .tbl_users
-        .create(conn.as_mut(), rand::user())
+        .create(&mut conn.as_mut(), rand::user())
         .await
         .unwrap();
     let mut team = rand::team();
     team.created_by = user_id1;
-    let team_id = ctx.db.tbl_teams.create(conn.as_mut(), team).await.unwrap();
+    let team_id = ctx
+        .db
+        .tbl_teams
+        .create(&mut conn.as_mut(), team)
+        .await
+        .unwrap();
     let mut task = rand::task();
     task.team_id = team_id;
     task.created_by = user_id1;
     task.assignee_id = None;
     task.status = TaskStatus::Todo.to_string();
-    let task_id = ctx.db.tbl_tasks.create(conn.as_mut(), task).await.unwrap();
+    let task_id = ctx
+        .db
+        .tbl_tasks
+        .create(&mut conn.as_mut(), task)
+        .await
+        .unwrap();
 
     // err: проверим что не находит
     assert_matches!(
         ctx.db
             .tbl_task_histories
-            .one(conn.as_mut(), Uuid::new_v4())
+            .one(&mut conn.as_mut(), Uuid::new_v4())
             .await,
         Err(RepositoryError::NotFoundRow)
     );
@@ -838,7 +899,7 @@ async fn check_task_histories() {
     assert!(
         ctx.db
             .tbl_task_histories
-            .create(conn.as_mut(), rand::task_history())
+            .create(&mut conn.as_mut(), rand::task_history())
             .await
             .is_err()
     );
@@ -850,7 +911,7 @@ async fn check_task_histories() {
     task_history_expected.task_history_id = ctx
         .db
         .tbl_task_histories
-        .create(conn.as_mut(), task_history_expected.clone())
+        .create(&mut conn.as_mut(), task_history_expected.clone())
         .await
         .unwrap();
     assert!(!task_history_expected.task_history_id.is_nil());
@@ -859,7 +920,7 @@ async fn check_task_histories() {
     let task_history_actual = ctx
         .db
         .tbl_task_histories
-        .one(conn.as_mut(), task_history_expected.task_history_id)
+        .one(&mut conn.as_mut(), task_history_expected.task_history_id)
         .await
         .unwrap();
     assert!(task_history_actual.created_at.gt(&ctx.time_now));
@@ -870,7 +931,7 @@ async fn check_task_histories() {
     let mut list = ctx
         .db
         .tbl_task_histories
-        .list(conn.as_mut(), -1, -1)
+        .list(&mut conn.as_mut(), -1, -1)
         .await
         .unwrap();
     assert!(!list.0.is_empty());
@@ -880,7 +941,7 @@ async fn check_task_histories() {
     list = ctx
         .db
         .tbl_task_histories
-        .list(conn.as_mut(), 0, 0)
+        .list(&mut conn.as_mut(), 0, 0)
         .await
         .unwrap();
     assert!(list.0.is_empty());
@@ -890,7 +951,7 @@ async fn check_task_histories() {
     let items = ctx
         .db
         .tbl_task_histories
-        .by_task_id(conn.as_mut(), task_id)
+        .by_task_id(&mut conn.as_mut(), task_id)
         .await
         .unwrap();
     assert_eq!(1, items.len());
@@ -899,7 +960,7 @@ async fn check_task_histories() {
     assert!(
         ctx.db
             .tbl_task_histories
-            .update(conn.as_mut(), rand::task_history())
+            .update(&mut conn.as_mut(), rand::task_history())
             .await
             .is_err()
     );
@@ -913,7 +974,7 @@ async fn check_task_histories() {
     assert!(
         ctx.db
             .tbl_task_histories
-            .update(conn.as_mut(), task_history_expected.clone())
+            .update(&mut conn.as_mut(), task_history_expected.clone())
             .await
             .is_success()
     );
@@ -921,7 +982,7 @@ async fn check_task_histories() {
     let task_history_actual = ctx
         .db
         .tbl_task_histories
-        .one(conn.as_mut(), task_history_expected.task_history_id)
+        .one(&mut conn.as_mut(), task_history_expected.task_history_id)
         .await
         .unwrap();
     task_history_expected.created_at = task_history_actual.created_at; // подменим на валидное явно
@@ -931,7 +992,7 @@ async fn check_task_histories() {
     assert!(
         ctx.db
             .tbl_task_histories
-            .delete(conn.as_mut(), Uuid::new_v4())
+            .delete(&mut conn.as_mut(), Uuid::new_v4())
             .await
             .is_err()
     );
@@ -939,7 +1000,7 @@ async fn check_task_histories() {
     assert!(
         ctx.db
             .tbl_tasks
-            .delete(conn.as_mut(), task_id)
+            .delete(&mut conn.as_mut(), task_id)
             .await
             .is_err()
     );
@@ -947,7 +1008,7 @@ async fn check_task_histories() {
     assert!(
         ctx.db
             .tbl_users
-            .delete(conn.as_mut(), user_id2)
+            .delete(&mut conn.as_mut(), user_id2)
             .await
             .is_err()
     );
@@ -956,7 +1017,7 @@ async fn check_task_histories() {
     assert!(
         ctx.db
             .tbl_task_histories
-            .delete(conn.as_mut(), task_history_actual.task_history_id)
+            .delete(&mut conn.as_mut(), task_history_actual.task_history_id)
             .await
             .is_success()
     );
@@ -965,7 +1026,7 @@ async fn check_task_histories() {
     assert_matches!(
         ctx.db
             .tbl_task_histories
-            .one(conn.as_mut(), task_history_actual.task_history_id)
+            .one(&mut conn.as_mut(), task_history_actual.task_history_id)
             .await,
         Err(RepositoryError::NotFoundRow)
     );
@@ -973,22 +1034,22 @@ async fn check_task_histories() {
     // ok: почистим за собой
     ctx.db
         .tbl_tasks
-        .delete(conn.as_mut(), task_id)
+        .delete(&mut conn.as_mut(), task_id)
         .await
         .unwrap();
     ctx.db
         .tbl_teams
-        .delete(conn.as_mut(), team_id)
+        .delete(&mut conn.as_mut(), team_id)
         .await
         .unwrap();
     ctx.db
         .tbl_users
-        .delete(conn.as_mut(), user_id1)
+        .delete(&mut conn.as_mut(), user_id1)
         .await
         .unwrap();
     ctx.db
         .tbl_users
-        .delete(conn.as_mut(), user_id2)
+        .delete(&mut conn.as_mut(), user_id2)
         .await
         .unwrap();
 }
@@ -996,36 +1057,46 @@ async fn check_task_histories() {
 #[tokio::test]
 async fn check_task_comments() {
     let ctx = get_context().await;
-    let mut conn = ctx.transactor.conn().await.unwrap();
+    let mut conn = ctx.db.get_conn().await.unwrap();
 
     // ok: создадим зависимости
     let mut user_id1 = ctx
         .db
         .tbl_users
-        .create(conn.as_mut(), rand::user())
+        .create(&mut conn.as_mut(), rand::user())
         .await
         .unwrap();
     let mut user_id2 = ctx
         .db
         .tbl_users
-        .create(conn.as_mut(), rand::user())
+        .create(&mut conn.as_mut(), rand::user())
         .await
         .unwrap();
     let mut team = rand::team();
     team.created_by = user_id1;
-    let mut team_id = ctx.db.tbl_teams.create(conn.as_mut(), team).await.unwrap();
+    let mut team_id = ctx
+        .db
+        .tbl_teams
+        .create(&mut conn.as_mut(), team)
+        .await
+        .unwrap();
     let mut task = rand::task();
     task.team_id = team_id;
     task.created_by = user_id1;
     task.assignee_id = None;
     task.status = TaskStatus::Todo.to_string();
-    let mut task_id1 = ctx.db.tbl_tasks.create(conn.as_mut(), task).await.unwrap();
+    let mut task_id1 = ctx
+        .db
+        .tbl_tasks
+        .create(&mut conn.as_mut(), task)
+        .await
+        .unwrap();
 
     // err: проверим что не находит
     assert_matches!(
         ctx.db
             .tbl_task_comments
-            .one(conn.as_mut(), Uuid::new_v4())
+            .one(&mut conn.as_mut(), Uuid::new_v4())
             .await,
         Err(RepositoryError::NotFoundRow)
     );
@@ -1034,7 +1105,7 @@ async fn check_task_comments() {
     assert!(
         ctx.db
             .tbl_task_comments
-            .create(conn.as_mut(), rand::task_comment())
+            .create(&mut conn.as_mut(), rand::task_comment())
             .await
             .is_err()
     );
@@ -1046,7 +1117,7 @@ async fn check_task_comments() {
     task_comment_expected.task_comment_id = ctx
         .db
         .tbl_task_comments
-        .create(conn.as_mut(), task_comment_expected.clone())
+        .create(&mut conn.as_mut(), task_comment_expected.clone())
         .await
         .unwrap();
     assert!(!task_comment_expected.task_comment_id.is_nil());
@@ -1055,7 +1126,7 @@ async fn check_task_comments() {
     let task_comment_actual = ctx
         .db
         .tbl_task_comments
-        .one(conn.as_mut(), task_comment_expected.task_comment_id)
+        .one(&mut conn.as_mut(), task_comment_expected.task_comment_id)
         .await
         .unwrap();
     assert!(task_comment_actual.created_at.gt(&ctx.time_now));
@@ -1071,7 +1142,7 @@ async fn check_task_comments() {
     let mut list = ctx
         .db
         .tbl_task_comments
-        .list(conn.as_mut(), task_id1, -1, -1)
+        .list(&mut conn.as_mut(), task_id1, -1, -1)
         .await
         .unwrap();
     assert!(!list.0.is_empty());
@@ -1081,7 +1152,7 @@ async fn check_task_comments() {
     list = ctx
         .db
         .tbl_task_comments
-        .list(conn.as_mut(), task_id1, 0, 0)
+        .list(&mut conn.as_mut(), task_id1, 0, 0)
         .await
         .unwrap();
     assert!(list.0.is_empty());
@@ -1091,7 +1162,7 @@ async fn check_task_comments() {
     assert!(
         ctx.db
             .tbl_task_comments
-            .update(conn.as_mut(), rand::task_comment())
+            .update(&mut conn.as_mut(), rand::task_comment())
             .await
             .is_err()
     );
@@ -1105,14 +1176,14 @@ async fn check_task_comments() {
     assert!(
         ctx.db
             .tbl_task_comments
-            .update(conn.as_mut(), task_comment_expected.clone())
+            .update(&mut conn.as_mut(), task_comment_expected.clone())
             .await
             .is_success()
     );
     let task_comment_actual = ctx
         .db
         .tbl_task_comments
-        .one(conn.as_mut(), task_comment_expected.task_comment_id)
+        .one(&mut conn.as_mut(), task_comment_expected.task_comment_id)
         .await
         .unwrap();
     assert!(
@@ -1128,7 +1199,7 @@ async fn check_task_comments() {
     assert!(
         ctx.db
             .tbl_task_comments
-            .delete(conn.as_mut(), Uuid::new_v4())
+            .delete(&mut conn.as_mut(), Uuid::new_v4())
             .await
             .is_err()
     );
@@ -1137,7 +1208,7 @@ async fn check_task_comments() {
     assert!(
         ctx.db
             .tbl_task_comments
-            .delete(conn.as_mut(), task_comment_actual.task_comment_id)
+            .delete(&mut conn.as_mut(), task_comment_actual.task_comment_id)
             .await
             .is_success()
     );
@@ -1146,7 +1217,7 @@ async fn check_task_comments() {
     assert_matches!(
         ctx.db
             .tbl_task_comments
-            .one(conn.as_mut(), task_comment_actual.task_comment_id)
+            .one(&mut conn.as_mut(), task_comment_actual.task_comment_id)
             .await,
         Err(RepositoryError::NotFoundRow)
     );
@@ -1154,22 +1225,22 @@ async fn check_task_comments() {
     // ok: почистим за собой
     ctx.db
         .tbl_tasks
-        .delete(conn.as_mut(), task_id1)
+        .delete(&mut conn.as_mut(), task_id1)
         .await
         .unwrap();
     ctx.db
         .tbl_teams
-        .delete(conn.as_mut(), team_id)
+        .delete(&mut conn.as_mut(), team_id)
         .await
         .unwrap();
     ctx.db
         .tbl_users
-        .delete(conn.as_mut(), user_id1)
+        .delete(&mut conn.as_mut(), user_id1)
         .await
         .unwrap();
     ctx.db
         .tbl_users
-        .delete(conn.as_mut(), user_id2)
+        .delete(&mut conn.as_mut(), user_id2)
         .await
         .unwrap();
 
@@ -1177,31 +1248,41 @@ async fn check_task_comments() {
     user_id1 = ctx
         .db
         .tbl_users
-        .create(conn.as_mut(), rand::user())
+        .create(&mut conn.as_mut(), rand::user())
         .await
         .unwrap();
     user_id2 = ctx
         .db
         .tbl_users
-        .create(conn.as_mut(), rand::user())
+        .create(&mut conn.as_mut(), rand::user())
         .await
         .unwrap();
     team = rand::team();
     team.created_by = user_id1;
-    team_id = ctx.db.tbl_teams.create(conn.as_mut(), team).await.unwrap();
+    team_id = ctx
+        .db
+        .tbl_teams
+        .create(&mut conn.as_mut(), team)
+        .await
+        .unwrap();
     task = rand::task();
     task.team_id = team_id;
     task.created_by = user_id1;
     task.assignee_id = None;
     task.status = TaskStatus::Done.to_string();
-    task_id1 = ctx.db.tbl_tasks.create(conn.as_mut(), task).await.unwrap();
+    task_id1 = ctx
+        .db
+        .tbl_tasks
+        .create(&mut conn.as_mut(), task)
+        .await
+        .unwrap();
     task_comment_expected = rand::task_comment();
     task_comment_expected.task_id = task_id1;
     task_comment_expected.user_id = user_id1;
     let task_comment_id1 = ctx
         .db
         .tbl_task_comments
-        .create(conn.as_mut(), task_comment_expected.clone())
+        .create(&mut conn.as_mut(), task_comment_expected.clone())
         .await
         .unwrap();
     task_comment_expected = rand::task_comment();
@@ -1210,32 +1291,32 @@ async fn check_task_comments() {
     let task_comment_id2 = ctx
         .db
         .tbl_task_comments
-        .create(conn.as_mut(), task_comment_expected.clone())
+        .create(&mut conn.as_mut(), task_comment_expected.clone())
         .await
         .unwrap();
 
     ctx.db
         .tbl_users
-        .delete(conn.as_mut(), user_id2)
+        .delete(&mut conn.as_mut(), user_id2)
         .await
         .unwrap();
     assert_matches!(
         ctx.db
             .tbl_task_comments
-            .one(conn.as_mut(), task_comment_id2)
+            .one(&mut conn.as_mut(), task_comment_id2)
             .await,
         Err(RepositoryError::NotFoundRow)
     );
 
     ctx.db
         .tbl_tasks
-        .delete(conn.as_mut(), task_id1)
+        .delete(&mut conn.as_mut(), task_id1)
         .await
         .unwrap();
     assert_matches!(
         ctx.db
             .tbl_task_comments
-            .one(conn.as_mut(), task_comment_id1)
+            .one(&mut conn.as_mut(), task_comment_id1)
             .await,
         Err(RepositoryError::NotFoundRow)
     );
@@ -1243,12 +1324,12 @@ async fn check_task_comments() {
     // почистим за собой
     ctx.db
         .tbl_teams
-        .delete(conn.as_mut(), team_id)
+        .delete(&mut conn.as_mut(), team_id)
         .await
         .unwrap();
     ctx.db
         .tbl_users
-        .delete(conn.as_mut(), user_id1)
+        .delete(&mut conn.as_mut(), user_id1)
         .await
         .unwrap();
 }
