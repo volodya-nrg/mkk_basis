@@ -29,7 +29,6 @@ impl AnyConnectionOwned {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
 pub enum IsolationLevel {
     // ReadUncommitted,
     ReadCommitted,
@@ -38,7 +37,7 @@ pub enum IsolationLevel {
 }
 
 impl IsolationLevel {
-    pub const fn as_sql(&self) -> &'static str {
+    pub const fn as_sql(&self) -> &str {
         match self {
             // Self::ReadUncommitted => "READ UNCOMMITTED",
             Self::ReadCommitted => "READ COMMITTED",
@@ -60,14 +59,14 @@ pub trait Storage: Send + Sync {
     fn users(&self) -> &dyn UsersTable;
 }
 #[async_trait]
-pub trait Transaction: Send + Sync {
+pub trait Transaction: Send {
     async fn get_conn(&mut self) -> Result<AnyConnection<'_>, RepositoryError>;
     async fn commit(self: Box<Self>) -> Result<(), RepositoryError>;
     async fn rollback(self: Box<Self>) -> Result<(), RepositoryError>;
 }
 
 #[async_trait]
-pub trait TaskCommentsTable: Send + Sync {
+pub trait TaskCommentsTable {
     async fn list(
         &self,
         conn: &mut AnyConnection<'_>,
@@ -99,7 +98,7 @@ pub trait TaskCommentsTable: Send + Sync {
 }
 
 #[async_trait]
-pub trait TaskHistoriesTable: Send + Sync {
+pub trait TaskHistoriesTable {
     async fn list(
         &self,
         conn: &mut AnyConnection<'_>,
@@ -134,7 +133,7 @@ pub trait TaskHistoriesTable: Send + Sync {
 }
 
 #[async_trait]
-pub trait TasksTable: Send + Sync {
+pub trait TasksTable {
     async fn list(
         &self,
         conn: &mut AnyConnection<'_>,
@@ -160,7 +159,7 @@ pub trait TasksTable: Send + Sync {
 }
 
 #[async_trait]
-pub trait TeamMembersTable: Send + Sync {
+pub trait TeamMembersTable {
     async fn all(&self, conn: &mut AnyConnection<'_>) -> Result<Vec<TeamMember>, RepositoryError>;
     async fn one(
         &self,
@@ -182,7 +181,7 @@ pub trait TeamMembersTable: Send + Sync {
 }
 
 #[async_trait]
-pub trait TeamsTable: Send + Sync {
+pub trait TeamsTable {
     async fn list(
         &self,
         conn: &mut AnyConnection<'_>,
@@ -209,7 +208,7 @@ pub trait TeamsTable: Send + Sync {
 }
 
 #[async_trait]
-pub trait UsersTable: Send + Sync {
+pub trait UsersTable {
     async fn list(
         &self,
         conn: &mut AnyConnection<'_>,

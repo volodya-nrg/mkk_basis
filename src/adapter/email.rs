@@ -19,9 +19,9 @@ pub enum EmailError {
 }
 
 // Crate "async_trait" упрощает объявление Pin<Box>, внутренних vtable у трейтов и разных lifetime.
-// Укажем сразу поддержку "Send + Sync + 'static", чтоб не писать подобное в других местах.
+// Укажем сразу поддержку "Send + Sync", чтоб не писать подобное в других местах.
 #[async_trait]
-pub trait EmailSender: Send + Sync + 'static {
+pub trait EmailSender: Send + Sync {
     fn send(&self, to: &str, subject: &str, body: &str) -> Result<(), EmailError>;
 }
 
