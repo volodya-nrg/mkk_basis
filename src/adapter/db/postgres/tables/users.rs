@@ -41,7 +41,7 @@ impl Users {
 }
 
 impl Table for Users {
-    fn get_name(&self) -> &str {
+    fn get_table_name(&self) -> &str {
         "users"
     }
     fn get_fields(&self) -> &[&str] {
@@ -73,10 +73,10 @@ impl UsersTable for Users {
         let mut common_builder = QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
             self.get_fields().join(","),
-            self.get_name(),
+            self.get_table_name(),
         ));
         let mut count_builder =
-            QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.get_name()));
+            QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.get_table_name()));
 
         if limit > -1 {
             common_builder.push(" LIMIT ");
@@ -111,7 +111,7 @@ impl UsersTable for Users {
         let query = format!(
             "SELECT {} FROM {} WHERE user_id=$1",
             self.get_fields().join(","),
-            self.get_name(),
+            self.get_table_name(),
         );
         QueryBuilder::new(query)
             .build_query_as()
@@ -132,7 +132,7 @@ impl UsersTable for Users {
         let query = format!(
             "SELECT {} FROM {} WHERE email=$1",
             self.get_fields().join(","),
-            self.get_name(),
+            self.get_table_name(),
         );
         QueryBuilder::new(query)
             .build_query_as()
@@ -152,7 +152,7 @@ impl UsersTable for Users {
         };
         let query = format!(
             "INSERT INTO {} (email, password, name, email_code, avatar, role) VALUES ($1,$2,$3,$4,$5,$6::user_role_enum) RETURNING user_id",
-            self.get_name(),
+            self.get_table_name(),
         );
         QueryBuilder::new(query)
             .build()
@@ -178,7 +178,7 @@ impl UsersTable for Users {
         };
         let query = format!(
             "UPDATE {} SET email=$1, password=$2, name=$3, email_code=$4, avatar=$5, role=$6::user_role_enum WHERE user_id=$7",
-            self.get_name(),
+            self.get_table_name(),
         );
         QueryBuilder::new(query)
             .build()
@@ -209,7 +209,7 @@ impl UsersTable for Users {
         let AnyConnection::Postgres(pg) = conn else {
             return Err(RepositoryError::WrongDatabase);
         };
-        let query = format!("DELETE FROM {} WHERE user_id=$1", self.get_name());
+        let query = format!("DELETE FROM {} WHERE user_id=$1", self.get_table_name());
         QueryBuilder::new(query)
             .build()
             .bind(item_id)

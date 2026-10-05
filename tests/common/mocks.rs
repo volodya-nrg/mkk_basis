@@ -1,7 +1,8 @@
 use async_trait::async_trait;
-use mkk_basis::adapter::email::{ConfirmationCodeStorer, EmailError, EmailSender};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+
+use mkk_basis::adapter::email::{ConfirmationCodeStorer, EmailError, EmailSender};
 
 #[derive(Clone)]
 pub struct ConfirmationCodeStoreMock {
@@ -38,6 +39,7 @@ pub struct EmailServiceMock {}
 #[async_trait]
 impl EmailSender for EmailServiceMock {
     fn send(&self, _to: &str, _subject: &str, _body: &str) -> Result<(), EmailError> {
+        // поиск ключа в строке
         // let re = Regex::new(r#"href="([^"]+)""#).unwrap();
         // let url_str = &re.captures(body).unwrap()[1];
         // let url = Url::parse(url_str).unwrap();
@@ -57,7 +59,6 @@ impl EmailSender for EmailServiceMock {
         // {
         //     self.save_code(email_value, code_value)
         // }
-
         Ok(())
     }
 }

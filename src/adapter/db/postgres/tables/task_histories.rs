@@ -12,7 +12,7 @@ use crate::adapter::db::{
 pub struct TaskHistories {}
 
 impl Table for TaskHistories {
-    fn get_name(&self) -> &str {
+    fn get_table_name(&self) -> &str {
         "task_histories"
     }
     fn get_fields(&self) -> &[&str] {
@@ -34,10 +34,10 @@ impl TaskHistoriesTable for TaskHistories {
         let mut common_builder = QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
             self.get_fields().join(","),
-            self.get_name(),
+            self.get_table_name(),
         ));
         let mut count_builder =
-            QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.get_name()));
+            QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.get_table_name()));
 
         if limit > -1 {
             common_builder.push(" LIMIT ");
@@ -72,7 +72,7 @@ impl TaskHistoriesTable for TaskHistories {
         let query = format!(
             "SELECT {} FROM {} WHERE task_history_id=$1",
             self.get_fields().join(","),
-            self.get_name(),
+            self.get_table_name(),
         );
         QueryBuilder::new(query)
             .build_query_as()
@@ -93,7 +93,7 @@ impl TaskHistoriesTable for TaskHistories {
         QueryBuilder::new(format!(
             "SELECT {} FROM {} WHERE task_id=$1 ORDER BY created_at DESC",
             self.get_fields().join(","),
-            self.get_name(),
+            self.get_table_name(),
         ))
         .build_query_as()
         .bind(task_id)
@@ -111,7 +111,7 @@ impl TaskHistoriesTable for TaskHistories {
         };
         let query = format!(
             "INSERT INTO {} (task_id, user_id, msg) VALUES ($1,$2,$3) RETURNING task_history_id",
-            self.get_name(),
+            self.get_table_name(),
         );
         QueryBuilder::new(query)
             .build()
@@ -134,7 +134,7 @@ impl TaskHistoriesTable for TaskHistories {
         };
         let query = format!(
             "UPDATE {} SET task_id=$1, user_id=$2, msg=$3 WHERE task_history_id=$4",
-            self.get_name(),
+            self.get_table_name(),
         );
         QueryBuilder::new(query)
             .build()
@@ -162,7 +162,7 @@ impl TaskHistoriesTable for TaskHistories {
         let AnyConnection::Postgres(pg) = conn else {
             return Err(RepositoryError::WrongDatabase);
         };
-        let query = format!("DELETE FROM {} WHERE task_history_id=$1", self.get_name());
+        let query = format!("DELETE FROM {} WHERE task_history_id=$1", self.get_table_name());
         QueryBuilder::new(query)
             .build()
             .bind(item_id)

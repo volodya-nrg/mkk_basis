@@ -1,17 +1,16 @@
-use std::sync::Arc;
 use axum::extract::State;
 use axum::extract::{Path, Query};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::transport::http_server::TransportState;
-use crate::transport::http_server::handlers::{HandlerError, handler_err};
-use crate::transport::models::{AuthUser, TaskComment};
 use crate::transport::{
+    http_server::TransportState,
+    http_server::handlers::{HandlerError, handler_err},
     mapper,
-    models::{RequestLimitOffset, RequestTaskComment, TaskCommentsList},
+    models::{AuthUser, RequestLimitOffset, RequestTaskComment, TaskComment, TaskCommentsList},
 };
 
 #[utoipa::path(

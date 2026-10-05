@@ -50,7 +50,7 @@ impl IsolationLevel {
 
 #[async_trait]
 pub trait Storage: Send + Sync {
-    async fn begin(&self) -> Result<Box<dyn MyTransaction>, RepositoryError>;
+    async fn begin(&self) -> Result<Box<dyn Transaction>, RepositoryError>;
     async fn get_conn(&self) -> Result<AnyConnectionOwned, RepositoryError>;
     fn task_comments(&self) -> &dyn TaskCommentsTable;
     fn task_histories(&self) -> &dyn TaskHistoriesTable;
@@ -60,7 +60,7 @@ pub trait Storage: Send + Sync {
     fn users(&self) -> &dyn UsersTable;
 }
 #[async_trait]
-pub trait MyTransaction: Send + Sync {
+pub trait Transaction: Send + Sync {
     async fn get_conn(&mut self) -> Result<AnyConnection<'_>, RepositoryError>;
     async fn commit(self: Box<Self>) -> Result<(), RepositoryError>;
     async fn rollback(self: Box<Self>) -> Result<(), RepositoryError>;

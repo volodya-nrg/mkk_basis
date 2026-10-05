@@ -7,8 +7,8 @@ use std::sync::Arc;
 use time::Duration;
 
 use crate::consts;
-use crate::transport::http_server::TransportState;
 use crate::transport::{
+    http_server::TransportState,
     http_server::handlers::{HandlerError, handler_err},
     models::{RequestLogin, RequestRegister, RequestRegisterConfirm, ResponseUuid},
 };

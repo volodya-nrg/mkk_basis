@@ -6,12 +6,11 @@ use axum::{
 use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::transport::http_server::TransportState;
-use crate::transport::http_server::handlers::{HandlerError, handler_err};
-use crate::transport::models::{AuthUser, Task};
 use crate::transport::{
+    http_server::TransportState,
+    http_server::handlers::{HandlerError, handler_err},
     mapper,
-    models::{RequestTask, RequestTaskData, ResponseMsg, TaskHistories, TasksList},
+    models::{AuthUser, RequestTask, RequestTaskData, ResponseMsg, Task, TaskHistories, TasksList},
 };
 
 #[utoipa::path(

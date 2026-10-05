@@ -2,14 +2,14 @@ use http::StatusCode;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use super::{
-    UseCaseError, mapper,
-    models::{Team, TeamMember},
-};
-
 use crate::{
     adapter::db::{postgres::tables::users::Role as UserRole, storage::Storage},
     app_errors::AppErr,
+};
+
+use super::{
+    UseCaseError, mapper,
+    models::{Team, TeamMember},
 };
 
 #[derive(Clone)] // clone из-за axum

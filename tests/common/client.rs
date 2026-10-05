@@ -1,16 +1,18 @@
 #![allow(dead_code)]
 
-use super::rand;
-use crate::common::mocks::{ConfirmationCodeStoreMock};
 use http::StatusCode;
+use reqwest::{Certificate, Identity, Response, multipart::Form};
+use std::sync::Arc;
+use std::time::Duration;
+
 use mkk_basis::adapter::email::ConfirmationCodeStorer;
 use mkk_basis::transport::models::{
     RequestLimitOffset, RequestLogin, RequestRegister, RequestTask, RequestTaskComment,
     RequestTaskData, RequestTeam, RequestTeamInvite, RequestUserCreate, RequestUserUpdate,
 };
-use reqwest::{Certificate, Identity, Response, multipart::Form};
-use std::sync::Arc;
-use std::time::Duration;
+
+use super::rand;
+use crate::common::mocks::{ConfirmationCodeStoreMock};
 
 pub type StatusCodeBodyError = Result<(StatusCode, String), reqwest::Error>;
 

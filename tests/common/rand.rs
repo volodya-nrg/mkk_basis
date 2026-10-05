@@ -9,13 +9,14 @@ use std::io::{Cursor, Write};
 use std::path::PathBuf;
 use uuid::Uuid;
 
-use mkk_basis::adapter::db::models::{Task, TaskComment, TaskHistory, Team, TeamMember, User};
-use mkk_basis::adapter::db::postgres::tables::tasks::Status as TaskStatuses;
-use mkk_basis::adapter::db::postgres::tables::users::Role as UserRoles;
-use mkk_basis::adapter::helpers;
-use mkk_basis::transport::models::{
-    RequestLogin, RequestRegister, RequestTask, RequestTaskComment, RequestTeam, RequestTeamInvite,
-    RequestUserCreate, RequestUserUpdate,
+use mkk_basis::{
+    adapter::db::models::{Task, TaskComment, TaskHistory, Team, TeamMember, User},
+    adapter::db::postgres::tables::{tasks::Status as TaskStatuses, users::Role as UserRoles},
+    adapter::helpers,
+    transport::models::{
+        RequestLogin, RequestRegister, RequestTask, RequestTaskComment, RequestTeam,
+        RequestTeamInvite, RequestUserCreate, RequestUserUpdate,
+    },
 };
 
 pub fn private_key(len: usize) -> Vec<u8> {

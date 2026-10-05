@@ -12,7 +12,7 @@ use crate::adapter::db::{
 pub struct TeamMembers {}
 
 impl Table for TeamMembers {
-    fn get_name(&self) -> &str {
+    fn get_table_name(&self) -> &str {
         "team_members"
     }
     fn get_fields(&self) -> &[&str] {
@@ -29,7 +29,7 @@ impl TeamMembersTable for TeamMembers {
         QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
             self.get_fields().join(","),
-            self.get_name(),
+            self.get_table_name(),
         ))
         .build_query_as()
         .fetch_all(&mut **pg)
@@ -48,7 +48,7 @@ impl TeamMembersTable for TeamMembers {
         let query = format!(
             "SELECT {} FROM {} WHERE team_id=$1 AND user_id=$2",
             self.get_fields().join(","),
-            self.get_name(),
+            self.get_table_name(),
         );
         QueryBuilder::new(query)
             .build_query_as()
@@ -69,7 +69,7 @@ impl TeamMembersTable for TeamMembers {
         };
         let query = format!(
             "INSERT INTO {} (team_id, user_id) VALUES ($1,$2)",
-            self.get_name(),
+            self.get_table_name(),
         );
         QueryBuilder::new(query)
             .build()
@@ -91,7 +91,7 @@ impl TeamMembersTable for TeamMembers {
         };
         let query = format!(
             "DELETE FROM {} WHERE team_id=$1 AND user_id=$2",
-            self.get_name()
+            self.get_table_name()
         );
         QueryBuilder::new(query)
             .build()

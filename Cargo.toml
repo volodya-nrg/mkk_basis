@@ -22,7 +22,6 @@ log = "0.4.33"
 prost = "0.14"
 rand = "0.10.2"
 rcgen = "0.14.9"
-regex = "1.13.1"
 rustls-pemfile = "2.2.0"
 rustls = "0.23.43"
 serde = { version = "1.0.228", features = ["derive"] } # Включает функцию `derive` у serde.
@@ -38,7 +37,6 @@ utoipa-axum = "0.3.0"
 utoipa-swagger-ui = { version = "10.0.1", features = ["axum"] }
 utoipa = { version = "6.0.0", features = ["axum_extras"] }
 uuid = { version = "1.24.0", features = ["v4", "serde"] }
-futures = "0.3.34"
 anyhow = "1.0.104"
 
 [dev-dependencies] # Зависимости для примеров, тестов и бенчмарков

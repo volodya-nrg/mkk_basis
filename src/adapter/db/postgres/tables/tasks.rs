@@ -41,7 +41,7 @@ impl fmt::Display for Status {
 pub struct Tasks {}
 
 impl Table for Tasks {
-    fn get_name(&self) -> &str {
+    fn get_table_name(&self) -> &str {
         "tasks"
     }
     fn get_fields(&self) -> &[&str] {
@@ -72,9 +72,9 @@ impl TasksTable for Tasks {
         let mut query_common = format!(
             "SELECT {} FROM {}",
             self.get_fields().join(","),
-            self.get_name(),
+            self.get_table_name(),
         );
-        let mut query_count = format!("SELECT COUNT(*) as count FROM {}", self.get_name());
+        let mut query_count = format!("SELECT COUNT(*) as count FROM {}", self.get_table_name());
         let mut params: Vec<(String, String)> = vec![];
 
         if let Some(team_id) = data.team_id {
@@ -153,7 +153,7 @@ impl TasksTable for Tasks {
         let query = format!(
             "SELECT {} FROM {} WHERE task_id=$1",
             self.get_fields().join(","),
-            self.get_name(),
+            self.get_table_name(),
         );
         QueryBuilder::new(query)
             .build_query_as()
@@ -173,7 +173,7 @@ impl TasksTable for Tasks {
         };
         let query = format!(
             "INSERT INTO {} (name, description, created_by, team_id, assignee_id, status) VALUES ($1,$2,$3,$4,$5,$6::task_status_enum) RETURNING task_id",
-            self.get_name(),
+            self.get_table_name(),
         );
         QueryBuilder::new(query)
             .build()
@@ -199,7 +199,7 @@ impl TasksTable for Tasks {
         };
         let query = format!(
             "UPDATE {} SET name=$1, description=$2, created_by=$3, team_id=$4, assignee_id=$5, status=$6::task_status_enum WHERE task_id=$7",
-            self.get_name(),
+            self.get_table_name(),
         );
         QueryBuilder::new(query)
             .build()
@@ -230,7 +230,7 @@ impl TasksTable for Tasks {
         let AnyConnection::Postgres(pg) = conn else {
             return Err(RepositoryError::WrongDatabase);
         };
-        let query = format!("DELETE FROM {} WHERE task_id=$1", self.get_name());
+        let query = format!("DELETE FROM {} WHERE task_id=$1", self.get_table_name());
         QueryBuilder::new(query)
             .build()
             .bind(item_id)

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use chrono::{DateTime, Local};
-use sqlx::{Pool, Postgres};
+use sqlx::{Pool, Postgres as SQLXPostgres};
 use std::net::TcpListener;
 use std::process::Command;
 use std::sync::Arc;
@@ -14,16 +14,16 @@ use testcontainers_modules::{
 };
 use tokio::time::sleep;
 
-use super::{certs, consts, mocks::EmailServiceMock, rand};
-
-use crate::common::mocks::ConfirmationCodeStoreMock;
 use mkk_basis::{
     adapter::{
-        db::postgres::MyPostgres, db::storage::IsolationLevel, jwt::Jwt as JWTService, logger,
+        db::postgres::Postgres, db::storage::IsolationLevel, jwt::Jwt as JWTService, logger,
     },
     transport::{self, http_server::HTTPServer},
     usecase::UseCase,
 };
+
+use super::{certs, consts, mocks::EmailServiceMock, rand};
+use crate::common::mocks::ConfirmationCodeStoreMock;
 
 pub struct Context {
     pub http_addr: String,
@@ -32,7 +32,7 @@ pub struct Context {
     pub key: String,
     pub time_now: DateTime<Local>,
     pub container: ContainerAsync<PostgresContainer>, // обязательно нужно, чтоб жил, иначе после выходи из ф-ии уничтожается
-    pub db: Arc<MyPostgres>,
+    pub db: Arc<Postgres>,
     pub code_store: Arc<ConfirmationCodeStoreMock>,
 }
 
@@ -50,7 +50,7 @@ impl Context {
             .start()
             .await
             .unwrap();
-        let pool = Pool::<Postgres>::connect(
+        let pool = Pool::<SQLXPostgres>::connect(
             format!(
                 "postgres://postgres:postgres@localhost:{}/postgres",
                 consts::DB_PORT
@@ -68,11 +68,8 @@ impl Context {
             .unwrap();
         let addr_str = addr_socket.to_string();
         let http_addr = format!("https://{}", addr_str); // явно используем https
-        let arc_storage_service = Arc::new(
-            MyPostgres::new(pool.clone(), IsolationLevel::Serializable)
-                .await
-                .unwrap(),
-        );
+        let arc_storage_service =
+            Arc::new(Postgres::new(pool.clone(), IsolationLevel::Serializable));
         let arc_coder = Arc::new(ConfirmationCodeStoreMock::new());
         let use_case = UseCase::new(
             "http://localhost.loc".to_string(),

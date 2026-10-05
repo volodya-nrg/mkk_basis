@@ -7,12 +7,11 @@ use std::time::Duration;
 
 // Тут обращаемся через mkk_basis, они указаны в lib.rs, тем самым при интеграционном тестировании
 // запускается только один бинарник для проверки, а не два.
-use mkk_basis::adapter::email::ConfirmationCodeStore;
 use mkk_basis::{
     adapter::{
         config::Config,
-        db::{postgres::MyPostgres, storage::IsolationLevel},
-        email::Email as EmailService,
+        db::{postgres::Postgres, storage::IsolationLevel},
+        email::{ConfirmationCodeStore, Email as EmailService},
         jwt::Jwt as JWTService,
         logger,
     },
@@ -101,9 +100,7 @@ async fn run(config_filepath: String) -> Result<(), String> {
         .connect(&cfg.postgres.dsn)
         .await
         .map_err(|e| format!("failed to connect on DB: {e}"))?;
-    let storage_service = MyPostgres::new(pool, IsolationLevel::RepeatableRead)
-        .await
-        .map_err(|e| format!("failed to create MyPostgres: {e}"))?;
+    let storage_service = Postgres::new(pool, IsolationLevel::RepeatableRead);
     let email_service = EmailService::new(
         &cfg.email.host,
         &cfg.email.login,

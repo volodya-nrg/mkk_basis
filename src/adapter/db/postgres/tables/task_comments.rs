@@ -12,7 +12,7 @@ use crate::adapter::db::{
 pub struct TaskComments {}
 
 impl Table for TaskComments {
-    fn get_name(&self) -> &str {
+    fn get_table_name(&self) -> &str {
         "task_comments"
     }
     fn get_fields(&self) -> &[&str] {
@@ -42,9 +42,9 @@ impl TaskCommentsTable for TaskComments {
         let mut query_common = format!(
             "SELECT {} FROM {}",
             self.get_fields().join(","),
-            self.get_name()
+            self.get_table_name()
         );
-        let mut query_count = format!("SELECT COUNT(*) as count FROM {}", self.get_name());
+        let mut query_count = format!("SELECT COUNT(*) as count FROM {}", self.get_table_name());
         let mut params: Vec<(String, String)> = vec![];
 
         params.push((
@@ -108,7 +108,7 @@ impl TaskCommentsTable for TaskComments {
         let query = format!(
             "SELECT {} FROM {} WHERE task_comment_id=$1",
             self.get_fields().join(","),
-            self.get_name(),
+            self.get_table_name(),
         );
         QueryBuilder::new(query)
             .build_query_as()
@@ -128,7 +128,7 @@ impl TaskCommentsTable for TaskComments {
         };
         let query = format!(
             "INSERT INTO {} (task_id, user_id, msg) VALUES ($1,$2,$3) RETURNING task_comment_id",
-            self.get_name(),
+            self.get_table_name(),
         );
         QueryBuilder::new(query)
             .build()
@@ -151,7 +151,7 @@ impl TaskCommentsTable for TaskComments {
         };
         let query = format!(
             "UPDATE {} SET task_id=$1, user_id=$2, msg=$3 WHERE task_comment_id=$4",
-            self.get_name(),
+            self.get_table_name(),
         );
         QueryBuilder::new(query)
             .build()
@@ -180,7 +180,7 @@ impl TaskCommentsTable for TaskComments {
         let AnyConnection::Postgres(pg) = conn else {
             return Err(RepositoryError::WrongDatabase);
         };
-        let query = format!("DELETE FROM {} WHERE task_comment_id=$1", self.get_name());
+        let query = format!("DELETE FROM {} WHERE task_comment_id=$1", self.get_table_name());
         QueryBuilder::new(query)
             .build()
             .bind(item_id)

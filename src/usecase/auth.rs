@@ -2,7 +2,6 @@ use http::StatusCode;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use super::{UseCaseError, helpers};
 use crate::{
     adapter::{
         db::{errors::RepositoryError, models::User as UserDB, storage::Storage},
@@ -13,6 +12,8 @@ use crate::{
     app_errors::AppErr,
     consts,
 };
+
+use super::{UseCaseError, helpers};
 
 // Используется "dyn EmailSender", потому что может приходить как mock-а, так и структура для prod-а.
 #[derive(Clone)] // clone из-за axum

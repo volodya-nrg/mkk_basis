@@ -12,7 +12,7 @@ use crate::adapter::db::{
 pub struct Teams {}
 
 impl Table for Teams {
-    fn get_name(&self) -> &str {
+    fn get_table_name(&self) -> &str {
         "teams"
     }
     fn get_fields(&self) -> &[&str] {
@@ -34,10 +34,10 @@ impl TeamsTable for Teams {
         let mut common_builder = QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
             self.get_fields().join(","),
-            self.get_name(),
+            self.get_table_name(),
         ));
         let mut count_builder =
-            QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.get_name()));
+            QueryBuilder::new(format!("SELECT COUNT(*) FROM {}", self.get_table_name()));
 
         if limit > -1 {
             common_builder.push(" LIMIT ");
@@ -72,7 +72,7 @@ impl TeamsTable for Teams {
         let query = format!(
             "SELECT {} FROM {} WHERE team_id=$1",
             self.get_fields().join(","),
-            self.get_name(),
+            self.get_table_name(),
         );
         QueryBuilder::new(query)
             .build_query_as()
@@ -92,7 +92,7 @@ impl TeamsTable for Teams {
         };
         let query = format!(
             "INSERT INTO {} (name, created_by) VALUES ($1,$2) RETURNING team_id",
-            self.get_name(),
+            self.get_table_name(),
         );
         QueryBuilder::new(query)
             .build()
@@ -114,7 +114,7 @@ impl TeamsTable for Teams {
         };
         let query = format!(
             "UPDATE {} SET name=$1 WHERE team_id=$2", // создателя не меняем
-            self.get_name(),
+            self.get_table_name(),
         );
         QueryBuilder::new(query)
             .build()
@@ -140,7 +140,7 @@ impl TeamsTable for Teams {
         let AnyConnection::Postgres(pg) = conn else {
             return Err(RepositoryError::WrongDatabase);
         };
-        let query = format!("DELETE FROM {} WHERE team_id=$1", self.get_name());
+        let query = format!("DELETE FROM {} WHERE team_id=$1", self.get_table_name());
         QueryBuilder::new(query)
             .build()
             .bind(item_id)

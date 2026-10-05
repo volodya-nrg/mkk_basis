@@ -7,7 +7,10 @@ use tokio::time::sleep;
 use uuid::Uuid;
 
 use mkk_basis::{
-    adapter::{db::postgres::tables::users::Role as UsersRole, helpers as HelpersService},
+    adapter::{
+        db::postgres::tables::users::Role as UsersRole, email::ConfirmationCodeStorer,
+        helpers as HelpersService,
+    },
     consts::MIN_PASSWORD_LEN,
     transport::models::{
         RequestLogin, RequestTaskData, RequestTeamInvite, RequestUserUpdate, ResponseMsg,
@@ -17,7 +20,6 @@ use mkk_basis::{
 };
 
 use common::{client::Client, consts, context::Context, rand};
-use mkk_basis::adapter::email::ConfirmationCodeStorer;
 
 static CONTEXT: OnceCell<Context> = OnceCell::const_new();
 

@@ -12,13 +12,13 @@ use uuid::Uuid;
 
 use crate::adapter::helpers;
 use crate::app_errors::AppErr;
-use crate::transport::http_server::TransportState;
-use crate::transport::http_server::handlers::{HandlerError, handler_err};
-use crate::transport::models::User;
 use crate::transport::{
+    http_server::TransportState,
+    http_server::handlers::{HandlerError, handler_err},
     mapper,
     models::{
-        AuthUser, RequestLimitOffset, RequestUserCreate, RequestUserUpdate, ResponseMsg, UsersList,
+        AuthUser, RequestLimitOffset, RequestUserCreate, RequestUserUpdate, ResponseMsg, User,
+        UsersList,
     },
 };
 

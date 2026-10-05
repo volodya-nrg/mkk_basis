@@ -6,12 +6,13 @@ use axum::{Extension, Json};
 use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::transport::http_server::TransportState;
-use crate::transport::http_server::handlers::{HandlerError, handler_err};
-use crate::transport::models::{AuthUser, ResponseMsg, Team};
 use crate::transport::{
+    http_server::TransportState,
+    http_server::handlers::{HandlerError, handler_err},
     mapper,
-    models::{RequestLimitOffset, RequestTeam, RequestTeamInvite, TeamsList},
+    models::{
+        AuthUser, RequestLimitOffset, RequestTeam, RequestTeamInvite, ResponseMsg, Team, TeamsList,
+    },
 };
 
 #[utoipa::path(
