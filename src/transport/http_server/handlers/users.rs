@@ -14,13 +14,14 @@ use crate::adapter::helpers;
 use crate::app_errors::AppErr;
 use crate::transport::{
     http_server::TransportState,
-    http_server::handlers::{HandlerError, handler_err},
     mapper,
     models::{
         AuthUser, RequestLimitOffset, RequestUserCreate, RequestUserUpdate, ResponseMsg, User,
         UsersList,
     },
 };
+
+use super::helpers::map_uc_error;
 
 struct UploadErr {
     status_code: StatusCode,
@@ -43,22 +44,19 @@ pub async fn list(
     Extension(_user): Extension<AuthUser>,
     State(state): State<Arc<TransportState>>,
     Query(payload): Query<RequestLimitOffset>,
-) -> Response {
-    state
+) -> axum_anyhow::ApiResult<Response> {
+    let (items, total) = state
         .use_case
         .users
         .list(payload.limit.unwrap_or(0), payload.offset.unwrap_or(0))
         .await
-        .map_or_else(
-            |e| handler_err!(e).into_response(),
-            |(items, total)| {
-                Json(UsersList {
-                    items: items.into_iter().map(mapper::user_uc_to_user_tr).collect(),
-                    total: total as u32,
-                })
-                .into_response()
-            },
-        )
+        .map_err(|e| map_uc_error(e, "users.list"))?;
+
+    Ok(Json(UsersList {
+        items: items.into_iter().map(mapper::user_uc_to_user_tr).collect(),
+        total: total as u32,
+    })
+    .into_response())
 }
 
 #[utoipa::path(
@@ -79,11 +77,15 @@ pub async fn one(
     Extension(_user): Extension<AuthUser>,
     Path(item_id): Path<Uuid>,
     State(state): State<Arc<TransportState>>,
-) -> Response {
-    state.use_case.users.one(item_id).await.map_or_else(
-        |e| handler_err!(e).into_response(),
-        |v| Json(mapper::user_uc_to_user_tr(v)).into_response(),
-    )
+) -> axum_anyhow::ApiResult<Response> {
+    let user = state
+        .use_case
+        .users
+        .one(item_id)
+        .await
+        .map_err(|e| map_uc_error(e, "users.one"))?;
+    
+    Ok(Json(mapper::user_uc_to_user_tr(user)).into_response())
 }
 
 #[utoipa::path(
@@ -102,20 +104,14 @@ pub async fn create(
     Extension(_user): Extension<AuthUser>,
     State(state): State<Arc<TransportState>>,
     multipart: Multipart,
-) -> Response {
-    let m = match multipart_to_map(multipart).await {
-        Ok(v) => v,
-        Err(e) => {
-            log::error!("failed to execute multipart (create user): {:?}", e);
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(ResponseMsg {
-                    msg: AppErr::NotCorrectMultipartForm.to_string(),
-                }),
-            )
-                .into_response();
-        }
-    };
+) -> axum_anyhow::ApiResult<Response> {
+    let m = multipart_to_map(multipart).await.map_err(|e| {
+        log::error!("failed to execute multipart (create user): {:?}", e);
+        axum_anyhow::ApiError::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .title(AppErr::NotCorrectMultipartForm.to_string())
+            .build()
+    })?;
     let mut req_user = RequestUserCreate {
         email: get_string_from_map(&m, "email"),
         password: get_string_from_map(&m, "password"),
@@ -125,26 +121,29 @@ pub async fn create(
     };
 
     if let Some(avatar_bytes) = m.get("avatar").cloned() {
-        match upload_file(avatar_bytes) {
-            Ok(v) => req_user.avatar = Some(v),
-            Err(e) => return (e.status_code, Json(ResponseMsg { msg: e.msg })).into_response(),
-        }
+        let avatar = upload_file(avatar_bytes).map_err(|e| {
+            axum_anyhow::ApiError::builder()
+                .status(e.status_code)
+                .title(e.msg)
+                .build()
+        })?;
+        req_user.avatar = Some(avatar)
     }
 
-    let result = state
+    let new_uuid = state
         .use_case
         .users
         .create(mapper::user_create_tr_to_user_create_uc(req_user))
-        .await;
-    let new_uuid = match result {
-        Ok(v) => v,
-        Err(e) => return handler_err!(e).into_response(),
-    };
+        .await
+        .map_err(|e| map_uc_error(e, "users.create"))?;
+    let user = state
+        .use_case
+        .users
+        .one(new_uuid)
+        .await
+        .map_err(|e| map_uc_error(e, "users.create"))?;
 
-    state.use_case.users.one(new_uuid).await.map_or_else(
-        |e| handler_err!(e).into_response(),
-        |v| (StatusCode::CREATED, Json(mapper::user_uc_to_user_tr(v))).into_response(),
-    )
+    Ok((StatusCode::CREATED, Json(mapper::user_uc_to_user_tr(user))).into_response())
 }
 
 #[utoipa::path(
@@ -167,20 +166,14 @@ pub async fn update(
     Path(item_id): Path<Uuid>,
     State(state): State<Arc<TransportState>>,
     multipart: Multipart,
-) -> Response {
-    let m = match multipart_to_map(multipart).await {
-        Ok(v) => v,
-        Err(e) => {
-            log::error!("failed to execute multipart (update user): {:?}", e);
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(ResponseMsg {
-                    msg: AppErr::NotCorrectMultipartForm.to_string(),
-                }),
-            )
-                .into_response();
-        }
-    };
+) -> axum_anyhow::ApiResult<Response> {
+    let m = multipart_to_map(multipart).await.map_err(|e| {
+        log::error!("failed to execute multipart (update user): {:?}", e);
+        axum_anyhow::ApiError::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .title(AppErr::NotCorrectMultipartForm.to_string())
+            .build()
+    })?;
     let mut req_user = RequestUserUpdate {
         email: get_string_option_from_map(&m, "email"),
         password: get_string_option_from_map(&m, "password"),
@@ -191,23 +184,34 @@ pub async fn update(
     };
 
     if let Some(avatar_bytes) = m.get("avatar").cloned() {
-        match upload_file(avatar_bytes) {
-            Ok(v) => req_user.avatar = Some(v),
-            Err(e) => return (e.status_code, Json(ResponseMsg { msg: e.msg })).into_response(),
-        }
+        let url = upload_file(avatar_bytes).map_err(|e| {
+            axum_anyhow::ApiError::builder()
+                .status(e.status_code)
+                .title(e.msg)
+                .build()
+        })?;
+        req_user.avatar = Some(url);
     }
 
     let mut user_uc = mapper::user_tr_update_to_user_uc_update(req_user);
     user_uc.user_id = item_id;
 
-    if let Err(e) = state.use_case.users.update(user_uc).await {
-        return handler_err!(e).into_response();
-    }
+    state
+        .use_case
+        .users
+        .update(user_uc)
+        .await
+        .map_err(|e| map_uc_error(e, "users.update"))?;
 
-    state.use_case.users.one(item_id).await.map_or_else(
-        |e| handler_err!(e).into_response(),
-        |v| Json(mapper::user_uc_to_user_tr(v)).into_response(),
-    )
+    Ok(Json(mapper::user_uc_to_user_tr(
+        state
+            .use_case
+            .users
+            .one(item_id)
+            .await
+            .map_err(|e| map_uc_error(e, "users.update"))?,
+    ))
+    .into_response())
 }
 
 #[utoipa::path(
@@ -228,11 +232,15 @@ pub async fn delete(
     Extension(_user): Extension<AuthUser>,
     Path(item_id): Path<Uuid>,
     State(state): State<Arc<TransportState>>,
-) -> Response {
-    state.use_case.users.delete(item_id).await.map_or_else(
-        |e| handler_err!(e).into_response(),
-        |_| StatusCode::NO_CONTENT.into_response(),
-    )
+) -> axum_anyhow::ApiResult<StatusCode> {
+    state
+        .use_case
+        .users
+        .delete(item_id)
+        .await
+        .map_err(|e| map_uc_error(e, "users.delete"))?;
+    
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn multipart_to_map(

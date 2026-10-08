@@ -5,6 +5,10 @@
 - разобраться как делать моки в юнит-тестах
 - не удаляется контейнер после тестов
 - наладить grpc-gateway
+- borrow-checker;
+  clone vs copy vs ref;
+  различие dyn и impl;
+  lifetime.
 
 ## Заметки
 

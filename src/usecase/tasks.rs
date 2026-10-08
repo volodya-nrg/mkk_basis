@@ -1,3 +1,4 @@
+use anyhow::Context;
 use http::StatusCode;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -8,7 +9,8 @@ use crate::adapter::db::{
 use crate::app_errors::AppErr;
 
 use super::{
-    UseCaseError, mapper,
+    errors::UseCaseError,
+    mapper,
     models::{Task, TaskData, TaskHistory},
 };
 
@@ -21,41 +23,59 @@ impl Tasks {
     pub const fn new(storage: Arc<dyn Storage>) -> Self {
         Self { storage }
     }
-    pub async fn list(&self, data: TaskData) -> Result<(Vec<Task>, i64), UseCaseError> {
-        let mut tx = self.storage.begin().await?;
-        let mut conn = tx.get_conn().await?;
+    pub async fn list(&self, data: TaskData) -> anyhow::Result<(Vec<Task>, i64)> {
+        let mut tx = self
+            .storage
+            .begin()
+            .await
+            .context("failed to create tx-begin")?;
+        let mut conn = tx.get_conn().await.context("failed to get tx-conn")?;
         let list = self
             .storage
             .tasks()
             .list(&mut conn, mapper::task_data_uc_to_task_data_db(data))
-            .await?;
+            .await
+            .context("failed to get list tasks")?;
 
-        tx.commit().await?;
+        tx.commit().await.context("failed to tx-commit")?;
         Ok((
             list.0.into_iter().map(mapper::task_db_to_task_uc).collect(),
             list.1,
         ))
     }
-    pub async fn one(&self, item_id: Uuid) -> Result<Task, UseCaseError> {
-        let mut conn = self.storage.get_conn().await?;
+    pub async fn one(&self, item_id: Uuid) -> anyhow::Result<Task> {
+        let mut conn = self
+            .storage
+            .get_conn()
+            .await
+            .context("failed to get db-conn")?;
+        
         Ok(mapper::task_db_to_task_uc(
             self.storage
                 .tasks()
                 .one(&mut conn.as_mut(), item_id)
-                .await?,
+                .await
+                .context("failed to get task")?,
         ))
     }
-    pub async fn create(&self, task: Task, user_id: Uuid) -> Result<Uuid, UseCaseError> {
+    pub async fn create(&self, task: Task, user_id: Uuid) -> anyhow::Result<Uuid> {
         // создать задачу может только член команды
-        self.check_access(task.team_id, user_id).await?;
+        self.check_access(task.team_id, user_id)
+            .await
+            .context("failed to check access")?;
 
-        let mut tx = self.storage.begin().await?;
-        let mut conn = tx.get_conn().await?;
+        let mut tx = self
+            .storage
+            .begin()
+            .await
+            .context("failed to create tx-begin")?;
+        let mut conn = tx.get_conn().await.context("failed to get tx-conn")?;
         let new_task_uuid = self
             .storage
             .tasks()
             .create(&mut conn, mapper::task_uc_to_task_db(task))
-            .await?;
+            .await
+            .context("failed to create task")?;
         let _ = self
             .storage
             .task_histories()
@@ -69,23 +89,31 @@ impl Tasks {
                     created_at: Default::default(),
                 }),
             )
-            .await?;
+            .await
+            .context("failed to create task-history")?;
 
-        tx.commit().await?;
+        tx.commit().await.context("failed to tx-commit")?;
         Ok(new_task_uuid)
     }
-    pub async fn update(&self, task: Task, user_id: Uuid) -> Result<(), UseCaseError> {
+    pub async fn update(&self, task: Task, user_id: Uuid) -> anyhow::Result<()> {
         // обновить задачу может только член команды
-        self.check_access(task.team_id, user_id).await?;
+        self.check_access(task.team_id, user_id)
+            .await
+            .context("failed to check access")?;
 
         let task_id = task.task_id;
-        let mut tx = self.storage.begin().await?;
-        let mut conn = tx.get_conn().await?;
+        let mut tx = self
+            .storage
+            .begin()
+            .await
+            .context("failed to create tx-begin")?;
+        let mut conn = tx.get_conn().await.context("failed to get tx-conn")?;
 
         self.storage
             .tasks()
             .update(&mut conn, mapper::task_uc_to_task_db(task))
-            .await?;
+            .await
+            .context("failed to update task")?;
         self.storage
             .task_histories()
             .create(
@@ -98,32 +126,43 @@ impl Tasks {
                     created_at: Default::default(),
                 }),
             )
-            .await?;
+            .await
+            .context("failed to create task-history")?;
 
-        tx.commit().await?;
-
-        Ok(())
+        tx.commit().await.context("failed to tx-commit")
     }
     // удалить задачу может только член команды
-    pub async fn delete(&self, task_id: Uuid, user_id: Uuid) -> Result<(), UseCaseError> {
-        let mut conn = self.storage.get_conn().await?;
+    pub async fn delete(&self, task_id: Uuid, user_id: Uuid) -> anyhow::Result<()> {
+        let mut conn = self
+            .storage
+            .get_conn()
+            .await
+            .context("failed to get db-conn")?;
         let mut task = mapper::task_db_to_task_uc(
             self.storage
                 .tasks()
                 .one(&mut conn.as_mut(), task_id)
-                .await?,
+                .await
+                .context("failed to get task")?,
         );
 
-        self.check_access(task.team_id, user_id).await?;
+        self.check_access(task.team_id, user_id)
+            .await
+            .context("failed to check access")?;
         task.status = TaskStatus::Cancelled.to_string();
 
-        let mut tx = self.storage.begin().await?;
-        let mut conn = tx.get_conn().await?;
+        let mut tx = self
+            .storage
+            .begin()
+            .await
+            .context("failed to create tx-begin")?;
+        let mut conn = tx.get_conn().await.context("failed to get tx-conn")?;
 
         self.storage
             .tasks()
             .update(&mut conn, mapper::task_uc_to_task_db(task))
-            .await?;
+            .await
+            .context("failed to update task")?;
         self.storage
             .task_histories()
             .create(
@@ -136,24 +175,35 @@ impl Tasks {
                     created_at: Default::default(),
                 }),
             )
-            .await?;
+            .await
+            .context("failed to create task-history")?;
 
-        tx.commit().await?;
-        Ok(())
+        tx.commit().await.context("failed to tx-commit")
     }
-    pub async fn get_history(&self, item_id: Uuid) -> Result<Vec<TaskHistory>, UseCaseError> {
-        let mut conn = self.storage.get_conn().await?;
+    pub async fn get_history(&self, item_id: Uuid) -> anyhow::Result<Vec<TaskHistory>> {
+        let mut conn = self
+            .storage
+            .get_conn()
+            .await
+            .context("failed to get db-conn")?;
+        
         Ok(self
             .storage
             .task_histories()
             .by_task_id(&mut conn.as_mut(), item_id)
-            .await?
+            .await
+            .context("failed to get task-history")?
             .into_iter() // по значениям
             .map(mapper::task_history_db_to_task_history_uc)
             .collect())
     }
-    async fn check_access(&self, team_id: Uuid, user_id: Uuid) -> Result<(), UseCaseError> {
-        let mut conn = self.storage.get_conn().await?;
+    async fn check_access(&self, team_id: Uuid, user_id: Uuid) -> anyhow::Result<()> {
+        let mut conn = self
+            .storage
+            .get_conn()
+            .await
+            .context("failed to get db-conn")?;
+
         self.storage
             .team_members()
             .one(&mut conn.as_mut(), team_id, user_id)
@@ -163,9 +213,12 @@ impl Tasks {
                     status_code: StatusCode::FORBIDDEN,
                     public_err: AppErr::NoAccessTeamMemberOnly.to_string(),
                     internal_err: None,
-                },
-                other => UseCaseError::Common(other.to_string()),
+                }
+                .into(),
+                other => anyhow::Error::new(other), // пробрасываем типизированную ошибку не как format
             })
-            .map(|_| ())
+            .context("failed to get team-member")?;
+
+        Ok(())
     }
 }

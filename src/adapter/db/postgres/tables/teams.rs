@@ -6,6 +6,7 @@ use crate::adapter::db::{
     errors::RepositoryError,
     internal::Table,
     models::{List, Team},
+    postgres::helpers::expect_one_row,
     storage::{AnyConnection, TeamsTable},
 };
 
@@ -28,9 +29,7 @@ impl TeamsTable for Teams {
         limit: i32,
         offset: i32,
     ) -> Result<List<Team>, RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
+        let pg = conn.as_postgres_mut()?;
         let mut common_builder = QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
             self.get_fields().join(","),
@@ -50,14 +49,12 @@ impl TeamsTable for Teams {
 
         let items: Vec<Team> = common_builder
             .build_query_as()
-            .fetch_all(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToQuery)?;
+            .fetch_all(pg.as_mut())
+            .await?;
         let total = count_builder
             .build_query_scalar()
-            .fetch_one(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToCount)?;
+            .fetch_one(pg.as_mut())
+            .await?;
 
         Ok(List(items, total))
     }
@@ -66,9 +63,6 @@ impl TeamsTable for Teams {
         conn: &mut AnyConnection<'_>,
         item_id: Uuid,
     ) -> Result<Team, RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
         let query = format!(
             "SELECT {} FROM {} WHERE team_id=$1",
             self.get_fields().join(","),
@@ -77,9 +71,8 @@ impl TeamsTable for Teams {
         QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToQuery)?
+            .fetch_optional(conn.as_postgres_mut()?)
+            .await?
             .ok_or(RepositoryError::NotFoundRow)
     }
     async fn create(
@@ -87,9 +80,6 @@ impl TeamsTable for Teams {
         conn: &mut AnyConnection<'_>,
         item: Team,
     ) -> Result<Uuid, RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
         let query = format!(
             "INSERT INTO {} (name, created_by) VALUES ($1,$2) RETURNING team_id",
             self.get_table_name(),
@@ -98,62 +88,43 @@ impl TeamsTable for Teams {
             .build()
             .bind(&item.name)
             .bind(item.created_by)
-            .fetch_one(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToInsert)?
+            .fetch_one(conn.as_postgres_mut()?)
+            .await?
             .try_get(0)
-            .map_err(RepositoryError::Common)
+            .map_err(|e| e.into())
     }
     async fn update(
         &self,
         conn: &mut AnyConnection<'_>,
         item: Team,
     ) -> Result<(), RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
         let query = format!(
             "UPDATE {} SET name=$1 WHERE team_id=$2", // создателя не меняем
             self.get_table_name(),
         );
-        QueryBuilder::new(query)
+        let amount_rows = QueryBuilder::new(query)
             .build()
             .bind(&item.name)
             .bind(item.team_id)
-            .execute(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToUpdate)
-            .and_then(|result| {
-                let rows = result.rows_affected();
-                if rows == 1 {
-                    Ok(())
-                } else {
-                    Err(RepositoryError::ExpectedOneRow(rows))
-                }
-            })
+            .execute(conn.as_postgres_mut()?)
+            .await?
+            .rows_affected();
+
+        expect_one_row(amount_rows)
     }
     async fn delete(
         &self,
         conn: &mut AnyConnection<'_>,
         item_id: Uuid,
     ) -> Result<(), RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
         let query = format!("DELETE FROM {} WHERE team_id=$1", self.get_table_name());
-        QueryBuilder::new(query)
+        let amount_rows = QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToDelete)
-            .and_then(|result| {
-                let rows = result.rows_affected();
-                if rows == 1 {
-                    Ok(())
-                } else {
-                    Err(RepositoryError::ExpectedOneRow(rows))
-                }
-            })
+            .execute(conn.as_postgres_mut()?)
+            .await?
+            .rows_affected();
+
+        expect_one_row(amount_rows)
     }
 }

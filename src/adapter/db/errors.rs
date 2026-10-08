@@ -2,19 +2,8 @@
 // После этого нашу ошибку можно будет связывать в цепочку с другими ошибками из std-библиотеки.
 #[derive(Debug, thiserror::Error)]
 pub enum RepositoryError {
-    #[error("failed to query: {0}")]
-    FailedToQuery(sqlx::Error),
-    #[error("failed to count: {0}")]
-    FailedToCount(sqlx::Error),
-    #[error("failed to insert: {0}")]
-    FailedToInsert(sqlx::Error),
-    #[error("failed to update: {0}")]
-    FailedToUpdate(sqlx::Error),
-    #[error("failed to delete: {0}")]
-    FailedToDelete(sqlx::Error),
-    #[error("{0}")]
-    Common(sqlx::Error),
-
+    #[error("sqlx error: {0}")]
+    FailedSQLX(#[from] sqlx::Error), // обобщаем все к одному
     #[error("not found row")]
     NotFoundRow,
     #[error("expected one row, but has {0}")]

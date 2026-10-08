@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::transport::{
     http_server::TransportState,
-    http_server::handlers::{HandlerError, handler_err},
+    http_server::handlers::helpers::map_uc_error,
     mapper,
     models::{AuthUser, RequestLimitOffset, RequestTaskComment, TaskComment, TaskCommentsList},
 };
@@ -34,8 +34,8 @@ pub async fn list(
     Path(task_id): Path<Uuid>,
     State(state): State<Arc<TransportState>>,
     Query(payload): Query<RequestLimitOffset>,
-) -> Response {
-    state
+) -> axum_anyhow::ApiResult<Response> {
+    let (items, total) = state
         .use_case
         .task_comments
         .list(
@@ -44,19 +44,16 @@ pub async fn list(
             payload.offset.unwrap_or(0),
         )
         .await
-        .map_or_else(
-            |e| handler_err!(e).into_response(),
-            |(items, total)| {
-                Json(TaskCommentsList {
-                    items: items
-                        .into_iter() // перебор по значениям
-                        .map(mapper::task_comment_uc_to_task_comment_tr)
-                        .collect(),
-                    total: total as u32,
-                })
-                .into_response()
-            },
-        )
+        .map_err(|e| map_uc_error(e, "task_comments.list"))?;
+
+    Ok(Json(TaskCommentsList {
+        items: items
+            .into_iter() // перебор по значениям
+            .map(mapper::task_comment_uc_to_task_comment_tr)
+            .collect(),
+        total: total as u32,
+    })
+    .into_response())
 }
 
 #[utoipa::path(
@@ -79,8 +76,8 @@ pub async fn create(
     Path(task_id): Path<Uuid>,
     State(state): State<Arc<TransportState>>,
     Json(payload): Json<RequestTaskComment>,
-) -> Response {
-    let result = state
+) -> axum_anyhow::ApiResult<Response> {
+    let new_uuid = state
         .use_case
         .task_comments
         .create(mapper::task_comment_tr_to_task_comment_uc(
@@ -88,27 +85,20 @@ pub async fn create(
             task_id,
             user.user_id,
         ))
-        .await;
-    let new_uuid = match result {
-        Ok(v) => v,
-        Err(e) => return handler_err!(e).into_response(),
-    };
-
-    state
+        .await
+        .map_err(|e| map_uc_error(e, "task_comments.create"))?;
+    let t = state
         .use_case
         .task_comments
         .one(new_uuid)
         .await
-        .map_or_else(
-            |e| handler_err!(e).into_response(),
-            |v| {
-                (
-                    StatusCode::CREATED,
-                    Json(mapper::task_comment_uc_to_task_comment_tr(v)),
-                )
-                    .into_response()
-            },
-        )
+        .map_err(|e| map_uc_error(e, "task_comments.create"))?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(mapper::task_comment_uc_to_task_comment_tr(t)),
+    )
+        .into_response())
 }
 
 #[utoipa::path(
@@ -129,14 +119,13 @@ pub async fn delete(
     Extension(_user): Extension<AuthUser>,
     Path(item_id): Path<Uuid>,
     State(state): State<Arc<TransportState>>,
-) -> Response {
+) -> axum_anyhow::ApiResult<StatusCode> {
     state
         .use_case
         .task_comments
         .delete(item_id)
         .await
-        .map_or_else(
-            |e| handler_err!(e).into_response(),
-            |_| StatusCode::NO_CONTENT.into_response(),
-        )
+        .map_err(|e| map_uc_error(e, "task_comments.delete"))?;
+
+    Ok(StatusCode::NO_CONTENT)
 }

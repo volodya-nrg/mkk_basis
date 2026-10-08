@@ -16,10 +16,11 @@ use tokio::time::sleep;
 
 use mkk_basis::{
     adapter::{
-        db::postgres::Postgres, db::storage::IsolationLevel, jwt::Jwt as JWTService, logger,
+        db::postgres::connection::Postgres, db::storage::IsolationLevel, jwt::Jwt as JWTService,
+        logger,
     },
     transport::{self, http_server::HTTPServer},
-    usecase::UseCase,
+    usecase::index::UseCase,
 };
 
 use super::{certs, consts, mocks::EmailServiceMock, rand};

@@ -4,6 +4,13 @@ use serde::Serialize;
 use std::fs::OpenOptions;
 use std::io::Write;
 
+// thiserror::Error - создает Display и std цепочную Error
+#[derive(Debug, thiserror::Error)]
+pub enum LogError {
+    #[error("failed to open file: {0}")]
+    File(#[from] std::io::Error), // $[from] - оборачивает конкретную ошибку
+}
+
 #[derive(Serialize)]
 struct LogEntry {
     // в логах поля отображаются в том же порядке что и порядок свойств
@@ -19,7 +26,7 @@ pub fn init(
     ref_level: &str,
     filepath: Option<String>,
     is_test: bool,
-) -> Result<(), String> {
+) -> Result<(), LogError> {
     let level: LevelFilter = match ref_level.to_lowercase().as_str() {
         "info" => LevelFilter::Info,
         "warn" => LevelFilter::Warn,
@@ -32,8 +39,7 @@ pub fn init(
         let log_file = OpenOptions::new()
             .create(true)
             .append(true)
-            .open(v.clone())
-            .map_err(|e| format!("failed to open filepath({v}): {e}"))?;
+            .open(v)?;
 
         builder.target(Target::Pipe(Box::new(log_file)));
     }

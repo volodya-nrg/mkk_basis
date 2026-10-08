@@ -9,10 +9,10 @@ use time::Duration;
 use crate::consts;
 use crate::transport::{
     http_server::TransportState,
-    http_server::handlers::{HandlerError, handler_err},
+    http_server::handlers::helpers::map_uc_error,
     models::{RequestLogin, RequestRegister, RequestRegisterConfirm, ResponseUuid},
 };
-use crate::usecase::UseCaseError;
+use crate::usecase::errors::UseCaseError;
 
 #[utoipa::path(
     post,
@@ -29,8 +29,8 @@ use crate::usecase::UseCaseError;
 pub async fn register(
     State(state): State<Arc<TransportState>>,
     Json(payload): Json<RequestRegister>,
-) -> Response {
-    state
+) -> axum_anyhow::ApiResult<Response> {
+    let new_uuid = state
         .use_case
         .auth
         .register(
@@ -41,15 +41,12 @@ pub async fn register(
             payload.privacy_policy,
         )
         .await
-        .map_or_else(
-            |e| handler_err!(e).into_response(),
-            |new_uuid| {
-                Json(ResponseUuid {
-                    value: new_uuid.to_string(),
-                })
-                .into_response()
-            },
-        )
+        .map_err(|e| map_uc_error(e, "auth.register"))?;
+
+    Ok(Json(ResponseUuid {
+        value: new_uuid.to_string(),
+    })
+    .into_response())
 }
 
 #[utoipa::path(
@@ -67,16 +64,15 @@ pub async fn register(
 pub async fn register_confirm(
     State(state): State<Arc<TransportState>>,
     Query(req): Query<RequestRegisterConfirm>,
-) -> Response {
+) -> axum_anyhow::ApiResult<StatusCode> {
     state
         .use_case
         .auth
         .register_confirm(&req.email, &req.code)
         .await
-        .map_or_else(
-            |e| handler_err!(e).into_response(),
-            |_| StatusCode::NO_CONTENT.into_response(),
-        )
+        .map_err(|e| map_uc_error(e, "auth.register_confirm"))?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[utoipa::path(
@@ -96,20 +92,21 @@ pub async fn login(
     jar: CookieJar,
     State(state): State<Arc<TransportState>>,
     Json(payload): Json<RequestLogin>,
-) -> impl IntoResponse {
-    let result = state
+) -> axum_anyhow::ApiResult<Response> {
+    let login_result = state
         .use_case
         .auth
         .login(&payload.email, &payload.password)
         .await;
-    let (access_token, refresh_token) = match result {
-        Ok(v) => v,
-        Err(e) => {
-            return match e {
-                UseCaseError::UserNotExists => Redirect::to("/").into_response(),
-                _ => handler_err!(e).into_response(),
-            };
+    let (access_token, refresh_token) = match login_result {
+        Ok(tokens) => tokens,
+        Err(e)
+            if e.downcast_ref::<UseCaseError>()
+                .is_some_and(|e| matches!(e, UseCaseError::UserNotFound)) =>
+        {
+            return Ok(Redirect::to("/").into_response());
         }
+        Err(e) => return Err(map_uc_error(e, "auth.login")),
     };
     let updated_jar = jar
         .add(new_cookie_for_access(
@@ -121,7 +118,7 @@ pub async fn login(
             consts::REFRESH_TOKEN_TTL_SEC,
         ));
 
-    (StatusCode::NO_CONTENT, updated_jar).into_response()
+    Ok((StatusCode::NO_CONTENT, updated_jar).into_response())
 }
 
 #[utoipa::path(
@@ -137,11 +134,11 @@ pub async fn login(
 )]
 pub async fn logout(
     jar: CookieJar, // CookieJar не хранит Path и Domain, нужно указывать явно из оригинального Set-Cookie заголовка
-) -> Response {
+) -> axum_anyhow::ApiResult<Response> {
     let updated_jar = jar
         .add(new_cookie_for_access(String::new(), 0))
         .add(new_cookie_for_refresh(String::new(), 0));
-    (StatusCode::NO_CONTENT, updated_jar).into_response()
+    Ok((StatusCode::NO_CONTENT, updated_jar).into_response())
 }
 
 #[utoipa::path(
@@ -156,20 +153,23 @@ pub async fn logout(
     ),
     tag = "auth",
 )]
-pub async fn refresh_tokens(jar: CookieJar, State(state): State<Arc<TransportState>>) -> Response {
-    let cookie_str = match jar.get(consts::REFRESH_TOKEN_NAME) {
-        Some(c) => c.to_string(),
-        None => return StatusCode::UNAUTHORIZED.into_response(),
+pub async fn refresh_tokens(
+    jar: CookieJar,
+    State(state): State<Arc<TransportState>>,
+) -> axum_anyhow::ApiResult<Response> {
+    let Some(cookie) = jar.get(consts::REFRESH_TOKEN_NAME) else {
+        return Ok(StatusCode::UNAUTHORIZED.into_response());
     };
-    let refresh_token_src = match cookie_str.split("=").nth(1) {
-        Some(v) => v,
-        None => return StatusCode::UNAUTHORIZED.into_response(),
+    let cookie_str = cookie.to_string();
+    let Some(refresh_token_src) = cookie_str.split('=').nth(1) else {
+        return Ok(StatusCode::UNAUTHORIZED.into_response());
     };
-    let (access_token, refresh_token) =
-        match state.use_case.auth.refresh_tokens(refresh_token_src).await {
-            Ok(v) => v,
-            Err(e) => return handler_err!(e).into_response(),
-        };
+    let (access_token, refresh_token) = state
+        .use_case
+        .auth
+        .refresh_tokens(refresh_token_src)
+        .await
+        .map_err(|e| map_uc_error(e, "auth.refresh_tokens"))?;
     let updated_jar = jar
         .add(new_cookie_for_access(
             access_token,
@@ -180,7 +180,7 @@ pub async fn refresh_tokens(jar: CookieJar, State(state): State<Arc<TransportSta
             consts::REFRESH_TOKEN_TTL_SEC,
         ));
 
-    (StatusCode::NO_CONTENT, updated_jar).into_response()
+    Ok((StatusCode::NO_CONTENT, updated_jar).into_response())
 }
 
 // В итоге ниже две ф-ии сделать так чтоб отдавали структуру Cookie. Path(Domain) при удалении надо

@@ -6,6 +6,7 @@ use crate::adapter::db::{
     errors::RepositoryError,
     internal::Table,
     models::{List, TaskHistory},
+    postgres::helpers::expect_one_row,
     storage::{AnyConnection, TaskHistoriesTable},
 };
 
@@ -28,9 +29,7 @@ impl TaskHistoriesTable for TaskHistories {
         limit: i32,
         offset: i32,
     ) -> Result<List<TaskHistory>, RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
+        let pg = conn.as_postgres_mut()?;
         let mut common_builder = QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
             self.get_fields().join(","),
@@ -50,14 +49,12 @@ impl TaskHistoriesTable for TaskHistories {
 
         let items: Vec<TaskHistory> = common_builder
             .build_query_as()
-            .fetch_all(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToQuery)?;
+            .fetch_all(pg.as_mut())
+            .await?;
         let total = count_builder
             .build_query_scalar()
-            .fetch_one(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToCount)?;
+            .fetch_one(pg.as_mut())
+            .await?;
 
         Ok(List(items, total))
     }
@@ -66,9 +63,6 @@ impl TaskHistoriesTable for TaskHistories {
         conn: &mut AnyConnection<'_>,
         item_id: Uuid,
     ) -> Result<TaskHistory, RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
         let query = format!(
             "SELECT {} FROM {} WHERE task_history_id=$1",
             self.get_fields().join(","),
@@ -77,9 +71,8 @@ impl TaskHistoriesTable for TaskHistories {
         QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToQuery)?
+            .fetch_optional(conn.as_postgres_mut()?)
+            .await?
             .ok_or(RepositoryError::NotFoundRow)
     }
     async fn by_task_id(
@@ -87,9 +80,6 @@ impl TaskHistoriesTable for TaskHistories {
         conn: &mut AnyConnection<'_>,
         task_id: Uuid,
     ) -> Result<Vec<TaskHistory>, RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
         QueryBuilder::new(format!(
             "SELECT {} FROM {} WHERE task_id=$1 ORDER BY created_at DESC",
             self.get_fields().join(","),
@@ -97,18 +87,15 @@ impl TaskHistoriesTable for TaskHistories {
         ))
         .build_query_as()
         .bind(task_id)
-        .fetch_all(&mut **pg)
+        .fetch_all(conn.as_postgres_mut()?)
         .await
-        .map_err(RepositoryError::FailedToQuery)
+        .map_err(|e| e.into())
     }
     async fn create(
         &self,
         conn: &mut AnyConnection<'_>,
         item: TaskHistory,
     ) -> Result<Uuid, RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
         let query = format!(
             "INSERT INTO {} (task_id, user_id, msg) VALUES ($1,$2,$3) RETURNING task_history_id",
             self.get_table_name(),
@@ -118,64 +105,48 @@ impl TaskHistoriesTable for TaskHistories {
             .bind(item.task_id)
             .bind(item.user_id)
             .bind(&item.msg)
-            .fetch_one(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToInsert)?
+            .fetch_one(conn.as_postgres_mut()?)
+            .await?
             .try_get(0)
-            .map_err(RepositoryError::Common)
+            .map_err(|e| e.into())
     }
     async fn update(
         &self,
         conn: &mut AnyConnection<'_>,
         item: TaskHistory,
     ) -> Result<(), RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
         let query = format!(
             "UPDATE {} SET task_id=$1, user_id=$2, msg=$3 WHERE task_history_id=$4",
             self.get_table_name(),
         );
-        QueryBuilder::new(query)
+        let amount_rows = QueryBuilder::new(query)
             .build()
             .bind(item.task_id)
             .bind(item.user_id)
             .bind(&item.msg)
             .bind(item.task_history_id)
-            .execute(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToUpdate)
-            .and_then(|result| {
-                let rows = result.rows_affected();
-                if rows == 1 {
-                    Ok(())
-                } else {
-                    Err(RepositoryError::ExpectedOneRow(rows))
-                }
-            })
+            .execute(conn.as_postgres_mut()?)
+            .await?
+            .rows_affected();
+
+        expect_one_row(amount_rows)
     }
     async fn delete(
         &self,
         conn: &mut AnyConnection<'_>,
         item_id: Uuid,
     ) -> Result<(), RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
-        let query = format!("DELETE FROM {} WHERE task_history_id=$1", self.get_table_name());
-        QueryBuilder::new(query)
+        let query = format!(
+            "DELETE FROM {} WHERE task_history_id=$1",
+            self.get_table_name()
+        );
+        let amount_rows = QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToDelete)
-            .and_then(|result| {
-                let rows = result.rows_affected();
-                if rows == 1 {
-                    Ok(())
-                } else {
-                    Err(RepositoryError::ExpectedOneRow(rows))
-                }
-            })
+            .execute(conn.as_postgres_mut()?)
+            .await?
+            .rows_affected();
+
+        expect_one_row(amount_rows)
     }
 }

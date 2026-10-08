@@ -1,5 +1,5 @@
-use sqlx::{Postgres, Transaction as SQLXTransaction};
 use async_trait::async_trait;
+use sqlx::{Postgres, Transaction as SQLXTransaction};
 
 use crate::adapter::db::{
     errors::RepositoryError,
@@ -22,22 +22,22 @@ impl Transaction for Transactor {
         Ok(AnyConnection::Postgres(&mut self.tx))
     }
     async fn commit(self: Box<Self>) -> Result<(), RepositoryError> {
-        self.tx
+        Ok(self
+            .tx
             // .borrow()
             .commit()
-            .await
-            .map_err(RepositoryError::Common)
+            .await?)
         // match self.tx {
         //     AnyTransaction::Postgres(tx) => tx.commit().await.map_err(RepositoryError::Common),
         //     AnyTransaction::Sqlite(tx) => tx.commit().await.map_err(RepositoryError::Common),
         // }
     }
     async fn rollback(self: Box<Self>) -> Result<(), RepositoryError> {
-        self.tx
+        Ok(self
+            .tx
             // .borrow()
             .rollback()
-            .await
-            .map_err(RepositoryError::Common)
+            .await?)
         // match self.tx {
         //     AnyTransaction::Postgres(tx) => tx.rollback().await.map_err(RepositoryError::Common),
         //     AnyTransaction::Sqlite(tx) => tx.rollback().await.map_err(RepositoryError::Common),

@@ -7,6 +7,7 @@ use crate::adapter::db::{
     errors::RepositoryError,
     internal::Table,
     models::{List, User},
+    postgres::helpers::expect_one_row,
     storage::{AnyConnection, UsersTable},
 };
 
@@ -67,9 +68,7 @@ impl UsersTable for Users {
         limit: i32,
         offset: i32,
     ) -> Result<List<User>, RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
+        let pg = conn.as_postgres_mut()?;
         let mut common_builder = QueryBuilder::new(format!(
             "SELECT {} FROM {} ORDER BY created_at DESC",
             self.get_fields().join(","),
@@ -89,14 +88,12 @@ impl UsersTable for Users {
 
         let items: Vec<User> = common_builder
             .build_query_as()
-            .fetch_all(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToQuery)?;
+            .fetch_all(pg.as_mut())
+            .await?;
         let total = count_builder
             .build_query_scalar()
-            .fetch_one(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToCount)?;
+            .fetch_one(pg.as_mut())
+            .await?;
 
         Ok(List(items, total))
     }
@@ -105,9 +102,6 @@ impl UsersTable for Users {
         conn: &mut AnyConnection<'_>,
         item_id: Uuid,
     ) -> Result<User, RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
         let query = format!(
             "SELECT {} FROM {} WHERE user_id=$1",
             self.get_fields().join(","),
@@ -116,9 +110,8 @@ impl UsersTable for Users {
         QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToQuery)?
+            .fetch_optional(conn.as_postgres_mut()?)
+            .await?
             .ok_or(RepositoryError::NotFoundRow)
     }
     async fn by_email(
@@ -126,9 +119,6 @@ impl UsersTable for Users {
         conn: &mut AnyConnection<'_>,
         email: &str,
     ) -> Result<User, RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
         let query = format!(
             "SELECT {} FROM {} WHERE email=$1",
             self.get_fields().join(","),
@@ -137,9 +127,8 @@ impl UsersTable for Users {
         QueryBuilder::new(query)
             .build_query_as()
             .bind(email)
-            .fetch_optional(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToQuery)?
+            .fetch_optional(conn.as_postgres_mut()?)
+            .await?
             .ok_or(RepositoryError::NotFoundRow)
     }
     async fn create(
@@ -147,9 +136,6 @@ impl UsersTable for Users {
         conn: &mut AnyConnection<'_>,
         item: User,
     ) -> Result<Uuid, RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
         let query = format!(
             "INSERT INTO {} (email, password, name, email_code, avatar, role) VALUES ($1,$2,$3,$4,$5,$6::user_role_enum) RETURNING user_id",
             self.get_table_name(),
@@ -162,25 +148,21 @@ impl UsersTable for Users {
             .bind(&item.email_code)
             .bind(&item.avatar)
             .bind(self.get_valid_role(item.role))
-            .fetch_one(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToInsert)?
+            .fetch_one(conn.as_postgres_mut()?)
+            .await?
             .try_get(0)
-            .map_err(RepositoryError::Common)
+            .map_err(|e| e.into())
     }
     async fn update(
         &self,
         conn: &mut AnyConnection<'_>,
         item: User,
     ) -> Result<(), RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
         let query = format!(
             "UPDATE {} SET email=$1, password=$2, name=$3, email_code=$4, avatar=$5, role=$6::user_role_enum WHERE user_id=$7",
             self.get_table_name(),
         );
-        QueryBuilder::new(query)
+        let amount_rows = QueryBuilder::new(query)
             .build()
             .bind(&item.email)
             .bind(&item.password)
@@ -189,40 +171,25 @@ impl UsersTable for Users {
             .bind(&item.avatar)
             .bind(self.get_valid_role(item.role))
             .bind(item.user_id)
-            .execute(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToUpdate)
-            .and_then(|result| {
-                let rows = result.rows_affected();
-                if rows == 1 {
-                    Ok(())
-                } else {
-                    Err(RepositoryError::ExpectedOneRow(rows))
-                }
-            })
+            .execute(conn.as_postgres_mut()?)
+            .await?
+            .rows_affected();
+
+        expect_one_row(amount_rows)
     }
     async fn delete(
         &self,
         conn: &mut AnyConnection<'_>,
         item_id: Uuid,
     ) -> Result<(), RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
         let query = format!("DELETE FROM {} WHERE user_id=$1", self.get_table_name());
-        QueryBuilder::new(query)
+        let amount_rows = QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToDelete)
-            .and_then(|result| {
-                let rows = result.rows_affected();
-                if rows == 1 {
-                    Ok(())
-                } else {
-                    Err(RepositoryError::ExpectedOneRow(rows))
-                }
-            })
+            .execute(conn.as_postgres_mut()?)
+            .await?
+            .rows_affected();
+
+        expect_one_row(amount_rows)
     }
 }

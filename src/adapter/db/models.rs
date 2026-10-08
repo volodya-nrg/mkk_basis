@@ -72,5 +72,5 @@ pub struct TaskData {
     pub status: Option<String>,
 }
 
-// List - пусть будет struct-tuple
+// пусть будет struct-tuple
 pub struct List<T>(pub Vec<T>, pub i64);

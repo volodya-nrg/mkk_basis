@@ -14,8 +14,13 @@ use std::time::Duration;
 pub enum EmailError {
     #[error("invalid email address: {0}")]
     InvalidEmailAddress(String),
-    #[error("{0}")]
-    Common(String),
+
+    #[error("lettre error: {0}")]
+    FailedLettre(#[from] lettre::error::Error),
+    #[error("lettre address error: {0}")]
+    FailedLettreAddress(#[from] lettre::address::AddressError),
+    #[error("lettre transport-smtp error: {0}")]
+    FailedLettreTransportSMTP(#[from] lettre::transport::smtp::Error),
 }
 
 // Crate "async_trait" упрощает объявление Pin<Box>, внутренних vtable у трейтов и разных lifetime.
@@ -77,16 +82,12 @@ impl EmailSender for Email {
             self.from_email.split_once('@').ok_or_else(|| {
                 EmailError::InvalidEmailAddress("invalid email: missing @ from 'from'".to_string())
             })?;
-        let address_from_email =
-            Address::new(local_from_email, domain_from_email).map_err(|e| {
-                EmailError::Common(format!("failed to create address from 'from': {e}"))
-            })?;
+        let address_from_email = Address::new(local_from_email, domain_from_email)?;
         let mailbox_from = Mailbox::new(Some(self.from_name.clone()), address_from_email);
         let (local_to, domain_to) = ref_to.split_once('@').ok_or_else(|| {
             EmailError::InvalidEmailAddress("invalid email: missing @ from 'to'".to_string())
-        })?; // linter просит использовать эту ф-ию, а не ok_or
-        let address_to = Address::new(local_to, domain_to)
-            .map_err(|e| EmailError::Common(format!("failed to create address from 'to': {e}")))?;
+        })?;
+        let address_to = Address::new(local_to, domain_to)?;
         let mailbox_to = Mailbox::new(None, address_to);
         let email = Message::builder()
             .from(mailbox_from)
@@ -94,17 +95,16 @@ impl EmailSender for Email {
             .to(mailbox_to)
             .subject(ref_subject)
             .header(ContentType::TEXT_HTML)
-            .body(ref_body.to_string())
-            .map_err(|e| EmailError::Common(format!("failed to create body: {e}")))?;
+            .body(ref_body.to_string())?;
+        let smtp_transport_builder = SmtpTransport::starttls_relay(self.host.as_str())?;
 
-        SmtpTransport::starttls_relay(self.host.as_str())
-            .map_err(|e| EmailError::Common(format!("failed to create smtp-transport: {e}")))?
+        smtp_transport_builder
             .timeout(Some(self.timeout))
             .credentials(Credentials::new(self.login.clone(), self.pass.clone()))
             .build()
-            .send(&email)
-            .map_err(|e| EmailError::Common(format!("failed to send: {e}")))
-            .map(|_| ())
+            .send(&email)?;
+
+        Ok(())
     }
 }
 

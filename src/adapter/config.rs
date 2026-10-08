@@ -1,6 +1,12 @@
 use config::{Config as ConfigExternal, File, FileFormat};
 use serde::Deserialize;
 
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigError {
+    #[error("config error: {0}")]
+    FailedConfig(#[from] config::ConfigError),
+}
+
 #[derive(Deserialize)]
 pub struct Config {
     pub service_name: String,
@@ -43,12 +49,10 @@ pub struct Email {
 }
 
 impl Config {
-    pub fn new(filepath: &str) -> Result<Self, String> {
-        ConfigExternal::builder()
+    pub fn new(filepath: &str) -> Result<Self, ConfigError> {
+        Ok(ConfigExternal::builder()
             .add_source(File::new(filepath, FileFormat::Yaml))
-            .build()
-            .map_err(|e| format!("failed to build: {e}"))?
-            .try_deserialize()
-            .map_err(|e| format!("failed to deserialize: {e}"))
+            .build()?
+            .try_deserialize::<Self>()?)
     }
 }

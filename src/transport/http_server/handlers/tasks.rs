@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::transport::{
     http_server::TransportState,
-    http_server::handlers::{HandlerError, handler_err},
+    http_server::handlers::helpers::map_uc_error,
     mapper,
     models::{AuthUser, RequestTask, RequestTaskData, ResponseMsg, Task, TaskHistories, TasksList},
 };
@@ -29,33 +29,25 @@ pub async fn list(
     Extension(_user): Extension<AuthUser>,
     State(state): State<Arc<TransportState>>,
     Query(payload): Query<RequestTaskData>,
-) -> Response {
-    let request_task_data = match mapper::task_data_tr_to_task_data_uc(payload) {
-        Ok(v) => v,
-        Err(e) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(ResponseMsg { msg: e.to_string() }),
-            )
-                .into_response();
-        }
-    };
-
-    state
+) -> axum_anyhow::ApiResult<Response> {
+    let request_task_data = mapper::task_data_tr_to_task_data_uc(payload).map_err(|e| {
+        axum_anyhow::ApiError::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .title(e.to_string())
+            .build()
+    })?;
+    let (items, total) = state
         .use_case
         .tasks
         .list(request_task_data)
         .await
-        .map_or_else(
-            |e| handler_err!(e).into_response(),
-            |(items, total)| {
-                Json(TasksList {
-                    items: items.into_iter().map(mapper::task_uc_to_task_tr).collect(),
-                    total: total as u32,
-                })
-                .into_response()
-            },
-        )
+        .map_err(|e| map_uc_error(e, "tasks.list"))?;
+
+    Ok(Json(TasksList {
+        items: items.into_iter().map(mapper::task_uc_to_task_tr).collect(),
+        total: total as u32,
+    })
+    .into_response())
 }
 
 #[utoipa::path(
@@ -76,11 +68,15 @@ pub async fn one(
     Extension(_user): Extension<AuthUser>,
     Path(item_id): Path<Uuid>,
     State(state): State<Arc<TransportState>>,
-) -> Response {
-    state.use_case.tasks.one(item_id).await.map_or_else(
-        |e| handler_err!(e).into_response(),
-        |v| Json(mapper::task_uc_to_task_tr(v)).into_response(),
-    )
+) -> axum_anyhow::ApiResult<Response> {
+    let t = state
+        .use_case
+        .tasks
+        .one(item_id)
+        .await
+        .map_err(|e| map_uc_error(e, "tasks.one"))?;
+
+    Ok(Json(mapper::task_uc_to_task_tr(t)).into_response())
 }
 
 #[utoipa::path(
@@ -99,26 +95,27 @@ pub async fn create(
     Extension(user): Extension<AuthUser>,
     State(state): State<Arc<TransportState>>,
     Json(payload): Json<RequestTask>,
-) -> Response {
-    let uc_task = match mapper::task_tr_to_task_uc(payload) {
-        Ok(v) => v,
-        Err(e) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(ResponseMsg { msg: e.to_string() }),
-            )
-                .into_response();
-        }
-    };
-    let new_uuid = match state.use_case.tasks.create(uc_task, user.user_id).await {
-        Ok(v) => v,
-        Err(e) => return handler_err!(e).into_response(),
-    };
+) -> axum_anyhow::ApiResult<Response> {
+    let uc_task = mapper::task_tr_to_task_uc(payload).map_err(|e| {
+        axum_anyhow::ApiError::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .title(e.to_string())
+            .build()
+    })?;
+    let new_uuid = state
+        .use_case
+        .tasks
+        .create(uc_task, user.user_id)
+        .await
+        .map_err(|e| map_uc_error(e, "tasks.create"))?;
+    let t = state
+        .use_case
+        .tasks
+        .one(new_uuid)
+        .await
+        .map_err(|e| map_uc_error(e, "tasks.create"))?;
 
-    state.use_case.tasks.one(new_uuid).await.map_or_else(
-        |e| handler_err!(e).into_response(),
-        |v| (StatusCode::CREATED, Json(mapper::task_uc_to_task_tr(v))).into_response(),
-    )
+    Ok((StatusCode::CREATED, Json(mapper::task_uc_to_task_tr(t))).into_response())
 }
 
 #[utoipa::path(
@@ -141,28 +138,30 @@ pub async fn update(
     Path(task_id): Path<Uuid>,
     State(state): State<Arc<TransportState>>,
     Json(payload): Json<RequestTask>,
-) -> Response {
-    let mut uc_task = match mapper::task_tr_to_task_uc(payload) {
-        Ok(v) => v,
-        Err(e) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(ResponseMsg { msg: e.to_string() }),
-            )
-                .into_response();
-        }
-    };
+) -> axum_anyhow::ApiResult<Response> {
+    let mut uc_task = mapper::task_tr_to_task_uc(payload).map_err(|e| {
+        axum_anyhow::ApiError::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .title(e.to_string())
+            .build()
+    })?;
 
     uc_task.task_id = task_id;
+    state
+        .use_case
+        .tasks
+        .update(uc_task, user.user_id)
+        .await
+        .map_err(|e| map_uc_error(e, "tasks.update"))?;
 
-    if let Err(e) = state.use_case.tasks.update(uc_task, user.user_id).await {
-        return handler_err!(e).into_response();
-    };
+    let t = state
+        .use_case
+        .tasks
+        .one(task_id)
+        .await
+        .map_err(|e| map_uc_error(e, "tasks.update"))?;
 
-    state.use_case.tasks.one(task_id).await.map_or_else(
-        |e| handler_err!(e).into_response(),
-        |v| Json(mapper::task_uc_to_task_tr(v)).into_response(),
-    )
+    Ok(Json(mapper::task_uc_to_task_tr(t)).into_response())
 }
 
 #[utoipa::path(
@@ -183,16 +182,15 @@ pub async fn delete(
     Extension(user): Extension<AuthUser>,
     Path(item_id): Path<Uuid>,
     State(state): State<Arc<TransportState>>,
-) -> Response {
+) -> axum_anyhow::ApiResult<StatusCode> {
     state
         .use_case
         .tasks
         .delete(item_id, user.user_id)
         .await
-        .map_or_else(
-            |e| handler_err!(e).into_response(),
-            |_| StatusCode::NO_CONTENT.into_response(),
-        )
+        .map_err(|e| map_uc_error(e, "tasks.delete"))?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[utoipa::path(
@@ -213,17 +211,19 @@ pub async fn history(
     Extension(_user): Extension<AuthUser>,
     Path(task_id): Path<Uuid>,
     State(state): State<Arc<TransportState>>,
-) -> Response {
-    state.use_case.tasks.get_history(task_id).await.map_or_else(
-        |e| handler_err!(e).into_response(),
-        |v| {
-            Json(TaskHistories {
-                items: v
-                    .into_iter()
-                    .map(mapper::task_history_uc_to_task_history_tr)
-                    .collect(),
-            })
-            .into_response()
-        },
-    )
+) -> axum_anyhow::ApiResult<Response> {
+    let items = state
+        .use_case
+        .tasks
+        .get_history(task_id)
+        .await
+        .map_err(|e| map_uc_error(e, "tasks.history"))?;
+
+    Ok(Json(TaskHistories {
+        items: items
+            .into_iter()
+            .map(mapper::task_history_uc_to_task_history_tr)
+            .collect(),
+    })
+    .into_response())
 }

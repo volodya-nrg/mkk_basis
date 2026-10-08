@@ -1,5 +1,5 @@
 use chrono::Utc;
-use jsonwebtoken::errors;
+use jsonwebtoken::errors::{Error as JsonWebTokenError, ErrorKind};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use uuid::Uuid;
@@ -7,20 +7,21 @@ use uuid::Uuid;
 pub const TYPE_ACCESS: &str = "access";
 pub const TYPE_REFRESH: &str = "refresh";
 
+// конкретно нужно иметь проверку на ExpiredToken и остальное
 #[derive(Debug, thiserror::Error)]
 pub enum JWTError {
     #[error("token expired")]
     ExpiredToken,
-    #[error("{0}")]
-    Common(errors::Error),
+    #[error("jsonwebtoken error: {0}")]
+    FailedJsonWebToken(#[from] JsonWebTokenError),
 }
 
-// From - для e.into() (авто-конвертация)
-impl From<errors::Error> for JWTError {
-    fn from(value: errors::Error) -> Self {
-        match value.kind() {
-            errors::ErrorKind::ExpiredSignature => Self::ExpiredToken,
-            _ => Self::Common(value),
+impl JWTError {
+    // Умный конструктор: различает истёкший токен и прочие ошибки.
+    pub fn from_jwt(err: JsonWebTokenError) -> Self {
+        match err.kind() {
+            ErrorKind::ExpiredSignature => Self::ExpiredToken,
+            _ => Self::FailedJsonWebToken(err),
         }
     }
 }
@@ -78,7 +79,7 @@ impl Jwt {
             },
             &jsonwebtoken::EncodingKey::from_secret(self.private_key_bytes.as_slice()),
         )
-        .map_err(|e| e.into())
+        .map_err(JWTError::from_jwt)
     }
     pub fn generate_refresh_token(&self, user_id: Uuid) -> Result<String, JWTError> {
         let now = Utc::now();
@@ -93,7 +94,7 @@ impl Jwt {
             },
             &jsonwebtoken::EncodingKey::from_secret(self.private_key_bytes.as_slice()),
         )
-        .map_err(|e| e.into())
+        .map_err(JWTError::from_jwt)
     }
     pub fn validate_access_token(&self, token: &str) -> Result<AccessClaims, JWTError> {
         jsonwebtoken::decode::<AccessClaims>(
@@ -102,7 +103,7 @@ impl Jwt {
             &self.get_validation(),
         )
         .map(|data| data.claims)
-        .map_err(|e| e.into())
+        .map_err(JWTError::from_jwt)
     }
     pub fn validate_refresh_token(&self, token: &str) -> Result<RefreshClaims, JWTError> {
         jsonwebtoken::decode::<RefreshClaims>(
@@ -111,7 +112,7 @@ impl Jwt {
             &self.get_validation(),
         )
         .map(|data| data.claims)
-        .map_err(|e| e.into())
+        .map_err(JWTError::from_jwt)
     }
     fn get_validation(&self) -> jsonwebtoken::Validation {
         let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::HS256);

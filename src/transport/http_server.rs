@@ -29,7 +29,7 @@ use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::usecase::UseCase;
+use crate::usecase::index::UseCase;
 
 use handlers::{auth, etc, task_comments, tasks, teams, users};
 

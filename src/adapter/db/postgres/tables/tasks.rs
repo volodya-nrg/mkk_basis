@@ -9,6 +9,7 @@ use crate::adapter::db::{
     errors::RepositoryError,
     internal::Table,
     models::{List, Task, TaskData},
+    postgres::helpers::expect_one_row,
     storage::{AnyConnection, TasksTable},
 };
 
@@ -66,9 +67,7 @@ impl TasksTable for Tasks {
         conn: &mut AnyConnection<'_>,
         data: TaskData,
     ) -> Result<List<Task>, RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
+        let pg = conn.as_postgres_mut()?;
         let mut query_common = format!(
             "SELECT {} FROM {}",
             self.get_fields().join(","),
@@ -131,14 +130,8 @@ impl TasksTable for Tasks {
             prepare_common = prepare_common.bind(v);
         }
 
-        let items = prepare_common
-            .fetch_all(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToQuery)?;
-        let total = prepare_count
-            .fetch_one(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToCount)?;
+        let items = prepare_common.fetch_all(pg.as_mut()).await?;
+        let total = prepare_count.fetch_one(pg.as_mut()).await?;
 
         Ok(List(items, total))
     }
@@ -147,9 +140,6 @@ impl TasksTable for Tasks {
         conn: &mut AnyConnection<'_>,
         item_id: Uuid,
     ) -> Result<Task, RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
         let query = format!(
             "SELECT {} FROM {} WHERE task_id=$1",
             self.get_fields().join(","),
@@ -158,9 +148,8 @@ impl TasksTable for Tasks {
         QueryBuilder::new(query)
             .build_query_as()
             .bind(item_id)
-            .fetch_optional(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToQuery)?
+            .fetch_optional(conn.as_postgres_mut()?)
+            .await?
             .ok_or(RepositoryError::NotFoundRow)
     }
     async fn create(
@@ -168,9 +157,6 @@ impl TasksTable for Tasks {
         conn: &mut AnyConnection<'_>,
         item: Task,
     ) -> Result<Uuid, RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
         let query = format!(
             "INSERT INTO {} (name, description, created_by, team_id, assignee_id, status) VALUES ($1,$2,$3,$4,$5,$6::task_status_enum) RETURNING task_id",
             self.get_table_name(),
@@ -183,25 +169,21 @@ impl TasksTable for Tasks {
             .bind(item.team_id)
             .bind(item.assignee_id)
             .bind(&item.status)
-            .fetch_one(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToInsert)?
+            .fetch_one(conn.as_postgres_mut()?)
+            .await?
             .try_get(0)
-            .map_err(RepositoryError::Common)
+            .map_err(|e| e.into())
     }
     async fn update(
         &self,
         conn: &mut AnyConnection<'_>,
         item: Task,
     ) -> Result<(), RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
         let query = format!(
             "UPDATE {} SET name=$1, description=$2, created_by=$3, team_id=$4, assignee_id=$5, status=$6::task_status_enum WHERE task_id=$7",
             self.get_table_name(),
         );
-        QueryBuilder::new(query)
+        let amount_rows = QueryBuilder::new(query)
             .build()
             .bind(&item.name)
             .bind(&item.description)
@@ -210,40 +192,25 @@ impl TasksTable for Tasks {
             .bind(item.assignee_id)
             .bind(&item.status)
             .bind(item.task_id)
-            .execute(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToUpdate)
-            .and_then(|result| {
-                let rows = result.rows_affected();
-                if rows == 1 {
-                    Ok(())
-                } else {
-                    Err(RepositoryError::ExpectedOneRow(rows))
-                }
-            })
+            .execute(conn.as_postgres_mut()?)
+            .await?
+            .rows_affected();
+
+        expect_one_row(amount_rows)
     }
     async fn delete(
         &self,
         conn: &mut AnyConnection<'_>,
         item_id: Uuid,
     ) -> Result<(), RepositoryError> {
-        let AnyConnection::Postgres(pg) = conn else {
-            return Err(RepositoryError::WrongDatabase);
-        };
         let query = format!("DELETE FROM {} WHERE task_id=$1", self.get_table_name());
-        QueryBuilder::new(query)
+        let amount_rows = QueryBuilder::new(query)
             .build()
             .bind(item_id)
-            .execute(&mut **pg)
-            .await
-            .map_err(RepositoryError::FailedToDelete)
-            .and_then(|result| {
-                let rows = result.rows_affected();
-                if rows == 1 {
-                    Ok(())
-                } else {
-                    Err(RepositoryError::ExpectedOneRow(rows))
-                }
-            })
+            .execute(conn.as_postgres_mut()?)
+            .await?
+            .rows_affected();
+
+        expect_one_row(amount_rows)
     }
 }

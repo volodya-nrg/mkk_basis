@@ -10,14 +10,14 @@ use std::time::Duration;
 use mkk_basis::{
     adapter::{
         config::Config,
-        db::{postgres::Postgres, storage::IsolationLevel},
+        db::{postgres::connection::Postgres, storage::IsolationLevel},
         email::{ConfirmationCodeStore, Email as EmailService},
         jwt::Jwt as JWTService,
         logger,
     },
     consts,
     transport::{self, http_server::HTTPServer},
-    usecase::UseCase,
+    usecase::index::UseCase,
 };
 
 #[derive(Parser)]

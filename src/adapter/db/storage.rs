@@ -14,6 +14,16 @@ pub enum AnyConnection<'a> {
     Sqlite(&'a mut SqliteConnection),
 }
 
+impl<'a> AnyConnection<'a> {
+    // данный метод для упрощения
+    pub const fn as_postgres_mut(&mut self) -> Result<&mut PgConnection, RepositoryError> {
+        match self {
+            AnyConnection::Postgres(pg) => Ok(pg),
+            _ => Err(RepositoryError::WrongDatabase),
+        }
+    }
+}
+
 // Владеющее соединение — то, что возвращает Storage::get_conn().
 pub enum AnyConnectionOwned {
     Postgres(PoolConnection<Postgres>),
