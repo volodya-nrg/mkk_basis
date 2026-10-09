@@ -39,7 +39,7 @@ pub struct Context {
 
 impl Context {
     pub async fn new() -> Self {
-        logger::init(String::new(), String::new(), "", None, true).unwrap();
+        logger::init(String::new(), String::new(), "info", None, true).unwrap();
 
         let _ = Command::new("docker")
             .args(["rm", "-f", consts::CONTAINER_NAME])
