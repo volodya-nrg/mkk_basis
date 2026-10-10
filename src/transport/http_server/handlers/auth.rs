@@ -102,7 +102,7 @@ pub async fn login(
         Ok(tokens) => tokens,
         Err(e)
             if e.downcast_ref::<UseCaseError>()
-                .is_some_and(|e| matches!(e, UseCaseError::UserNotFound)) =>
+                .is_some_and(|e| matches!(e, UseCaseError::ItemNotFound)) =>
         {
             return Ok(Redirect::to("/").into_response());
         }

@@ -49,12 +49,13 @@ impl Tasks {
             .get_conn()
             .await
             .context("failed to get db-conn")?;
-        
+
         Ok(mapper::task_db_to_task_uc(
             self.storage
                 .tasks()
                 .one(&mut conn.as_mut(), item_id)
                 .await
+                .map_err(UseCaseError::from)
                 .context("failed to get task")?,
         ))
     }
@@ -143,6 +144,7 @@ impl Tasks {
                 .tasks()
                 .one(&mut conn.as_mut(), task_id)
                 .await
+                .map_err(UseCaseError::from)
                 .context("failed to get task")?,
         );
 
@@ -186,7 +188,7 @@ impl Tasks {
             .get_conn()
             .await
             .context("failed to get db-conn")?;
-        
+
         Ok(self
             .storage
             .task_histories()
@@ -213,9 +215,8 @@ impl Tasks {
                     status_code: StatusCode::FORBIDDEN,
                     public_err: AppErr::NoAccessTeamMemberOnly.to_string(),
                     internal_err: None,
-                }
-                .into(),
-                other => anyhow::Error::new(other), // пробрасываем типизированную ошибку не как format
+                },
+                other => UseCaseError::Internal(anyhow::Error::new(other)),
             })
             .context("failed to get team-member")?;
 

@@ -5,7 +5,8 @@ use crate::usecase::errors::UseCaseError;
 pub fn map_uc_error(e: anyhow::Error, handler: &str) -> axum_anyhow::ApiError {
     let mut status_code = StatusCode::INTERNAL_SERVER_ERROR;
     let mut public_err = String::from("Internal error");
-    let mut internal_err = format!("{e:?}"); // fallback: вся цепочка
+    let all: Vec<String> = e.chain().map(ToString::to_string).collect();
+    let mut internal_err = all.join("; ");
 
     if let Some(uc) = e.chain().find_map(|c| c.downcast_ref::<UseCaseError>()) {
         match uc {
@@ -18,20 +19,23 @@ pub fn map_uc_error(e: anyhow::Error, handler: &str) -> axum_anyhow::ApiError {
                 public_err = pe.clone();
 
                 if let Some(v) = ie {
-                    internal_err = format!("{}; {}", internal_err, v.clone());
-                    // } else {
-                    //     internal_err.clear(); // ожидаемая бизнес-ошибка, без internal
+                    internal_err = v.clone();
                 }
             }
-            UseCaseError::UserNotFound => {
+            UseCaseError::ItemNotFound => {
                 status_code = StatusCode::NOT_FOUND;
-                public_err = "user not found".into();
-                // internal_err.clear();
+                public_err = "item not found".into();
+            }
+            UseCaseError::Internal(e2) => {
+                internal_err = format!("{e2}");
             }
         }
     }
 
-    log::error!("{}; {}", handler, internal_err);
+    // тут надо логировать только 500-ые ошибки
+    if status_code.is_server_error() {
+        log::error!("{}; {}", handler, internal_err);
+    }
 
     axum_anyhow::ApiError::builder()
         .status(status_code)

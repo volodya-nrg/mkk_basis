@@ -55,6 +55,7 @@ impl Teams {
                 .teams()
                 .one(&mut conn.as_mut(), item_id)
                 .await
+                .map_err(UseCaseError::from)
                 .context("failed to get team")?,
         ))
     }
@@ -119,6 +120,7 @@ impl Teams {
                 .teams()
                 .one(&mut conn.as_mut(), team_id)
                 .await
+                .map_err(UseCaseError::from)
                 .context("failed to get team")?
                 .created_by
                 == profile_id

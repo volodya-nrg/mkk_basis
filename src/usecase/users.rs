@@ -1,4 +1,4 @@
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use http::StatusCode;
 use std::fs;
 use std::sync::Arc;
@@ -53,6 +53,7 @@ impl Users {
                 .users()
                 .one(&mut conn.as_mut(), item_id)
                 .await
+                .map_err(UseCaseError::from)
                 .context("failed to get user")?,
         ))
     }
@@ -112,6 +113,7 @@ impl Users {
             .users()
             .one(&mut conn.as_mut(), user.user_id)
             .await
+            .map_err(UseCaseError::from)
             .context("failed to get user")?;
         let mut user_db_copy = user_db.clone();
 
@@ -158,7 +160,8 @@ impl Users {
             && let Some(avatar_filepath) = user_db.avatar.clone()
             && let Err(e) = fs::remove_file(avatar_filepath.clone())
         {
-            return Err(anyhow!("failed to remove file ({avatar_filepath}): {e}"));
+            return Err(anyhow::Error::from(e)
+                .context(format!("failed to remove file ({avatar_filepath})")));
         }
 
         tx.commit().await.context("failed to tx-commit")
@@ -174,6 +177,7 @@ impl Users {
             .users()
             .one(&mut conn.as_mut(), item_id)
             .await
+            .map_err(UseCaseError::from)
             .context("failed to get user")?;
         let mut tx = self
             .storage
@@ -191,7 +195,7 @@ impl Users {
         if let Some(v) = user.avatar
             && let Err(e) = fs::remove_file(v.clone())
         {
-            return Err(anyhow!("failed to remove file ({v}): {e}"));
+            return Err(anyhow::Error::from(e).context(format!("failed to remove file ({v})")));
         }
 
         tx.commit().await.context("failed to tx-commit")

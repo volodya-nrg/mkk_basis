@@ -3,7 +3,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::adapter::db::storage::Storage;
-
+use crate::usecase::errors::UseCaseError;
 use super::{mapper, models::TaskComment};
 
 #[derive(Clone)] // clone из-за axum
@@ -49,12 +49,13 @@ impl TaskComments {
             .get_conn()
             .await
             .context("failed to get db-conn")?;
-        
+
         Ok(mapper::task_comment_db_to_task_comment_uc(
             self.storage
                 .task_comments()
                 .one(&mut conn.as_mut(), item_id)
                 .await
+                .map_err(UseCaseError::from)
                 .context("failed to get task-comment")?,
         ))
     }

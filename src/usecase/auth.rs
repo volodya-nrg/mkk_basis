@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{
     adapter::{
-        db::{errors::RepositoryError, models::User as UserDB, storage::Storage},
+        db::{models::User as UserDB, storage::Storage},
         email::{ConfirmationCodeStorer, EmailSender},
         helpers as HelpersService,
         jwt::{JWTError, Jwt as JWTService, TYPE_REFRESH},
@@ -62,7 +62,7 @@ impl Auth {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: AppErr::PasswordIsShort.to_string(),
-                internal_err: Default::default(),
+                internal_err: None,
             }
             .into());
         }
@@ -70,7 +70,7 @@ impl Auth {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: AppErr::PasswordsNotEquals.to_string(),
-                internal_err: Default::default(),
+                internal_err: None,
             }
             .into());
         }
@@ -78,7 +78,7 @@ impl Auth {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: AppErr::NeedAcceptAgreement.to_string(),
-                internal_err: Default::default(),
+                internal_err: None,
             }
             .into());
         }
@@ -86,7 +86,7 @@ impl Auth {
             return Err(UseCaseError::Transport {
                 status_code: StatusCode::BAD_REQUEST,
                 public_err: AppErr::NeedAcceptPrivacyPolicy.to_string(),
-                internal_err: Default::default(),
+                internal_err: None,
             }
             .into());
         }
@@ -121,7 +121,7 @@ impl Auth {
 
         self.email_sender
             .send(email, email_subject.as_str(), email_message.as_str())
-            .map_err(|e| anyhow!("failed to send email: {e}"))?;
+            .context("failed to send email")?;
         self.codes.store(email, code.as_str()); // сохраним для теста
 
         tx.commit().await.context("failed to tx-commit")?;
@@ -163,6 +163,7 @@ impl Auth {
             .users()
             .by_email(&mut conn.as_mut(), email)
             .await
+            .map_err(UseCaseError::from)
             .context("failed to get user by email")?;
         let expected_code = user_db
             .email_code
@@ -217,11 +218,7 @@ impl Auth {
             .users()
             .by_email(&mut conn.as_mut(), email)
             .await
-            .map_err(|e| match e {
-                // ! если пользователь не найден, то нужно перенаправлять его на страницу регистрации - тут исключение
-                RepositoryError::NotFoundRow => UseCaseError::UserNotFound.into(),
-                other => anyhow::Error::new(other),
-            })
+            .map_err(UseCaseError::from)
             .context("failed to get user by email")?;
 
         if user_db.email_code.is_some() {
@@ -234,7 +231,7 @@ impl Auth {
         }
 
         let password_is_eq = helpers::password_verify(password, user_db.password.as_str())
-            .map_err(|e| anyhow!("failed to verify password: {e}"))?;
+            .context("failed to verify password")?;
 
         if !password_is_eq {
             return Err(UseCaseError::Transport {
@@ -293,6 +290,7 @@ impl Auth {
             .users()
             .one(&mut conn.as_mut(), claims.sub)
             .await
+            .map_err(UseCaseError::from)
             .context("failed to get user")?;
         let access_token = self
             .jwt_service
