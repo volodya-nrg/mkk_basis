@@ -6,12 +6,13 @@ use axum::{Extension, Json};
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::transport::http_server::handlers::helpers::ApiErrorResponse;
 use crate::transport::{
     http_server::TransportState,
     http_server::handlers::helpers::map_uc_error,
     mapper,
     models::{
-        AuthUser, RequestLimitOffset, RequestTeam, RequestTeamInvite, ResponseMsg, Team, TeamsList,
+        AuthUser, RequestLimitOffset, RequestTeam, RequestTeamInvite, Team, TeamsList,
     },
 };
 
@@ -22,8 +23,7 @@ use crate::transport::{
     params(RequestLimitOffset),
     responses(
         (status = 200, description = "Получение списка", body = TeamsList),
-        (status = 400, description = "Некорректный запрос"),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "teams",
 )]
@@ -55,8 +55,7 @@ pub async fn list(
     ),
     responses(
         (status = 200, description = "Получение команды", body = Team),
-        (status = 400, description = "Некорректный запрос"),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "teams",
 )]
@@ -82,8 +81,7 @@ pub async fn one(
     request_body = RequestTeam,
     responses(
         (status = 201, description = "Создание команды", body = Team),
-        (status = 400, description = "Некорректный запрос"),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "teams",
 )]
@@ -121,8 +119,7 @@ pub async fn create(
     request_body = RequestTeam,
     responses(
         (status = 200, description = "Изменение команды", body = Team),
-        (status = 400, description = "Некорректный запрос"),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "teams",
 )]
@@ -167,8 +164,7 @@ pub async fn update(
     ),
     responses(
         (status = 204, description = "Удаление команды"),
-        (status = 400, description = "Некорректный запрос"),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "teams",
 )]
@@ -197,8 +193,7 @@ pub async fn delete(
     request_body = RequestTeamInvite,
     responses(
         (status = 200, description = "Приглашение пользователя в команду"),
-        (status = 400, description = "Некорректный запрос", body = ResponseMsg),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "teams",
 )]

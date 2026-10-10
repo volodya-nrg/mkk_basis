@@ -6,11 +6,12 @@ use axum::{
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::transport::http_server::handlers::helpers::ApiErrorResponse;
 use crate::transport::{
     http_server::TransportState,
     http_server::handlers::helpers::map_uc_error,
     mapper,
-    models::{AuthUser, RequestTask, RequestTaskData, ResponseMsg, Task, TaskHistories, TasksList},
+    models::{AuthUser, RequestTask, RequestTaskData, Task, TaskHistories, TasksList},
 };
 
 #[utoipa::path(
@@ -20,8 +21,7 @@ use crate::transport::{
     operation_id = "tasks_list",
     responses(
         (status = 200, description = "Получение списка", body = TasksList),
-        (status = 400, description = "Некорректный запрос", body = ResponseMsg),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "tasks",
 )]
@@ -59,8 +59,7 @@ pub async fn list(
     ),
     responses(
         (status = 200, description = "Получение задачи", body = Task),
-        (status = 400, description = "Некорректный запрос"),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "tasks",
 )]
@@ -86,8 +85,7 @@ pub async fn one(
     request_body = RequestTask,
     responses(
         (status = 201, description = "Создание задачи", body = Task),
-        (status = 400, description = "Некорректный запрос", body = ResponseMsg),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "tasks",
 )]
@@ -128,8 +126,7 @@ pub async fn create(
     request_body = RequestTask,
     responses(
         (status = 200, description = "Обновление задачи", body = Task),
-        (status = 400, description = "Некорректный запрос", body = ResponseMsg),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "tasks",
 )]
@@ -173,8 +170,7 @@ pub async fn update(
     ),
     responses(
         (status = 204, description = "Удаление задачи"),
-        (status = 400, description = "Некорректный запрос"),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "tasks",
 )]
@@ -202,8 +198,7 @@ pub async fn delete(
     ),
     responses(
         (status = 200, description = "Получение историй действий над задачей", body = TaskHistories),
-        (status = 400, description = "Некорректный запрос"),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "tasks",
 )]

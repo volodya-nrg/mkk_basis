@@ -1,6 +1,27 @@
 use http::StatusCode;
+use serde::Serialize;
+#[allow(unused_imports)]
+use serde_json::json;
+use utoipa::{ToResponse, ToSchema};
 
 use crate::usecase::errors::UseCaseError;
+
+// так как axum_anyhow::ApiError не реализует трейт ToSchema из utoipa, то создадим свой
+#[derive(ToResponse, Serialize, ToSchema)]
+#[response(
+    description = "Стандартная структура ошибки",
+    content_type = "application/json",
+    example = json!({
+        "status": 400,
+        "title": "Bad Request",
+        "detail": "The requested resource is invalid"
+    })
+)]
+pub struct ApiErrorResponse {
+    status: u16,
+    title: String,
+    detail: String,
+}
 
 pub fn map_uc_error(e: anyhow::Error, handler: &str) -> axum_anyhow::ApiError {
     let mut status_code = StatusCode::INTERNAL_SERVER_ERROR;

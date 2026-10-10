@@ -7,6 +7,7 @@ use std::sync::Arc;
 use time::Duration;
 
 use crate::consts;
+use crate::transport::http_server::handlers::helpers::ApiErrorResponse;
 use crate::transport::{
     http_server::TransportState,
     http_server::handlers::helpers::map_uc_error,
@@ -21,8 +22,7 @@ use crate::usecase::errors::UseCaseError;
     request_body = RequestRegister,
     responses(
         (status = 200, description = "Пользователь зарегистрирован", body = ResponseUuid),
-        (status = 400, description = "Некорректный запрос"),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "auth",
 )]
@@ -56,8 +56,7 @@ pub async fn register(
     params(RequestRegisterConfirm),
     responses(
         (status = 204, description = "Подтверждение е-мэйла на валидность и завершение регистрации"),
-        (status = 400, description = "Некорректный запрос"),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "auth",
 )]
@@ -82,9 +81,8 @@ pub async fn register_confirm(
     request_body = RequestLogin,
     responses(
         (status = 204, description = "Аутентификация в системе"),
-        (status = 303, description = "Редирект на главную страницу"),
-        (status = 400, description = "Некорректный запрос"),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = 303, description = "Редирект на главную страницу", body = ApiErrorResponse),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "auth",
 )]
@@ -127,8 +125,7 @@ pub async fn login(
     operation_id = "auth_logout",
     responses(
         (status = 204, description = "Выход из системы"),
-        (status = 400, description = "Некорректный запрос"),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "auth",
 )]
@@ -147,9 +144,7 @@ pub async fn logout(
     operation_id = "auth_refresh_tokens",
     responses(
         (status = 204, description = "Обновление токенов"),
-        (status = 400, description = "Некорректный запрос"),
-        (status = 401, description = "Не аутентифицирован"),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "auth",
 )]

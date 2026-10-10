@@ -12,6 +12,7 @@ use crate::transport::{
     mapper,
     models::{AuthUser, RequestLimitOffset, RequestTaskComment, TaskComment, TaskCommentsList},
 };
+use crate::transport::http_server::handlers::helpers::ApiErrorResponse;
 
 #[utoipa::path(
     get,
@@ -23,8 +24,7 @@ use crate::transport::{
     ),
     responses(
         (status = 200, description = "Получение списка", body = TaskCommentsList),
-        (status = 400, description = "Некорректный запрос"),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "task_comments",
 )]
@@ -66,8 +66,7 @@ pub async fn list(
     request_body = RequestTaskComment,
     responses(
         (status = 201, description = "Комментарий к задаче создан", body = TaskComment),
-        (status = 400, description = "Некорректный запрос"),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "task_comments",
 )]
@@ -110,8 +109,7 @@ pub async fn create(
     ),
     responses(
         (status = 204, description = "Комментарий к задаче удален"),
-        (status = 400, description = "Некорректный запрос"),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "task_comments",
 )]

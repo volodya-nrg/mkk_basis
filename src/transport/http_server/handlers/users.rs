@@ -16,12 +16,12 @@ use crate::transport::{
     http_server::TransportState,
     mapper,
     models::{
-        AuthUser, RequestLimitOffset, RequestUserCreate, RequestUserUpdate, ResponseMsg, User,
+        AuthUser, RequestLimitOffset, RequestUserCreate, RequestUserUpdate, User,
         UsersList,
     },
 };
 
-use super::helpers::map_uc_error;
+use super::helpers::{ApiErrorResponse, map_uc_error};
 
 struct UploadErr {
     status_code: StatusCode,
@@ -35,8 +35,7 @@ struct UploadErr {
     params(RequestLimitOffset),
     responses(
         (status = 200, description = "Получение списка", body = UsersList),
-        (status = 400, description = "Некорректный запрос"),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "users",
 )]
@@ -68,8 +67,7 @@ pub async fn list(
     ),
     responses(
         (status = 200, description = "Получение пользователя", body = User),
-        (status = 400, description = "Некорректный запрос"),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "users",
 )]
@@ -84,7 +82,7 @@ pub async fn one(
         .one(item_id)
         .await
         .map_err(|e| map_uc_error(e, "users.one"))?;
-    
+
     Ok(Json(mapper::user_uc_to_user_tr(user)).into_response())
 }
 
@@ -95,8 +93,7 @@ pub async fn one(
     request_body = RequestUserCreate,
     responses(
         (status = 201, description = "Создание пользователя", body = User),
-        (status = 400, description = "Некорректный запрос", body = ResponseMsg),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "users",
 )]
@@ -156,8 +153,7 @@ pub async fn create(
     request_body = RequestUserUpdate,
     responses(
         (status = 200, description = "Обновление пользователя", body = User),
-        (status = 400, description = "Некорректный запрос", body = ResponseMsg),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "users",
 )]
@@ -223,8 +219,7 @@ pub async fn update(
     ),
     responses(
         (status = 204, description = "Удаление пользователя"),
-        (status = 400, description = "Некорректный запрос"),
-        (status = 500, description = "Внутренняя ошибка сервера"),
+        (status = "default", description = "Ошибка API", body = ApiErrorResponse),
     ),
     tag = "users",
 )]
@@ -239,7 +234,7 @@ pub async fn delete(
         .delete(item_id)
         .await
         .map_err(|e| map_uc_error(e, "users.delete"))?;
-    
+
     Ok(StatusCode::NO_CONTENT)
 }
 
