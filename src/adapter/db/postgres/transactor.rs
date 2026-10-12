@@ -24,7 +24,6 @@ impl Transaction for Transactor {
     async fn commit(self: Box<Self>) -> Result<(), RepositoryError> {
         Ok(self
             .tx
-            // .borrow()
             .commit()
             .await?)
         // match self.tx {
@@ -35,7 +34,6 @@ impl Transaction for Transactor {
     async fn rollback(self: Box<Self>) -> Result<(), RepositoryError> {
         Ok(self
             .tx
-            // .borrow()
             .rollback()
             .await?)
         // match self.tx {

@@ -68,6 +68,7 @@ pub trait Storage: Send + Sync {
     fn teams(&self) -> &dyn TeamsTable;
     fn users(&self) -> &dyn UsersTable;
 }
+
 #[async_trait]
 pub trait Transaction: Send {
     async fn get_conn(&mut self) -> Result<AnyConnection<'_>, RepositoryError>;
