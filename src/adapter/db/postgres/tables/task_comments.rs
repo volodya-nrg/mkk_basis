@@ -10,36 +10,6 @@ use crate::adapter::db::{
     storage::{AnyConnection, TaskCommentsTable},
 };
 
-/*
-Чтобы from не делать, можно короче написать с помощью thiserror.
-Эта аннотация говорит thiserror, что нужно сгенерировать соответствующую реализацию трэйта From.
-#[derive(Debug, Error)]
-enum PurchaseError {
-    #[error("Nested servation error: (0)")]
-    ReservationFailed(#[from] ReserveError)
-    #[error("Nested shipping error: (0)")]
-    ShippingFailed(#[from] ShipmentError)
-}
-*/
-/*
-    пример как два раза получить мутабильную ссылку
-    fn main() {
-        let mut a = 5;
-        unsafe {
-            let r1: &mut i32 = &mut a; // первая мутабельная ссылка
-            let ptr: *mut i32 = r1 as *mut i32; // мутабельный указатель
-            let r2: &mut i32 = ptr.as_mut().unwrap(); // указатель во вторую ссылку
-            inc(r1);
-            inc(r2);
-        }
-        println!("{a}"); // 7
-    }
-
-    fn inc(a: &mut i32) {
-        *a = *a + 1;
-    }
-*/
-
 pub struct TaskComments {}
 
 impl Table for TaskComments {
@@ -170,7 +140,6 @@ impl TaskCommentsTable for TaskComments {
             "UPDATE {} SET task_id=$1, user_id=$2, msg=$3 WHERE task_comment_id=$4",
             self.get_table_name(),
         );
-        // and_then - as map() and flatten()
         let amount_rows = QueryBuilder::new(query)
             .build()
             .bind(item.task_id)

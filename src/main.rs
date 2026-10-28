@@ -26,33 +26,6 @@ struct Args {
     config: String,
 }
 
-/*
-async-await:
-    асинхронный код
-    не блокирует текущий поток, который может взять после др. задачу на выполнение
-    возвращает обещание (future) результата
-    await - приостанови эту задачу пока future не будет готов и отдай поток другим задачам. Выполнение может остановится и продолжить позже.
-    небходим executor который продвигает эту задачу. Он делает poll, пока не получит результат.
-runtime:
-    многопотомный runtime с ланировщиком, I/O-драйвером и таймером
-    let rt = Runtime::new().unwrap();
-    let result = rt.block_on(async {...});
-#[tokio::main]:
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all() // включает I/O-драйвер и таймеры
-        .build() // строит runtime
-        .unwrap()
-        .block_on(async {
-            println!("Hello world"); // запускает future
-        })
-    По умолчанию используется многопоточный runtime (multi_thread) с числом воркеров, равным количеству ядер CPU.
-*/
-
-/*
-по сути "#[tokio::main]" равен:
-    let mut rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(async {Код асинхронной программы})
-*/
 #[tokio::main] // атрибут-макрос, создает tokio-runtime
 // чистый main, удобно выходить с кодом 1, в случае ошибки
 async fn main() {
@@ -63,7 +36,6 @@ async fn main() {
 }
 
 async fn run(config_filepath: String) -> Result<(), String> {
-    // возвращаешься тип Unit "()"
     let cfg = Config::new(&config_filepath).map_err(|e| {
         let str = format!("failed to create new config: {e}");
         eprint!("{}", str); // в stderr

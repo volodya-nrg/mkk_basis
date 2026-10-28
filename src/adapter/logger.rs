@@ -4,7 +4,6 @@ use serde::Serialize;
 use std::fs::OpenOptions;
 use std::io::Write;
 
-// thiserror::Error - создает Display и std цепочную Error
 #[derive(Debug, thiserror::Error)]
 pub enum LogError {
     #[error("failed to open file: {0}")]

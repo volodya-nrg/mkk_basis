@@ -6,10 +6,6 @@ use lettre::{
 };
 use std::time::Duration;
 
-// все таки надежнее создавать ошибки через thiserror::Error, потому что:
-// 1. отсутствует отличие ошибок
-// 2. теряется источник (предыдущая ошибка в цепочке)
-// 3. не реализует std::error::Error
 #[derive(Debug, thiserror::Error)]
 pub enum EmailError {
     #[error("invalid email address: {0}")]
@@ -23,7 +19,6 @@ pub enum EmailError {
     FailedLettreTransportSMTP(#[from] lettre::transport::smtp::Error),
 }
 
-// Crate "async_trait" упрощает объявление Pin<Box>, внутренних vtable у трейтов и разных lifetime.
 // Укажем сразу поддержку "Send + Sync", чтоб не писать подобное в других местах.
 #[async_trait]
 pub trait EmailSender: Send + Sync {
